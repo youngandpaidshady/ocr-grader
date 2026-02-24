@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR Grader Assistant</title>
+    <!-- Use Tailwind CSS for quick, modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom styles to ensure video acts properly on mobile */
+        #video-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            position: relative;
+            background-color: #000;
+        }
+
+        #camera-feed {
+            width: 100%;
+            height: auto;
+            object-fit: cover;
+            display: block;
+        }
+
+        .captured-thumb {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 0.25rem;
+            border: 2px solid white;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800 min-h-screen font-sans antialiased">
+
+    <div class="max-w-4xl mx-auto p-4 md:p-6">
+        <!-- Header -->
+        <header class="text-center mb-8 pt-4">
+            <h1 class="text-3xl font-bold text-indigo-700 mb-2"><i class="fa-solid fa-graduation-cap mr-2"></i>OCR
+                Grader</h1>
+            <p class="text-gray-600">Scan handwritten test scripts in batches of 10.</p>
+        </header>
+
+        <!-- Main Content Area -->
+        <main>
+
+            <!-- Step 1: Capture Area -->
+            <section id="capture-section" class="bg-white rounded-xl shadow-md p-4 md:p-6 mb-8">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold"><i class="fa-solid fa-camera mr-2"></i>Capture Scripts</h2>
+                    <span class="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">Batch:
+                        <span id="batch-count">0</span>/10</span>
+                </div>
+
+                <!-- Assessment Type Selector -->
+                <div class="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Assessment Type / Column Name</label>
+                    <select id="assessment-type"
+                        class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                        <option value="1st CA">1st CA</option>
+                        <option value="2nd CA">2nd CA</option>
+                        <option value="Assignment">Assignment</option>
+                        <option value="Exam">Exam</option>
+                        <option value="Open Day">Open Day</option>
+                        <option value="custom">-- Custom Name --</option>
+                    </select>
+                    <input type="text" id="custom-assessment"
+                        class="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm hidden"
+                        placeholder="e.g., Midterm Project">
+                </div>
+
+                <!-- Video Feed -->
+                <div id="video-container" class="mb-4 aspect-[3/4] md:aspect-video flex items-center justify-center">
+                    <video id="camera-feed" autoplay playsinline></video>
+                    <div id="camera-loading" class="absolute text-white text-sm">Requesting camera access...</div>
+                </div>
+
+                <!-- Capture Controls -->
+                <div class="flex justify-center space-x-4 mb-4">
+                    <button id="btn-camera"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 px-4 rounded-lg shadow-sm w-1/3 transition-colors flex items-center justify-center">
+                        <i class="fa-solid fa-rotate mr-2"></i> Switch Cam
+                    </button>
+                    <button id="btn-capture"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full shadow-lg w-1/2 md:w-1/3 transition-colors flex items-center justify-center">
+                        <i class="fa-solid fa-camera mr-2"></i> SNAP
+                    </button>
+                </div>
+
+                <!-- Captured Thumbnails -->
+                <div id="thumbnails-container" class="flex overflow-x-auto space-x-2 py-2 mb-4 min-h-[70px]">
+                    <!-- Thumbnails go here -->
+                </div>
+
+                <!-- Action Buttons -->
+                <button id="btn-process" disabled
+                    class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors flex justify-center items-center">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Extract Data with AI
+                </button>
+                <div id="processing-indicator"
+                    class="hidden text-center mt-2 text-indigo-600 font-medium animate-pulse">
+                    Processing with Gemini 3.1 Pro... Might take a minute for 10 images.
+                </div>
+            </section>
+
+            <!-- Step 2: Review Area -->
+            <section id="review-section" class="bg-white rounded-xl shadow-md p-4 md:p-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold"><i class="fa-solid fa-list-check mr-2"></i>Review & Edit</h2>
+                    <button id="btn-reset" class="text-sm text-gray-500 hover:text-red-500 hover:underline">Start
+                        Over</button>
+                </div>
+
+                <p class="text-sm text-gray-600 mb-4">Click any field to edit. Data will automatically be sorted
+                    alphabetically when saved to Excel.</p>
+
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full text-sm text-left text-gray-500 border border-gray-200 rounded-lg">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 border-b border-r w-1/12 text-center text-xs">#</th>
+                                <th scope="col" class="px-4 py-3 border-b text-xs">Name <span
+                                        class="text-indigo-500">*</span></th>
+                                <th scope="col" class="px-4 py-3 border-b text-xs">Class</th>
+                                <th scope="col" class="px-4 py-3 border-b text-xs" id="score-th">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-tbody">
+                            <!-- Results go here -->
+                            <tr class="bg-white border-b hover:bg-gray-50">
+                                <td class="px-3 py-2 border-r text-center text-gray-500">1</td>
+                                <td class="px-3 py-2">
+                                    <input type="text"
+                                        class="w-full min-w-[120px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-0 px-2 py-3 text-sm font-medium transition-colors"
+                                        value="John Doe">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="text"
+                                        class="w-full min-w-[70px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-0 px-2 py-3 text-sm transition-colors"
+                                        value="JSS 1">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="text"
+                                        class="w-full min-w-[60px] bg-transparent border-b border-transparent hover:border-red-300 focus:border-red-500 focus:ring-0 px-2 py-3 text-red-600 font-bold text-sm transition-colors"
+                                        value="8/10">
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <button id="btn-export"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors flex justify-center items-center">
+                    <i class="fa-solid fa-file-excel mr-2"></i> Save to Excel
+                </button>
+                <div id="export-msg" class="text-center mt-3 text-sm font-medium hidden"></div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Invisible Canvas for capturing image frames -->
+    <canvas id="canvas" class="hidden"></canvas>
+
+    <script>
+        // Elements
+        const video = document.getElementById('camera-feed');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const btnCapture = document.getElementById('btn-capture');
+        const btnSwitchCam = document.getElementById('btn-camera');
+        const btnProcess = document.getElementById('btn-process');
+        const loadingIndicator = document.getElementById('camera-loading');
+        const batchCountEl = document.getElementById('batch-count');
+        const thumbnailsContainer = document.getElementById('thumbnails-container');
+        const processingIndicator = document.getElementById('processing-indicator');
+
+        const captureSection = document.getElementById('capture-section');
+        const reviewSection = document.getElementById('review-section');
+        const tbody = document.getElementById('results-tbody');
+        const btnReset = document.getElementById('btn-reset');
+        const btnExport = document.getElementById('btn-export');
+        const exportMsg = document.getElementById('export-msg');
+
+        // State
+        const MAX_BATCH_SIZE = 10;
+        let imagesBatch = []; // Stores objects { id: number, base64: string }
+        let extractedData = []; // Stores final objects from AI
+        let currentFacingMode = 'environment'; // environment (rear) or user (front)
+        let stream = null;
+        let imageIdCounter = 0;
+        let finalAssessmentType = '';
+
+        // UI Logic for Select Custom
+        const assessmentTypeSelect = document.getElementById('assessment-type');
+        const customAssessmentInput = document.getElementById('custom-assessment');
+        const scoreTh = document.getElementById('score-th');
+
+        assessmentTypeSelect.addEventListener('change', (e) => {
+            if (e.target.value === 'custom') {
+                customAssessmentInput.classList.remove('hidden');
+            } else {
+                customAssessmentInput.classList.add('hidden');
+            }
+        });
+
+        // Initialization
+        async function initCamera() {
+            loadingIndicator.classList.remove('hidden');
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: currentFacingMode,
+                        // Try to request higher resolution for better OCR
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                });
+                video.srcObject = stream;
+
+                // Wait for video metadata to load to set canvas dimensions correctly
+                video.onloadedmetadata = () => {
+                    loadingIndicator.classList.add('hidden');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                };
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+                loadingIndicator.innerHTML = `Error: Cannot access camera. <br/><span class="text-xs">Ensure you granted permissions or are using HTTPS/localhost.</span>`;
+            }
+        }
+
+        // Capture Image
+        btnCapture.addEventListener('click', () => {
+            if (imagesBatch.length >= MAX_BATCH_SIZE) {
+                alert(`You have reached the maximum batch size of ${MAX_BATCH_SIZE}.`);
+                return;
+            }
+
+            // Draw current video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert to base64 jpeg
+            // We use peg and 0.8 quality to keep payload reasonably sized
+            const base64Image = canvas.toDataURL('image/jpeg', 0.8);
+
+            // Create object with unique ID
+            const imageId = imageIdCounter++;
+            imagesBatch.push({ id: imageId, base64: base64Image });
+            batchCountEl.innerText = imagesBatch.length;
+
+            // Add Thumbnail to UI with a cancel button
+            const thumbDiv = document.createElement('div');
+            thumbDiv.className = 'relative flex-shrink-0 group';
+            thumbDiv.dataset.id = imageId;
+
+            const img = document.createElement('img');
+            img.src = base64Image;
+            img.className = 'captured-thumb shadow-sm';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'absolute -top-2 -right-2 bg-red-500 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 transition-transform transform hover:scale-110';
+            cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            cancelBtn.title = 'Remove image';
+            cancelBtn.onclick = function () {
+                // Remove from array
+                imagesBatch = imagesBatch.filter(item => item.id !== imageId);
+                batchCountEl.innerText = imagesBatch.length;
+                // Remove from UI
+                thumbDiv.remove();
+                // Disable process button if empty
+                if (imagesBatch.length === 0) {
+                    btnProcess.disabled = true;
+                }
+            };
+
+            thumbDiv.appendChild(img);
+            thumbDiv.appendChild(cancelBtn);
+            thumbnailsContainer.appendChild(thumbDiv);
+
+            // Enable process button if we have at least 1 image
+            btnProcess.disabled = false;
+
+            // Haptic feedback if supported (mostly mobile)
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            // Visual flash effect
+            video.style.opacity = 0;
+            setTimeout(() => video.style.opacity = 1, 100);
+        });
+
+        // Switch Camera
+        btnSwitchCam.addEventListener('click', () => {
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            initCamera();
+        });
+
+        // Process Batch (Send to Backend)
+        btnProcess.addEventListener('click', async () => {
+            if (imagesBatch.length === 0) return;
+
+            // UI updates
+            btnProcess.disabled = true;
+            btnCapture.disabled = true;
+            processingIndicator.classList.remove('hidden');
+
+            try {
+                // Extract base64 strings for the backend API
+                const base64List = imagesBatch.map(item => item.base64);
+
+                const response = await fetch('/upload-batch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ images: base64List })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Server error");
+
+                extractedData = data.results;
+
+                // Determine assessment type
+                finalAssessmentType = assessmentTypeSelect.value === 'custom'
+                    ? (customAssessmentInput.value.trim() || 'Score')
+                    : assessmentTypeSelect.value;
+
+                scoreTh.innerText = finalAssessmentType;
+
+                // Render Review UI
+                renderReviewTable(extractedData);
+
+                // Switch Views
+                captureSection.classList.add('hidden');
+                reviewSection.classList.remove('hidden');
+
+            } catch (err) {
+                console.error("Processing error:", err);
+                alert(`Error processing images: ${err.message}`);
+                btnProcess.disabled = false;
+                btnCapture.disabled = false;
+            } finally {
+                processingIndicator.classList.add('hidden');
+            }
+        });
+
+        // Render Data to Table
+        function renderReviewTable(data) {
+            tbody.innerHTML = '';
+            data.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-white border-b hover:bg-gray-50';
+
+                // Ensure values aren't null visually
+                const nameStr = item.name || '';
+                const classStr = item.class || '';
+                const scoreStr = item.score || '';
+
+                tr.innerHTML = `
+                <td class="px-3 py-2 border-r text-center text-gray-500">${index + 1}</td>
+                <td class="px-3 py-2"><input type="text" data-index="${index}" data-field="name" class="w-full min-w-[120px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-0 px-2 py-3 text-sm font-medium transition-colors" value="${nameStr}" placeholder="Student Name"></td>
+                <td class="px-3 py-2"><input type="text" data-index="${index}" data-field="class" class="w-full min-w-[70px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-0 px-2 py-3 text-sm transition-colors" value="${classStr}" placeholder="Class"></td>
+                <td class="px-3 py-2"><input type="text" data-index="${index}" data-field="score" class="w-full min-w-[60px] bg-transparent border-b border-transparent hover:border-red-300 focus:border-red-500 focus:ring-0 px-2 py-3 text-red-600 font-bold text-sm transition-colors" value="${scoreStr}" placeholder="Score"></td>
+            `;
+                tbody.appendChild(tr);
+            });
+
+            // Add event listeners to sync edits back to state array
+            const inputs = tbody.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const idx = parseInt(e.target.getAttribute('data-index'), 10);
+                    const field = e.target.getAttribute('data-field');
+                    extractedData[idx][field] = e.target.value;
+                });
+            });
+        }
+
+        // Export to Excel
+        btnExport.addEventListener('click', async () => {
+            btnExport.disabled = true;
+            btnExport.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...`;
+            exportMsg.classList.add('hidden');
+
+            try {
+                const response = await fetch('/export-excel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        results: extractedData,
+                        assessmentType: finalAssessmentType
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Export failed");
+
+                exportMsg.classList.remove('hidden', 'text-red-500');
+                exportMsg.classList.add('text-green-600');
+                exportMsg.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i> ${data.message}`;
+
+            } catch (err) {
+                console.error("Export error:", err);
+                exportMsg.classList.remove('hidden', 'text-green-600');
+                exportMsg.classList.add('text-red-500');
+                exportMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> Error: ${err.message}`;
+            } finally {
+                btnExport.disabled = false;
+                btnExport.innerHTML = `<i class="fa-solid fa-file-excel mr-2"></i> Save to Excel`;
+            }
+        });
+
+        // Reset Flow
+        btnReset.addEventListener('click', () => {
+            if (confirm("Are you sure? This will discard the current batch.")) {
+                // Reset state
+                imagesBatch = [];
+                extractedData = [];
+                batchCountEl.innerText = '0';
+                thumbnailsContainer.innerHTML = '';
+
+                // Reset UI
+                btnProcess.disabled = true;
+                btnCapture.disabled = false;
+                reviewSection.classList.add('hidden');
+                captureSection.classList.remove('hidden');
+                exportMsg.classList.add('hidden');
+            }
+        });
+
+        // Start video on load
+        window.addEventListener('load', initCamera);
+
+    </script>
+</body>
+
+</html>
