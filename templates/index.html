@@ -897,8 +897,8 @@
 
                             if (hullArea > 0) {
                                 let solidity = area / hullArea;
-                                // A rectangle/paper has high solidity (> 0.85). Hands have low solidity.
-                                if (solidity > 0.85) {
+                                // A rectangle/paper has high solidity (> 0.80). Hands have low solidity.
+                                if (solidity > 0.80) {
                                     documentFound = true;
                                     maxArea = area; // Keep the largest valid document contour
                                     if (bestContour) bestContour.delete();
@@ -907,6 +907,24 @@
                             }
                             hull.delete();
                         }
+                    }
+
+                    // Secondary Heuristic: Ensure the "paper" has text/ink on it, not just a blank white square.
+                    if (documentFound && bestContour) {
+                        let rect = cv.boundingRect(bestContour);
+                        // Cropped region of interest (ROI) from the Canny edges map
+                        let roi = edges.roi(rect);
+                        // Count non-zero pixels (edges) in the ROI
+                        let edgePixels = cv.countNonZero(roi);
+                        let roiArea = rect.width * rect.height;
+                        let edgeDensity = edgePixels / roiArea;
+
+                        // If it's a completely blank sheet of paper, edge density will be near 0.
+                        // We want at least ~2% of the paper to contain sharp contrasting edges (ink/text)
+                        if (edgeDensity < 0.02) {
+                            documentFound = false; // It's a solid rectangle, but it's blank or out of focus.
+                        }
+                        roi.delete();
                     }
 
                     // Draw HUD Graphic if found
