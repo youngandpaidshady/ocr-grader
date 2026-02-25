@@ -951,22 +951,18 @@
                             }
 
                             // Check 4: Skin-Tone Rejection (Color Neutrality)
-                            // Paper is white/gray: R ≈ G ≈ B (neutral).
-                            // Skin is warm: R > G > B (red-shifted).
-                            // If the Red channel is much higher than Blue, it's skin, not paper.
+                            // Sample the CENTER 50% to avoid thumb at edges.
                             if (documentFound) {
-                                let colorRoi = src.roi(roiRect);
-                                let meanColor = cv.mean(colorRoi);
-                                colorRoi.delete();
-
-                                let meanR = meanColor[0]; // RGBA order from cv.imread
-                                let meanG = meanColor[1];
-                                let meanB = meanColor[2];
-
-                                // Paper: |R - B| < 25. Skin: R - B > 25-50
-                                let warmth = meanR - meanB;
-                                if (warmth > 25) {
-                                    documentFound = false; // Too warm → skin/wood, not paper
+                                let cx2 = rx + Math.floor(rw * 0.25);
+                                let cy2 = ry + Math.floor(rh * 0.25);
+                                let cw2 = Math.floor(rw * 0.5);
+                                let ch2 = Math.floor(rh * 0.5);
+                                if (cw2 > 3 && ch2 > 3 && cx2 + cw2 <= checkW && cy2 + ch2 <= checkH) {
+                                    let centerRoi = src.roi(new cv.Rect(cx2, cy2, cw2, ch2));
+                                    let mc = cv.mean(centerRoi);
+                                    centerRoi.delete();
+                                    let w4 = mc[0] - mc[2]; // R - B warmth
+                                    if (w4 > 35) documentFound = false;
                                 }
                             }
                         } else {
