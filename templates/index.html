@@ -899,39 +899,58 @@
                     }
                 }
 
-                // Paper Brightness Discriminator:
-                // A test script is WHITE/CREAM paper with DARK ink.
-                // Check the grayscale ROI of the detected blob:
-                //   - Mean brightness > 120 = it's light-colored (paper, not a desk or metal bar)
-                //   - Std deviation > 20 = there's contrast (ink on paper, not a blank wall)
+                // ── DISCRIMINATOR GATE ─────────────────────────────────────
+                // Reject false positives (floors, walls, desks) with 3 checks:
+                //   1. MAX AREA: if blob covers >75% of frame, it's the entire scene, not a document
+                //   2. ASPECT RATIO: paper is roughly rectangular (0.3 to 3.5 w/h ratio)
+                //   3. BRIGHTNESS: paper is WHITE (mean > 150), not beige tiles (~140)
+                //   4. INK CONTRAST: stddev > 30 means dark ink on light paper
                 if (documentFound && bestContour) {
                     let rect = cv.boundingRect(bestContour);
-                    // Clamp ROI to image bounds
-                    let rx = Math.max(0, rect.x);
-                    let ry = Math.max(0, rect.y);
-                    let rw = Math.min(rect.width, checkW - rx);
-                    let rh = Math.min(rect.height, checkH - ry);
+                    let blobArea = cv.contourArea(bestContour);
+                    let frameArea = checkW * checkH;
 
-                    if (rw > 5 && rh > 5) {
-                        let roi = gray.roi(new cv.Rect(rx, ry, rw, rh));
-                        let mean = new cv.Mat();
-                        let stddev = new cv.Mat();
-                        cv.meanStdDev(roi, mean, stddev);
+                    // Check 1: Blob can't be the entire scene
+                    if (blobArea > frameArea * 0.75) {
+                        documentFound = false;
+                    }
 
-                        let meanBrightness = mean.data64F[0];
-                        let stdDeviation = stddev.data64F[0];
-
-                        roi.delete();
-                        mean.delete();
-                        stddev.delete();
-
-                        // Paper is bright (white/cream). Dark objects like desks, bars, walls fail here.
-                        // StdDev ensures there's ink contrast (not a blank white surface).
-                        if (meanBrightness < 120 || stdDeviation < 20) {
+                    // Check 2: Aspect ratio must be paper-like
+                    if (documentFound && rect.width > 0 && rect.height > 0) {
+                        let aspectRatio = rect.width / rect.height;
+                        if (aspectRatio < 0.3 || aspectRatio > 3.5) {
                             documentFound = false;
                         }
-                    } else {
-                        documentFound = false;
+                    }
+
+                    // Check 3 & 4: Brightness + ink contrast
+                    if (documentFound) {
+                        let rx = Math.max(0, rect.x);
+                        let ry = Math.max(0, rect.y);
+                        let rw = Math.min(rect.width, checkW - rx);
+                        let rh = Math.min(rect.height, checkH - ry);
+
+                        if (rw > 5 && rh > 5) {
+                            let roi = gray.roi(new cv.Rect(rx, ry, rw, rh));
+                            let mean = new cv.Mat();
+                            let stddev = new cv.Mat();
+                            cv.meanStdDev(roi, mean, stddev);
+
+                            let meanBrightness = mean.data64F[0];
+                            let stdDeviation = stddev.data64F[0];
+
+                            roi.delete();
+                            mean.delete();
+                            stddev.delete();
+
+                            // Paper is BRIGHT WHITE (>150). Beige tiles are ~130-145 → rejected.
+                            // Ink creates high contrast (stddev>30). Grout lines are ~20-25 → rejected.
+                            if (meanBrightness < 150 || stdDeviation < 30) {
+                                documentFound = false;
+                            }
+                        } else {
+                            documentFound = false;
+                        }
                     }
                 }
 
