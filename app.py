@@ -142,6 +142,12 @@ def upload_batch():
             for i, res in enumerate(results):
                 if i < len(chunk_indexed_images):
                     global_idx = chunk_indexed_images[i][0]
+                    
+                    # Clean the score (e.g., "8/10" -> "8")
+                    raw_score = str(res.get('score', '')).strip()
+                    if raw_score and '/' in raw_score:
+                        res['score'] = raw_score.split('/')[0].strip()
+                        
                     paired_results.append({"index": global_idx, "result": res})
             return paired_results
         

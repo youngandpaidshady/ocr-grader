@@ -660,7 +660,6 @@
         const statLowName = document.getElementById('stat-low-name');
 
         // State
-        const MAX_BATCH_SIZE = 10;
         let imagesBatch = [];
         let extractedData = [];
         let currentFacingMode = 'environment';
@@ -761,11 +760,6 @@
 
         // Capture Image
         function captureFrame() {
-            if (imagesBatch.length >= MAX_BATCH_SIZE) {
-                alert(`Maximum batch size of ${MAX_BATCH_SIZE} reached.`);
-                return;
-            }
-
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const rawBase64 = canvas.toDataURL('image/jpeg', 0.9); // Capture at high quality first
             const imageId = imageIdCounter++;
@@ -820,16 +814,16 @@
         btnCapture.addEventListener('click', captureFrame);
 
         // Auto-Capture Motion Detection Logic
-        let previousFrameData = null;
+        let anchorFrameData = null;
         let motionDetectorId = null;
         let stillTimeStart = null;
         const MOTION_THRESHOLD = 15; // Pixel difference tolerance
-        const STILL_DURATION_REQUIRED = 1500; // ms paper must be still
+        const STILL_DURATION_REQUIRED = 2000; // ms paper must be still (Increased to 2s)
 
         function detectMotion() {
-            if (!autoCaptureToggle.checked || imagesBatch.length >= MAX_BATCH_SIZE) {
+            if (!autoCaptureToggle.checked) {
                 autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-muted-foreground/30 transition-colors shadow-glow';
-                previousFrameData = null;
+                anchorFrameData = null;
                 stillTimeStart = null;
                 if (autoCaptureToggle.checked) motionDetectorId = requestAnimationFrame(detectMotion);
                 return;
@@ -847,23 +841,26 @@
                 dctx.drawImage(video, 0, 0, w, h);
                 const currentFrameData = dctx.getImageData(0, 0, w, h).data;
 
-                if (previousFrameData) {
+                if (!anchorFrameData) {
+                    anchorFrameData = currentFrameData;
+                } else {
                     let diffScore = 0;
                     for (let i = 0; i < currentFrameData.length; i += 4) {
-                        const rDiff = Math.abs(currentFrameData[i] - previousFrameData[i]);
-                        const gDiff = Math.abs(currentFrameData[i + 1] - previousFrameData[i + 1]);
-                        const bDiff = Math.abs(currentFrameData[i + 2] - previousFrameData[i + 2]);
+                        const rDiff = Math.abs(currentFrameData[i] - anchorFrameData[i]);
+                        const gDiff = Math.abs(currentFrameData[i + 1] - anchorFrameData[i + 1]);
+                        const bDiff = Math.abs(currentFrameData[i + 2] - anchorFrameData[i + 2]);
                         diffScore += rDiff + gDiff + bDiff;
                     }
 
                     const avgDiff = diffScore / (w * h * 3);
 
                     if (avgDiff > MOTION_THRESHOLD) {
-                        // Moving
+                        // Moving: Reset anchor to current flowing image
+                        anchorFrameData = currentFrameData;
                         stillTimeStart = null;
                         autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-yellow-500 transition-colors shadow-glow';
                     } else {
-                        // Still
+                        // Still (relative to anchor)
                         if (!stillTimeStart) {
                             stillTimeStart = Date.now();
                         } else if (Date.now() - stillTimeStart > STILL_DURATION_REQUIRED) {
@@ -872,17 +869,15 @@
                             captureFrame();
                             stillTimeStart = null; // Reset
 
-                            // Brief pause to allow user to swap paper so it doesn't double-snap
+                            // 2.5s pause to allow user to swap paper so it doesn't double-snap
                             setTimeout(() => {
-                                previousFrameData = null;
+                                anchorFrameData = null;
                                 motionDetectorId = requestAnimationFrame(detectMotion);
-                            }, 1000);
+                            }, 2500);
                             return;
                         }
                     }
                 }
-
-                previousFrameData = currentFrameData;
             } catch (e) { } // Ignore cross-origin canvas errors during init
 
             motionDetectorId = requestAnimationFrame(detectMotion);
@@ -891,7 +886,7 @@
         autoCaptureToggle.addEventListener('change', (e) => {
             if (e.target.checked) {
                 stillTimeStart = null;
-                previousFrameData = null;
+                anchorFrameData = null;
                 detectMotion();
             } else {
                 if (motionDetectorId) cancelAnimationFrame(motionDetectorId);
