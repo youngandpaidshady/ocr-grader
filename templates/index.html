@@ -259,11 +259,11 @@
             </div>
             <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-extrabold text-white mb-4 tracking-tight">
                 <i
-                    class="fa-solid fa-graduation-cap mr-3 text-primary drop-shadow-[0_0_15px_rgba(var(--brand-rgb),0.5)]"></i>OCR
-                Grader
+                    class="fa-solid fa-graduation-cap mr-3 text-primary drop-shadow-[0_0_15px_rgba(var(--brand-rgb),0.5)]"></i>QSI
+                Smart Grader
             </h1>
             <p class="text-muted-foreground text-lg max-w-xl mx-auto font-medium">Capture handwritten exam scripts and
-                let the model automatically extract, format, and rank the results directly to Excel.</p>
+                let the AI automatically extract, format, and rank the results directly to Excel.</p>
         </header>
 
         <main>
@@ -272,26 +272,41 @@
                 class="reveal bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] text-center">
                 <i
                     class="fa-solid fa-file-excel text-5xl text-emerald-500 mb-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]"></i>
-                <h2 class="text-2xl font-heading font-bold text-white mb-2 tracking-tight">Initialize Roster</h2>
-                <p class="text-muted-foreground mb-8 max-w-md mx-auto text-sm leading-relaxed">To get started, choose
-                    whether to begin a brand new blank spreadsheet or upload an existing class roster for smart
-                    name-matching.</p>
+                <h2 class="text-2xl font-heading font-bold text-white mb-2 tracking-tight">Welcome to QSI Auto-Grader
+                </h2>
+                <p class="text-muted-foreground mb-8 max-w-lg mx-auto text-sm leading-relaxed">To make sure the AI
+                    assigns grades to the correct students, how would you like to provide your class list?</p>
 
-                <div class="flex flex-col md:flex-row justify-center gap-4">
-                    <button id="btn-start-blank"
-                        class="w-full md:w-auto bg-primary hover:bg-primary/90 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-glow flex items-center justify-center group mb-2 md:mb-0">
-                        <i class="fa-solid fa-file-lines mr-3 group-hover:scale-110 transition-transform"></i> Start
-                        Blank Sheet
-                    </button>
-                    <div class="relative w-full md:w-auto">
-                        <input type="file" id="upload-roster-input" accept=".xlsx, .xls, .csv" class="hidden">
+                <div class="flex flex-col sm:flex-row justify-center gap-3 max-w-3xl mx-auto">
+                    <!-- Option 1: Upload File -->
+                    <div class="relative flex-1">
+                        <input type="file" id="upload-roster-input" accept=".txt,.md,.xlsx,.csv" class="hidden">
                         <button id="btn-upload-roster" onclick="document.getElementById('upload-roster-input').click()"
-                            class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold py-4 px-8 rounded-xl transition-all flex items-center justify-center group">
+                            class="w-full h-full bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-4 px-4 rounded-xl transition-all flex flex-col items-center justify-center group gap-2">
                             <i
-                                class="fa-solid fa-file-arrow-up mr-3 group-hover:-translate-y-1 transition-transform"></i>
-                            Upload Existing Sheet
+                                class="fa-solid fa-file-arrow-up text-xl text-primary group-hover:-translate-y-1 transition-transform"></i>
+                            <span class="text-sm font-bold">1. Upload Class List</span>
+                            <span class="text-[10px] text-muted-foreground/70">Excel, CSV, or Text file</span>
                         </button>
                     </div>
+
+                    <!-- Option 2: Paste Names -->
+                    <button id="btn-open-paste-modal-start"
+                        onclick="document.getElementById('btn-open-paste-modal').click()"
+                        class="flex-1 bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-4 px-4 rounded-xl transition-all flex flex-col items-center justify-center group gap-2">
+                        <i
+                            class="fa-solid fa-paste text-xl text-primary group-hover:scale-110 transition-transform"></i>
+                        <span class="text-sm font-bold">2. Paste Student Names</span>
+                        <span class="text-[10px] text-muted-foreground/70">Copy from Word/WhatsApp</span>
+                    </button>
+
+                    <!-- Option 3: Skip -->
+                    <button id="btn-start-blank"
+                        class="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-4 px-4 rounded-xl transition-all shadow-glow flex flex-col items-center justify-center group gap-2">
+                        <i class="fa-solid fa-forward-step text-xl group-hover:translate-x-1 transition-transform"></i>
+                        <span class="text-sm font-bold">3. Skip (No Names Yet)</span>
+                        <span class="text-[10px] text-white/80">Grade raw numbers only</span>
+                    </button>
                 </div>
                 <div id="start-msg" class="text-sm font-semibold mt-6 hidden"></div>
             </section>
@@ -395,8 +410,8 @@
                         <!-- Assessment Type -->
                         <div class="space-y-2">
                             <label
-                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Assessment
-                                Type</label>
+                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">What
+                                are you grading?</label>
                             <div
                                 class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
                                 <select id="assessment-type"
@@ -424,13 +439,13 @@
                         <!-- Target Class -->
                         <div class="space-y-2 group">
                             <label
-                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Target
-                                Class</label>
+                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Class
+                                Name</label>
                             <div
                                 class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
                                 <input type="text" id="target-class"
                                     class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
-                                    placeholder="e.g., SS1Q" required>
+                                    placeholder="e.g., JSS 1, SS 2A" required>
                                 <div class="input-focus-anim"></div>
                             </div>
                             <p class="text-[11px] text-muted-foreground/60 mt-1 pl-1 flex items-start gap-1.5"><i
@@ -442,8 +457,8 @@
                     <!-- Roster Management -->
                     <div class="pt-5 border-t border-white/5 space-y-3">
                         <label
-                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Roster
-                            Management</label>
+                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Manage
+                            Class List</label>
                         <div class="flex flex-col sm:flex-row gap-3">
                             <div class="relative flex-1">
                                 <input type="file" id="roster-upload" accept=".txt,.md,.xlsx,.csv" class="hidden">
@@ -458,12 +473,12 @@
                                 class="magnetic flex-1 bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm group">
                                 <i
                                     class="fa-solid fa-paste text-primary group-hover:scale-110 transition-transform"></i>
-                                <span>Paste Names</span>
+                                <span>Type or Paste Names</span>
                             </button>
                             <button id="btn-clear-roster"
                                 class="magnetic flex-1 bg-red-900/20 hover:bg-red-900/40 border border-red-500/20 text-red-100 font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm">
                                 <i class="fa-solid fa-trash-can"></i>
-                                <span>Init Blank Roster</span>
+                                <span>Clear Class List</span>
                             </button>
                         </div>
                     </div>
@@ -478,7 +493,7 @@
                         class="absolute inset-0 rounded-full border border-primary/30 group-hover:border-primary/60 transition-colors"></span>
                     <i
                         class="fa-solid fa-wand-magic-sparkles mr-2 text-primary group-hover:scale-110 transition-transform"></i>
-                    Extract Data
+                    Mark Papers Now!
                 </button>
             </div>
 
@@ -490,8 +505,8 @@
                     <i class="fa-solid fa-microchip text-primary"></i>
                 </div>
                 <span
-                    class="text-xs font-bold tracking-widest uppercase border border-primary/20 bg-primary/10 px-5 py-2 rounded-full shadow-glow">Extracting
-                    via Model...</span>
+                    class="text-xs font-bold tracking-widest uppercase border border-primary/20 bg-primary/10 px-5 py-2 rounded-full shadow-glow">AI
+                    is Grading Papers...</span>
             </div>
 
             <!-- Step 2: Review Area -->
@@ -506,11 +521,11 @@
                         <span
                             class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mr-3 border border-white/10 shadow-sm"><i
                                 class="fa-solid fa-list-check text-white text-sm"></i></span>
-                        Data Review
+                        Review Grades
                     </h2>
                     <button id="btn-reset"
                         class="text-xs font-bold tracking-widest uppercase text-muted-foreground hover:text-white transition-colors px-4 py-2 rounded-lg border border-white/5 hover:border-white/20 bg-black/40 hover:bg-black/60 flex items-center shadow-sm">
-                        <i class="fa-solid fa-rotate-left mr-2"></i> Clear Batch
+                        <i class="fa-solid fa-rotate-left mr-2"></i> Delete these & Start Over
                     </button>
                 </div>
 
@@ -521,7 +536,7 @@
                             <tr>
                                 <th scope="col"
                                     class="px-5 py-4 w-12 text-center rounded-tl-xl border-r border-white/5">#</th>
-                                <th scope="col" class="px-5 py-4 border-r border-white/5">Student Identity <span
+                                <th scope="col" class="px-5 py-4 border-r border-white/5">Student Name <span
                                         class="text-primary">*</span></th>
                                 <th scope="col" class="px-5 py-4 border-r border-white/5">Class</th>
                                 <th scope="col" class="px-5 py-4 text-right rounded-tr-xl" id="score-th">Score</th>
@@ -535,8 +550,8 @@
 
                 <button id="btn-export"
                     class="magnetic holographic shadow-glow w-full bg-primary hover:bg-primary/90 text-white font-extrabold text-sm uppercase tracking-widest py-5 px-6 rounded-xl transition-all active:scale-95 flex justify-center items-center group relative z-10 border border-t-white/30 border-primary shadow-[0_4px_14px_0_rgba(var(--brand-rgb),0.39)]">
-                    <i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Append to
-                    Results.xlsx
+                    <i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Save
+                    Grades to Active Roster
                 </button>
                 <div id="export-msg" class="text-center mt-5 text-sm font-bold hidden relative z-10"></div>
             </section>
@@ -547,7 +562,7 @@
                     <span
                         class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-glow"><i
                             class="fa-solid fa-chart-pie text-emerald-400 text-sm"></i></span>
-                    <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight">Session Analytics
+                    <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight">Class Statistics
                     </h2>
                 </div>
 
@@ -584,13 +599,13 @@
                     <button id="btn-download-sheet" onclick="window.location.href='/download-sheet'"
                         class="w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-glow flex items-center justify-center group mb-2 md:mb-0">
                         <i class="fa-solid fa-download mr-2 group-hover:translate-y-1 transition-transform"></i>
-                        Download Final Sheet
+                        Download Complete Excel Sheet
                     </button>
                     <button id="btn-new-batch"
                         class="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-sm border border-white/10 flex items-center justify-center group">
                         <i
                             class="fa-solid fa-rotate-right mr-2 group-hover:-rotate-90 transition-transform duration-500"></i>
-                        Start Next Batch
+                        Scan More Papers
                     </button>
                 </div>
             </section>
@@ -617,7 +632,7 @@
             class="bg-card w-full max-w-md mx-4 rounded-2xl border border-white/10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.8)] p-6 transform scale-95 transition-transform duration-300">
             <div class="flex justify-between items-center mb-5">
                 <h3 class="text-white font-bold text-lg tracking-wide"><i
-                        class="fa-solid fa-paste text-primary mr-2"></i>Paste Class List</h3>
+                        class="fa-solid fa-paste text-primary mr-2"></i>Type or Paste Student Names</h3>
                 <button id="btn-close-paste"
                     class="text-white/50 hover:text-white transition-colors w-8 h-8 flex justify-center items-center rounded-full hover:bg-white/10">
                     <i class="fa-solid fa-xmark"></i>
@@ -627,12 +642,13 @@
             <div class="space-y-4">
                 <div class="space-y-2 group">
                     <label
-                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Target
-                        Class</label>
+                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Class
+                        Name
+                    </label>
                     <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
                         <input type="text" id="paste-target-class"
                             class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
-                            placeholder="e.g., SS1Q" required>
+                            placeholder="e.g., JSS 1, SS 2A" required>
                         <div class="input-focus-anim"></div>
                     </div>
                 </div>
@@ -653,7 +669,7 @@
 
                 <button id="btn-submit-paste"
                     class="magnetic w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl transition-all shadow-glow mt-2 flex justify-center items-center">
-                    Parse & Save Roster
+                    Save Student Names
                 </button>
             </div>
         </div>
