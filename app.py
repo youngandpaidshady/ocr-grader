@@ -2,7 +2,7 @@ import os
 import base64
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, send_file, Response, stream_with_context
 from flask_cors import CORS
 import google.generativeai as genai
 import pandas as pd
@@ -102,10 +102,18 @@ def upload_batch():
         CHUNK_SIZE = 3  # Process 3 images per Gemini call for optimal speed/accuracy
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        def process_chunk(chunk_images):
+        # Attach global index to each image
+        indexed_images = list(enumerate(images_base64))
+        
+        # Split images into chunks
+        image_chunks = []
+        for i in range(0, len(indexed_images), CHUNK_SIZE):
+            image_chunks.append(indexed_images[i:i + CHUNK_SIZE])
+        
+        def process_chunk(chunk_indexed_images):
             """Process a chunk of images through Gemini."""
             contents = [dynamic_prompt]
-            for img_b64 in chunk_images:
+            for idx, img_b64 in chunk_indexed_images:
                 if 'base64,' in img_b64:
                     img_b64 = img_b64.split('base64,')[1]
                 contents.append({
@@ -118,37 +126,41 @@ def upload_batch():
                 response_text = response_text[7:]
             if response_text.endswith("```"):
                 response_text = response_text[:-3]
-            return json.loads(response_text.strip())
+            try:
+                results = json.loads(response_text.strip())
+            except Exception as e:
+                print(f"Error parsing JSON from Gemini: {e}")
+                results = []
+                
+            # Map back the global index to the result
+            paired_results = []
+            for i, res in enumerate(results):
+                if i < len(chunk_indexed_images):
+                    global_idx = chunk_indexed_images[i][0]
+                    paired_results.append({"index": global_idx, "result": res})
+            return paired_results
         
-        # Split images into chunks
-        image_chunks = []
-        for i in range(0, len(images_base64), CHUNK_SIZE):
-            image_chunks.append(images_base64[i:i + CHUNK_SIZE])
+        @stream_with_context
+        def generate():
+            if len(image_chunks) == 1:
+                # Single chunk
+                chunk_res = process_chunk(image_chunks[0])
+                for r in chunk_res:
+                    yield f"data: {json.dumps(r)}\n\n"
+            else:
+                # Concurrent processing of multiple chunks
+                with ThreadPoolExecutor(max_workers=min(len(image_chunks), 4)) as executor:
+                    futures = [executor.submit(process_chunk, chunk) for chunk in image_chunks]
+                    for future in as_completed(futures):
+                        try:
+                            chunk_res = future.result()
+                            for r in chunk_res:
+                                yield f"data: {json.dumps(r)}\n\n"
+                        except Exception as exc:
+                            print(f'Chunk generated an exception: {exc}')
+            yield "data: [DONE]\n\n"
         
-        all_results = []
-        
-        if len(image_chunks) == 1:
-            # Single chunk, no need for threading
-            all_results = process_chunk(image_chunks[0])
-        else:
-            # Concurrent processing of multiple chunks
-            chunk_results = [None] * len(image_chunks)
-            with ThreadPoolExecutor(max_workers=min(len(image_chunks), 4)) as executor:
-                future_to_idx = {executor.submit(process_chunk, chunk): idx for idx, chunk in enumerate(image_chunks)}
-                for future in as_completed(future_to_idx):
-                    idx = future_to_idx[future]
-                    chunk_results[idx] = future.result()
-            
-            # Merge results in order
-            for chunk_result in chunk_results:
-                if isinstance(chunk_result, list):
-                    all_results.extend(chunk_result)
-                else:
-                    all_results.append(chunk_result)
-        
-        print(f"Processed {len(all_results)} results from {len(image_chunks)} chunk(s)")
-        
-        return jsonify({"results": all_results})
+        return Response(generate(), mimetype='text/event-stream')
 
     except Exception as e:
         print(f"Error processing batch: {e}")
