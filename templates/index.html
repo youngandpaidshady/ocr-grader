@@ -57,6 +57,10 @@
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- OpenCV.js for Advanced Document Detection -->
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="console.log('OpenCV loaded');"
+        type="text/javascript"></script>
+
     <style>
         :root {
             --brand-rgb: 33, 150, 243;
@@ -829,6 +833,70 @@
                 return;
             }
 
+            // Document Heuristic Check: Uses OpenCV.js to find large document contours
+            function isDocumentPresent() {
+                // Wait for OpenCV to load
+                if (typeof cv === 'undefined' || !cv.Mat) return false;
+
+                const checkW = 320; // Increased resolution for better contour detection
+                const checkH = 240;
+                const docCanvas = document.createElement('canvas');
+                docCanvas.width = checkW;
+                docCanvas.height = checkH;
+                const docCtx = docCanvas.getContext('2d', { willReadFrequently: true });
+
+                try {
+                    docCtx.drawImage(video, 0, 0, checkW, checkH);
+
+                    // Create OpenCV Mats
+                    let src = cv.imread(docCanvas);
+                    let dst = new cv.Mat();
+                    let edges = new cv.Mat();
+                    let contours = new cv.MatVector();
+                    let hierarchy = new cv.Mat();
+
+                    // 1. Convert to grayscale & blur slightly to remove noise
+                    cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+                    cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+
+                    // 2. Perform Canny edge detection
+                    cv.Canny(dst, edges, 75, 200, 3, false);
+
+                    // 3. Find contours
+                    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                    let documentFound = false;
+                    const minDocumentArea = (checkW * checkH) * 0.15; // Document must take up at least 15% of the frame
+
+                    for (let i = 0; i < contours.size(); ++i) {
+                        let cnt = contours.get(i);
+                        let area = cv.contourArea(cnt);
+
+                        if (area > minDocumentArea) {
+                            // Check if the contour is roughly rectangular
+                            let perimeter = cv.arcLength(cnt, true);
+                            let approx = new cv.Mat();
+                            cv.approxPolyDP(cnt, approx, 0.04 * perimeter, true);
+
+                            // A document should have exactly 4 vertices (corners)
+                            if (approx.rows === 4) {
+                                documentFound = true;
+                            }
+                            approx.delete();
+                        }
+                    }
+
+                    // Cleanup memory (Critical for OpenCV.js)
+                    src.delete(); dst.delete(); edges.delete(); contours.delete(); hierarchy.delete();
+
+                    return documentFound;
+
+                } catch (e) {
+                    console.error("OpenCV detection error:", e);
+                    return false;
+                }
+            }
+
             // Draw current low-res frame for analysis
             const w = 64; // Tiny resolution for fast diffing
             const h = 48;
@@ -864,17 +932,26 @@
                         if (!stillTimeStart) {
                             stillTimeStart = Date.now();
                         } else if (Date.now() - stillTimeStart > STILL_DURATION_REQUIRED) {
-                            // Valid Auto-Capture!
-                            autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-emerald-500 transition-colors shadow-glow ring-2 ring-emerald-500/50';
-                            captureFrame();
-                            stillTimeStart = null; // Reset
 
-                            // 2.5s pause to allow user to swap paper so it doesn't double-snap
-                            setTimeout(() => {
-                                anchorFrameData = null;
-                                motionDetectorId = requestAnimationFrame(detectMotion);
-                            }, 2500);
-                            return;
+                            // Only snap if we actually detect a paper-like object
+                            if (isDocumentPresent()) {
+                                // Valid Auto-Capture!
+                                autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-emerald-500 transition-colors shadow-glow ring-2 ring-emerald-500/50';
+                                captureFrame();
+                                stillTimeStart = null; // Reset
+
+                                // 2.5s pause to allow user to swap paper so it doesn't double-snap
+                                setTimeout(() => {
+                                    anchorFrameData = null;
+                                    motionDetectorId = requestAnimationFrame(detectMotion);
+                                }, 2500);
+                                return;
+                            } else {
+                                // It's still, but it's not a document (e.g. wall, empty desk)
+                                autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-blue-500 transition-colors shadow-glow';
+                                anchorFrameData = null; // Reset anchor to keep looking
+                                stillTimeStart = null;
+                            }
                         }
                     }
                 }
