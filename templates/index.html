@@ -923,7 +923,13 @@
                         }
                     }
 
-                    // Check 3 & 4: Brightness + ink contrast
+                    // Check 3: White Pixel Ratio (the KEY discriminator)
+                    // Paper has many near-white pixels (the background between text lines).
+                    // Floor tiles are uniformly beige (~140) with almost zero pixels above 180.
+                    // This test counts what % of the ROI is "white" (>180 brightness).
+                    //   - White paper with ink: 20-70% white pixels → PASS
+                    //   - Beige floor tiles: <5% white pixels → FAIL
+                    //   - Dark desk/metal: <1% white pixels → FAIL
                     if (documentFound) {
                         let rx = Math.max(0, rect.x);
                         let ry = Math.max(0, rect.y);
@@ -932,20 +938,19 @@
 
                         if (rw > 5 && rh > 5) {
                             let roi = gray.roi(new cv.Rect(rx, ry, rw, rh));
-                            let mean = new cv.Mat();
-                            let stddev = new cv.Mat();
-                            cv.meanStdDev(roi, mean, stddev);
 
-                            let meanBrightness = mean.data64F[0];
-                            let stdDeviation = stddev.data64F[0];
+                            // Threshold at 180: pixels brighter than 180 = "white"
+                            let binary = new cv.Mat();
+                            cv.threshold(roi, binary, 180, 255, cv.THRESH_BINARY);
+                            let whitePixels = cv.countNonZero(binary);
+                            let totalPixels = rw * rh;
+                            let whiteRatio = whitePixels / totalPixels;
 
                             roi.delete();
-                            mean.delete();
-                            stddev.delete();
+                            binary.delete();
 
-                            // Paper is BRIGHT WHITE (>150). Beige tiles are ~130-145 → rejected.
-                            // Ink creates high contrast (stddev>30). Grout lines are ~20-25 → rejected.
-                            if (meanBrightness < 150 || stdDeviation < 30) {
+                            // Paper needs at least 20% white pixels
+                            if (whiteRatio < 0.20) {
                                 documentFound = false;
                             }
                         } else {
