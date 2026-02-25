@@ -383,6 +383,10 @@ def export_excel():
                 # Ensure Name column exists
                 if 'Name' not in df_existing.columns:
                     df_existing['Name'] = ''
+                    
+                # Defeat Pandas strict dtype assignment rules by converting column to object first
+                if assessment_type in df_existing.columns:
+                    df_existing[assessment_type] = df_existing[assessment_type].astype(object)
                 
                 # Iterate over new grades to insert/update smartly
                 for _, row in class_data_new.iterrows():
