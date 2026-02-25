@@ -262,9 +262,38 @@
         </header>
 
         <main>
+            <!-- Step 0: Start Screen -->
+            <section id="start-section"
+                class="reveal bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] text-center">
+                <i
+                    class="fa-solid fa-file-excel text-5xl text-emerald-500 mb-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]"></i>
+                <h2 class="text-2xl font-heading font-bold text-white mb-2 tracking-tight">Initialize Roster</h2>
+                <p class="text-muted-foreground mb-8 max-w-md mx-auto text-sm leading-relaxed">To get started, choose
+                    whether to begin a brand new blank spreadsheet or upload an existing class roster for smart
+                    name-matching.</p>
+
+                <div class="flex flex-col md:flex-row justify-center gap-4">
+                    <button id="btn-start-blank"
+                        class="w-full md:w-auto bg-primary hover:bg-primary/90 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-glow flex items-center justify-center group mb-2 md:mb-0">
+                        <i class="fa-solid fa-file-lines mr-3 group-hover:scale-110 transition-transform"></i> Start
+                        Blank Sheet
+                    </button>
+                    <div class="relative w-full md:w-auto">
+                        <input type="file" id="upload-roster-input" accept=".xlsx, .xls, .csv" class="hidden">
+                        <button id="btn-upload-roster" onclick="document.getElementById('upload-roster-input').click()"
+                            class="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold py-4 px-8 rounded-xl transition-all flex items-center justify-center group">
+                            <i
+                                class="fa-solid fa-file-arrow-up mr-3 group-hover:-translate-y-1 transition-transform"></i>
+                            Upload Existing Sheet
+                        </button>
+                    </div>
+                </div>
+                <div id="start-msg" class="text-sm font-semibold mt-6 hidden"></div>
+            </section>
+
             <!-- Step 1: Capture Area -->
             <section id="capture-section"
-                class="reveal reveal-delay-1 bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
+                class="hidden reveal reveal-delay-1 bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
                 <!-- Inner subtle gradient for volume -->
                 <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent pointer-events-none">
                 </div>
@@ -507,7 +536,12 @@
                     </div>
                 </div>
 
-                <div class="flex justify-center">
+                <div class="flex flex-col md:flex-row justify-center gap-4">
+                    <button id="btn-download-sheet" onclick="window.location.href='/download-sheet'"
+                        class="w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-glow flex items-center justify-center group mb-2 md:mb-0">
+                        <i class="fa-solid fa-download mr-2 group-hover:translate-y-1 transition-transform"></i>
+                        Download Final Sheet
+                    </button>
                     <button id="btn-new-batch"
                         class="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-sm border border-white/10 flex items-center justify-center group">
                         <i
@@ -558,6 +592,66 @@
         const autoCaptureToggle = document.getElementById('auto-capture-toggle');
         const autoCaptureStatus = document.getElementById('auto-capture-status');
 
+        // Start Section Elements
+        const startSection = document.getElementById('start-section');
+        const btnStartBlank = document.getElementById('btn-start-blank');
+        const uploadRosterInput = document.getElementById('upload-roster-input');
+        const startMsg = document.getElementById('start-msg');
+
+        // Start Blank Flow
+        btnStartBlank.addEventListener('click', async () => {
+            btnStartBlank.disabled = true;
+            btnStartBlank.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Initializing...`;
+            startMsg.classList.add('hidden');
+            try {
+                const res = await fetch('/start-blank-sheet', { method: 'POST' });
+                if (!res.ok) throw new Error("Failed to initialize");
+                startSection.classList.add('hidden');
+                captureSection.classList.remove('hidden');
+                initCamera();
+            } catch (e) {
+                startMsg.classList.remove('hidden', 'text-primary');
+                startMsg.classList.add('text-destructive');
+                startMsg.innerText = e.message;
+            } finally {
+                btnStartBlank.disabled = false;
+                btnStartBlank.innerHTML = `<i class="fa-solid fa-file-lines mr-3 group-hover:scale-110 transition-transform"></i> Start Blank Sheet`;
+            }
+        });
+
+        // Upload Existing Flow
+        uploadRosterInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const btnUploadRoster = document.getElementById('btn-upload-roster');
+            btnUploadRoster.disabled = true;
+            btnUploadRoster.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Uploading...`;
+            startMsg.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/upload-sheet', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) throw new Error("Upload failed");
+                startSection.classList.add('hidden');
+                captureSection.classList.remove('hidden');
+                initCamera();
+            } catch (err) {
+                startMsg.classList.remove('hidden', 'text-primary');
+                startMsg.classList.add('text-destructive');
+                startMsg.innerText = err.message;
+            } finally {
+                btnUploadRoster.disabled = false;
+                btnUploadRoster.innerHTML = `<i class="fa-solid fa-file-arrow-up mr-3 group-hover:-translate-y-1 transition-transform"></i> Upload Existing Sheet`;
+                uploadRosterInput.value = '';
+            }
+        });
+
         // Analytics Elements
         const statAvg = document.getElementById('stat-avg');
         const statHigh = document.getElementById('stat-high');
@@ -587,6 +681,28 @@
                 customAssessmentWrapper.classList.add('hidden');
             }
         });
+
+        // Initialize Camera
+        async function initCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            loadingIndicator.classList.remove('hidden');
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    loadingIndicator.classList.add('hidden');
+                };
+            } catch (err) {
+                console.error("Camera error:", err);
+                loadingIndicator.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-destructive text-3xl mb-3 block"></i><span class="text-sm font-bold text-destructive">Camera Access Denied</span>`;
+            }
+        }
 
         // Smart Image Compression: only downscale if > MAX_WIDTH, preserving quality for low-end cameras
         const COMPRESS_MAX_WIDTH = 1600;
@@ -1043,7 +1159,7 @@
                 exportMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> Error: ${err.message}`;
             } finally {
                 btnExport.disabled = false;
-                btnExport.innerHTML = `<i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Append to Results.xlsx`;
+                btnExport.innerHTML = `<i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Compile To Dashboard`;
             }
         });
 

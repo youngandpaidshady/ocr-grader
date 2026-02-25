@@ -6,10 +6,14 @@ from flask import Flask, request, jsonify, render_template, send_file, Response,
 from flask_cors import CORS
 import google.generativeai as genai
 import pandas as pd
+from thefuzz import process, fuzz
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Active working file path configured globally
+WORKING_EXCEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ActiveRoaster.xlsx")
 
 # Configure Gemini AI
 api_key = os.getenv("GEMINI_API_KEY")
@@ -166,6 +170,41 @@ def upload_batch():
         print(f"Error processing batch: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/start-blank-sheet', methods=['POST'])
+def start_blank_sheet():
+    """Initializes a blank active roster and clears the old one."""
+    try:
+        # Create a single empty dataframe with generic columns to start
+        df = pd.DataFrame(columns=["Name", "Class"])
+        df.to_excel(WORKING_EXCEL_PATH, index=False, sheet_name="General")
+        return jsonify({"message": "Blank sheet initialized.", "status": "success"}), 200
+    except Exception as e:
+        print(f"Error starting blank sheet: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/upload-sheet', methods=['POST'])
+def upload_sheet():
+    """Accepts an Excel file from the frontend and saves it as the active roster."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if file and file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        try:
+            # Just save it as the working path regardless of original extension, 
+            # though we should enforce saving as clean xlsx
+            if file.filename.endswith('.csv'):
+                df = pd.read_csv(file)
+                df.to_excel(WORKING_EXCEL_PATH, index=False)
+            else:
+                file.save(WORKING_EXCEL_PATH)
+            return jsonify({"message": "Roster successfully uploaded and set as active.", "status": "success"}), 200
+        except Exception as e:
+            print(f"Error saving uploaded sheet: {e}")
+            return jsonify({"error": str(e)}), 500
+    return jsonify({"error": "Invalid file type. Please upload an Excel or CSV file."}), 400
+
 @app.route('/export-excel', methods=['POST'])
 def export_excel():
     try:
@@ -209,20 +248,13 @@ def export_excel():
             
         df_new = pd.DataFrame(formatted_results)
         
-        # Save to Excel
-        output_filename = "Results.xlsx"
-        try:
-            output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
-        except NameError:
-            output_path = output_filename
-            
         # Dictionary to hold dataframes for each sheet (Class)
         sheets_dict = {}
         
         # Load existing if available
-        if os.path.exists(output_path):
+        if os.path.exists(WORKING_EXCEL_PATH):
             try:
-                sheets_dict = pd.read_excel(output_path, sheet_name=None)
+                sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
             except Exception as e:
                 print(f"Could not read existing Excel: {e}")
                 
@@ -233,7 +265,7 @@ def export_excel():
             # Safe sheet name (Excel limits to 31 chars)
             sheet_name = str(c)[:31]
             if not sheet_name:
-                sheet_name = "Unknown"
+                sheet_name = "General"
                 
             # Get the new data for this specific class
             class_data_new = df_new[df_new['Class'] == c][['Name', assessment_type]]
@@ -247,6 +279,43 @@ def export_excel():
                 # Ensure Name column exists
                 if 'Name' not in df_existing.columns:
                     df_existing['Name'] = ''
+                
+                # Iterate over new grades to insert/update smartly
+                for _, row in class_data_new.iterrows():
+                    new_name = str(row['Name']).strip()
+                    new_score = row[assessment_type]
+                    
+                    if not new_name:
+                        continue
+                        
+                    # 1. Exact Match first
+                    exact_match_idx = df_existing.index[df_existing['Name'].str.strip().str.lower() == new_name.lower()].tolist()
+                    
+                    if exact_match_idx:
+                        # Update exact match
+                        idx = exact_match_idx[0]
+                        df_existing.at[idx, assessment_type] = new_score
+                    else:
+                        # 2. Fuzzy Match via thefuzz
+                        existing_names = df_existing['Name'].dropna().astype(str).tolist()
+                        if existing_names:
+                            # Use token set ratio which is good for rearranged names e.g. "Smith, John" vs "John Smith"
+                            best_match_tuple = process.extractOne(new_name, existing_names, scorer=fuzz.token_set_ratio)
+                            
+                            # If we find a good enough match (e.g. 85+ out of 100)
+                            if best_match_tuple and best_match_tuple[1] >= 85:
+                                matched_name = best_match_tuple[0]
+                                matched_idx = df_existing.index[df_existing['Name'] == matched_name].tolist()[0]
+                                df_existing.at[matched_idx, assessment_type] = new_score
+                                print(f"Fuzzy Matched: OCR '{new_name}' -> DB '{matched_name}' ({best_match_tuple[1]}%)")
+                                continue
+                                
+                        # 3. No match found, append new row
+                        new_row_dict = {'Name': new_name, assessment_type: new_score}
+                        df_existing = pd.concat([df_existing, pd.DataFrame([new_row_dict])], ignore_index=True)
+                
+                sheets_dict[sheet_name] = df_existing
+
                     
                 # Set index to Name for easier merging/updating
                 df_existing = df_existing.set_index('Name')
@@ -342,22 +411,36 @@ def export_excel():
                     
                 class_data_new['Position'] = class_data_new['Rank'].apply(format_position)
                 class_data_new = class_data_new.drop(columns=['Rank'])
-                # --------------------------------------------
-                
                 sheets_dict[sheet_name] = class_data_new
                 
-        # Write all sheets back to Excel
-        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        # Save all sheets back to Excel
+        with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
             for s_name, df_sheet in sheets_dict.items():
                 df_sheet.to_excel(writer, sheet_name=s_name, index=False)
-        
-        return jsonify({"success": True, "message": f"Successfully merged and exported to {output_filename}", "path": output_filename})
-        
+                
+        return jsonify({"message": f"Successfully mapped and saved {len(results)} grades to Active Sheet."}), 200
+
     except Exception as e:
-        print(f"Error exporting to Excel: {e}")
+        print(f"Excel export error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+@app.route('/download-sheet', methods=['GET'])
+def download_sheet():
+    """Returns the compiled Excel file to the user."""
+    if os.path.exists(WORKING_EXCEL_PATH):
+        try:
+            return send_file(
+                WORKING_EXCEL_PATH, 
+                as_attachment=True, 
+                download_name="OCR_Graded_Results.xlsx",
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        return jsonify({"error": "No active sheet found. Start a batch first."}), 404
 
 if __name__ == '__main__':
     # Make sure templates folder exists
