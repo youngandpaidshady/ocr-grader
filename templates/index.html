@@ -610,6 +610,55 @@
     <!-- Invisible Canvas for capturing image frames -->
     <canvas id="canvas" class="hidden"></canvas>
 
+    <!-- Paste Roster Modal -->
+    <div id="paste-modal"
+        class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+        <div
+            class="bg-card w-full max-w-md mx-4 rounded-2xl border border-white/10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.8)] p-6 transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-white font-bold text-lg tracking-wide"><i
+                        class="fa-solid fa-paste text-primary mr-2"></i>Paste Class List</h3>
+                <button id="btn-close-paste"
+                    class="text-white/50 hover:text-white transition-colors w-8 h-8 flex justify-center items-center rounded-full hover:bg-white/10">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="space-y-2 group">
+                    <label
+                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Target
+                        Class</label>
+                    <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
+                        <input type="text" id="paste-target-class"
+                            class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
+                            placeholder="e.g., SS1Q" required>
+                        <div class="input-focus-anim"></div>
+                    </div>
+                </div>
+
+                <div class="space-y-2 group">
+                    <label
+                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 flex justify-between">
+                        <span>Student Names</span>
+                        <span class="text-primary/70">One per line</span>
+                    </label>
+                    <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
+                        <textarea id="paste-raw-text" rows="8"
+                            class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide resize-none"
+                            placeholder="Ajayi Elizabeth&#x0a;Oluwatoyin Jewel&#x0a;..."></textarea>
+                        <div class="input-focus-anim"></div>
+                    </div>
+                </div>
+
+                <button id="btn-submit-paste"
+                    class="magnetic w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl transition-all shadow-glow mt-2 flex justify-center items-center">
+                    Parse & Save Roster
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Elements
         const video = document.getElementById('camera-feed');
@@ -1627,55 +1676,6 @@
             }, { passive: true });
         }
     </script>
-
-    <!-- Paste Roster Modal -->
-    <div id="paste-modal"
-        class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-300">
-        <div
-            class="bg-card w-full max-w-md mx-4 rounded-2xl border border-white/10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.8)] p-6 transform scale-95 transition-transform duration-300">
-            <div class="flex justify-between items-center mb-5">
-                <h3 class="text-white font-bold text-lg tracking-wide"><i
-                        class="fa-solid fa-paste text-primary mr-2"></i>Paste Class List</h3>
-                <button id="btn-close-paste"
-                    class="text-white/50 hover:text-white transition-colors w-8 h-8 flex justify-center items-center rounded-full hover:bg-white/10">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="space-y-4">
-                <div class="space-y-2 group">
-                    <label
-                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Target
-                        Class</label>
-                    <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
-                        <input type="text" id="paste-target-class"
-                            class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
-                            placeholder="e.g., SS1Q" required>
-                        <div class="input-focus-anim"></div>
-                    </div>
-                </div>
-
-                <div class="space-y-2 group">
-                    <label
-                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 flex justify-between">
-                        <span>Student Names</span>
-                        <span class="text-primary/70">One per line</span>
-                    </label>
-                    <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
-                        <textarea id="paste-raw-text" rows="8"
-                            class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide resize-none"
-                            placeholder="Ajayi Elizabeth&#x0a;Oluwatoyin Jewel&#x0a;..."></textarea>
-                        <div class="input-focus-anim"></div>
-                    </div>
-                </div>
-
-                <button id="btn-submit-paste"
-                    class="magnetic w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl transition-all shadow-glow mt-2 flex justify-center items-center">
-                    Parse & Save Roster
-                </button>
-            </div>
-        </div>
-    </div>
 </body>
 
 </html>
