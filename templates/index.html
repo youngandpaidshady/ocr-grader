@@ -883,7 +883,7 @@
 
                     let documentFound = false;
                     let bestContour = null;
-                    let maxArea = (checkW * checkH) * 0.15; // Minimum 15% of frame
+                    let maxArea = (checkW * checkH) * 0.08; // Relaxed to 8% so it triggers even when zoomed out
 
                     for (let i = 0; i < contours.size(); ++i) {
                         let cnt = contours.get(i);
@@ -897,8 +897,9 @@
 
                             if (hullArea > 0) {
                                 let solidity = area / hullArea;
-                                // A rectangle/paper has high solidity (> 0.80). Hands have low solidity.
-                                if (solidity > 0.80) {
+                                // Wait, the user's paper might be severely warped or heavily occluded by fingers.
+                                // Relax solidity constraint to 70%.
+                                if (solidity > 0.70) {
                                     documentFound = true;
                                     maxArea = area; // Keep the largest valid document contour
                                     if (bestContour) bestContour.delete();
@@ -919,10 +920,9 @@
                         let roiArea = rect.width * rect.height;
                         let edgeDensity = edgePixels / roiArea;
 
-                        // If it's a completely blank sheet of paper, edge density will be near 0.
-                        // We want at least ~2% of the paper to contain sharp contrasting edges (ink/text)
-                        if (edgeDensity < 0.02) {
-                            documentFound = false; // It's a solid rectangle, but it's blank or out of focus.
+                        // We want at least ~1% of the paper to contain sharp contrasting edges (ink/text)
+                        if (edgeDensity < 0.01) {
+                            documentFound = false; // It's a solid rectangle, but it's completely blank or out of focus.
                         }
                         roi.delete();
                     }
@@ -947,10 +947,10 @@
                         }
                         hudCtx.closePath();
                         hudCtx.stroke();
-
-                        bestContour.delete();
                     }
 
+                    // CRITICAL MEMORY LEAK FIX: Always delete bestContour, even if documentFound became false!
+                    if (bestContour) bestContour.delete();
                     src.delete(); dst.delete(); edges.delete(); contours.delete(); hierarchy.delete();
                     return documentFound;
 
