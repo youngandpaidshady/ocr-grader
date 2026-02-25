@@ -877,71 +877,81 @@
                     let hierarchy = new cv.Mat();
 
                     cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
-                    cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-                    cv.Canny(dst, edges, 40, 120, 3, false);
-                    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+                    // Strong blur to merge nearby text and lines
+                    cv.GaussianBlur(dst, dst, new cv.Size(7, 7), 0, 0, cv.BORDER_DEFAULT);
+
+                    // Very sensitive Canny detection to catch faint paper boundaries & text
+                    cv.Canny(dst, edges, 20, 60, 3, false);
+
+                    // Dilate to fuse text/lines/edges into larger connected contour webs
+                    let M = cv.Mat.ones(5, 5, cv.CV_8U);
+                    cv.dilate(edges, edges, M, new cv.Point(-1, -1), 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+                    M.delete();
+
+                    // Optional: Pad to close contours that bleed off the screen
+                    cv.copyMakeBorder(edges, edges, 2, 2, 2, 2, cv.BORDER_CONSTANT, new cv.Scalar(0, 0, 0, 255));
+
+                    // Use RETR_LIST to get ALL contours (open lines, closed shapes)
+                    cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
 
                     let documentFound = false;
-                    let bestContour = null;
-                    let maxArea = (checkW * checkH) * 0.08; // Relaxed to 8% so it triggers even when zoomed out
+                    let bestHull = null;
+                    let maxArea = (checkW * checkH) * 0.15; // At least 15% of the screen
 
                     for (let i = 0; i < contours.size(); ++i) {
                         let cnt = contours.get(i);
-                        let area = cv.contourArea(cnt);
+                        let hull = new cv.Mat();
+
+                        // Get the polygon wrapping this contour/line
+                        cv.convexHull(cnt, hull, false, true);
+                        let area = cv.contourArea(hull);
 
                         if (area > maxArea) {
-                            // Check Convex Hull Solidity
-                            let hull = new cv.Mat();
-                            cv.convexHull(cnt, hull, false, true);
-                            let hullArea = cv.contourArea(hull);
-
-                            if (hullArea > 0) {
-                                let solidity = area / hullArea;
-                                // Wait, the user's paper might be severely warped or heavily occluded by fingers.
-                                // Relax solidity constraint to 70%.
-                                if (solidity > 0.70) {
-                                    documentFound = true;
-                                    maxArea = area; // Keep the largest valid document contour
-                                    if (bestContour) bestContour.delete();
-                                    bestContour = cnt.clone();
-                                }
-                            }
-                            hull.delete();
+                            maxArea = area;
+                            if (bestHull) bestHull.delete();
+                            bestHull = hull.clone();
+                            documentFound = true;
                         }
+                        hull.delete();
                     }
 
-                    // Secondary Heuristic: Ensure the "paper" has text/ink on it, not just a blank white square.
-                    if (documentFound && bestContour) {
-                        let rect = cv.boundingRect(bestContour);
-                        // Cropped region of interest (ROI) from the Canny edges map
-                        let roi = edges.roi(rect);
-                        // Count non-zero pixels (edges) in the ROI
+                    // Secondary check: ensure the center of the screen has some ink/edges
+                    if (documentFound) {
+                        let cx = Math.floor(checkW / 4);
+                        let cy = Math.floor(checkH / 4);
+                        let cw = Math.floor(checkW / 2);
+                        let ch = Math.floor(checkH / 2);
+                        let rect = new cv.Rect(cx, cy, cw, ch);
+
+                        // Because we added a 2px border to 'edges' earlier, we need to shift the ROI by 2px
+                        let safeRect = new cv.Rect(cx + 2, cy + 2, cw, ch);
+                        let roi = edges.roi(safeRect);
                         let edgePixels = cv.countNonZero(roi);
-                        let roiArea = rect.width * rect.height;
+                        let roiArea = cw * ch;
                         let edgeDensity = edgePixels / roiArea;
-
-                        // We want at least ~1% of the paper to contain sharp contrasting edges (ink/text)
-                        if (edgeDensity < 0.01) {
-                            documentFound = false; // It's a solid rectangle, but it's completely blank or out of focus.
-                        }
                         roi.delete();
+
+                        // Just 0.5% texture (text/lines) in the center validates it
+                        if (edgeDensity < 0.005) {
+                            documentFound = false;
+                        }
                     }
 
-                    // Draw HUD Graphic if found
-                    if (documentFound && bestContour) {
+                    if (bestHull) {
                         const scaleX = hudCanvas.width / checkW;
                         const scaleY = hudCanvas.height / checkH;
 
-                        hudCtx.strokeStyle = '#10b981'; // Emerald 500
+                        hudCtx.strokeStyle = '#10b981';
                         hudCtx.lineWidth = 4;
                         hudCtx.shadowColor = '#10b981';
                         hudCtx.shadowBlur = 15;
 
                         hudCtx.beginPath();
-                        let points = bestContour.data32S;
+                        let points = bestHull.data32S;
                         for (let j = 0; j < points.length; j += 2) {
-                            let x = points[j] * scaleX;
-                            let y = points[j + 1] * scaleY;
+                            // Subtract 2 to account for the copyMakeBorder padding
+                            let x = (points[j] - 2) * scaleX;
+                            let y = (points[j + 1] - 2) * scaleY;
                             if (j === 0) hudCtx.moveTo(x, y);
                             else hudCtx.lineTo(x, y);
                         }
@@ -949,8 +959,7 @@
                         hudCtx.stroke();
                     }
 
-                    // CRITICAL MEMORY LEAK FIX: Always delete bestContour, even if documentFound became false!
-                    if (bestContour) bestContour.delete();
+                    if (bestHull) bestHull.delete();
                     src.delete(); dst.delete(); edges.delete(); contours.delete(); hierarchy.delete();
                     return documentFound;
 
