@@ -58,14 +58,43 @@ def upload_batch():
             return jsonify({"error": "No images provided"}), 400
         
         images_base64 = data['images']
+        target_class = data.get('targetClass', '').strip()
         
         if not images_base64:
              return jsonify({"error": "Empty images list"}), 400
 
         print(f"Received a batch of {len(images_base64)} images for processing...")
         
+        # Pull known names for this class to improve accuracy (Smart Name Matching)
+        known_names_text = ""
+        output_filename = "Results.xlsx"
+        try:
+            output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
+        except NameError:
+            output_path = output_filename
+            
+        if target_class and os.path.exists(output_path):
+            try:
+                # Find matching sheet based on formatting logic
+                import re
+                c_cleaned = re.sub(r'[^A-Z0-9]', '', target_class.upper())
+                match = re.match(r'([A-Z]+)(\d+)', c_cleaned)
+                sheet_target = f"{match.group(1)} {match.group(2)}" if match else (target_class.upper() or "Unknown Class")
+                sheet_target = sheet_target[:31]
+                
+                sheets_dict = pd.read_excel(output_path, sheet_name=None)
+                if sheet_target in sheets_dict:
+                    df_existing = sheets_dict[sheet_target]
+                    if 'Name' in df_existing.columns:
+                        known_names = df_existing['Name'].dropna().tolist()
+                        if known_names:
+                            known_names_text = f"\n\nCRITICAL INSTRUCTION: You are grading papers for class '{sheet_target}'. Here is the list of already known students in this class: {known_names}. If a handwritten name closely resembles one of these known names, you MUST use the exact spelling from this list."
+            except Exception as e:
+                print(f"Error checking known names: {e}")
+        
         # Prepare contents for Gemini
-        contents = [SYSTEM_PROMPT]
+        dynamic_prompt = SYSTEM_PROMPT + known_names_text
+        contents = [dynamic_prompt]
         
         for index, img_b64 in enumerate(images_base64):
             # Clean base64 string if it contains the data uri prefix (e.g., data:image/jpeg;base64,...)
@@ -199,12 +228,84 @@ def export_excel():
                 # Reset index back to normal columns
                 df_existing = df_existing.reset_index()
                 
-                # Sort alphabetically
+                # Sort alphabetically by default
                 df_existing = df_existing.sort_values(by='Name', ascending=True)
+                
+                # ---- Calculate Total Score and Position ----
+                if 'Total Score' in df_existing.columns:
+                    df_existing = df_existing.drop(columns=['Total Score'])
+                if 'Position' in df_existing.columns:
+                    df_existing = df_existing.drop(columns=['Position'])
+                
+                def parse_score(val):
+                    try:
+                        val_str = str(val).strip()
+                        if not val_str or val_str.lower() in ['nan', 'none']:
+                            return 0.0
+                        if '/' in val_str:
+                            val_str = val_str.split('/')[0]
+                        return float(val_str)
+                    except:
+                        return 0.0
+                        
+                score_cols = [col for col in df_existing.columns if col not in ['Name', 'Class']]
+                
+                # Pandas 2.1+ deprecates applymap, use map or apply depending on version, apply(lambda x: x.map(parse_score)) is safe
+                df_existing['Total Score'] = df_existing[score_cols].apply(lambda x: x.map(parse_score)).sum(axis=1)
+                
+                # Compute Ranking (min method handles ties: 1, 1, 3)
+                df_existing['Rank'] = df_existing['Total Score'].rank(method='min', ascending=False)
+                
+                def format_position(rank):
+                    if pd.isna(rank): return ''
+                    r = int(rank)
+                    if 11 <= (r % 100) <= 13:
+                        suffix = 'th'
+                    else:
+                        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+                    return f"{r}{suffix}"
+                    
+                df_existing['Position'] = df_existing['Rank'].apply(format_position)
+                df_existing = df_existing.drop(columns=['Rank'])
+                
+                # Reorder so Total and Position are at the end
+                final_cols = [c for c in df_existing.columns if c not in ['Total Score', 'Position']] + ['Total Score', 'Position']
+                df_existing = df_existing[final_cols]
+                # --------------------------------------------
+                
                 sheets_dict[sheet_name] = df_existing
             else:
                 # Brand new class sheet
                 class_data_new = class_data_new.sort_values(by='Name', ascending=True)
+                
+                # ---- Calculate Total Score and Position ----
+                def parse_score(val):
+                    try:
+                        val_str = str(val).strip()
+                        if not val_str or val_str.lower() in ['nan', 'none']:
+                            return 0.0
+                        if '/' in val_str:
+                            val_str = val_str.split('/')[0]
+                        return float(val_str)
+                    except:
+                        return 0.0
+                
+                class_data_new['Total Score'] = class_data_new[assessment_type].apply(parse_score)
+                class_data_new['Rank'] = class_data_new['Total Score'].rank(method='min', ascending=False)
+                
+                def format_position(rank):
+                    if pd.isna(rank): return ''
+                    r = int(rank)
+                    if 11 <= (r % 100) <= 13:
+                        suffix = 'th'
+                    else:
+                        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+                    return f"{r}{suffix}"
+                    
+                class_data_new['Position'] = class_data_new['Rank'].apply(format_position)
+                class_data_new = class_data_new.drop(columns=['Rank'])
+                # --------------------------------------------
+                
                 sheets_dict[sheet_name] = class_data_new
                 
         # Write all sheets back to Excel

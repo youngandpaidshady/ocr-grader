@@ -5,17 +5,207 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OCR Grader Assistant</title>
-    <!-- Use Tailwind CSS for quick, modern styling -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome for icons -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        background: 'hsl(215, 10%, 4%)',    /* Deep midnight blue layer 0 */
+                        foreground: 'hsl(215, 5%, 98%)',
+                        card: 'hsl(215, 10%, 6%)',          /* Elevated surface */
+                        'card-foreground': 'hsl(215, 5%, 98%)',
+                        muted: 'hsl(215, 10%, 15%)',
+                        'muted-foreground': 'hsl(215, 10%, 65%)',
+                        primary: 'hsl(215, 90%, 55%)',      /* QSI Blue */
+                        'primary-foreground': 'hsl(0, 0%, 98%)',
+                        accent: 'hsl(215, 80%, 70%)',
+                        destructive: 'hsl(0, 72%, 51%)',
+                    },
+                    animation: {
+                        'fade-in-up': 'fadeInUp 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
+                        'pulse-glow': 'pulseGlow 3s infinite',
+                        'spin-slow': 'spin 8s linear infinite',
+                    },
+                    keyframes: {
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { opacity: 0.2 },
+                            '50%': { opacity: 0.4 },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        /* Custom styles to ensure video acts properly on mobile */
+        :root {
+            --brand-rgb: 33, 150, 243;
+            /* Matches primary HSL 215, 90%, 55% */
+        }
+
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.foreground');
+        }
+
+        /* 21st.dev Premium Depth & Textures */
+        .dot-matrix {
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .shadow-glow {
+            box-shadow: 0 0 20px rgba(var(--brand-rgb), 0.3);
+        }
+
+        .shadow-glow-lg {
+            box-shadow: 0 0 40px rgba(var(--brand-rgb), 0.4);
+        }
+
+        .shadow-bloom {
+            box-shadow: 0 0 60px 20px rgba(var(--brand-rgb), 0.15);
+        }
+
+        .noise {
+            position: relative;
+        }
+
+        .noise::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Input Animations */
+        .input-wrapper {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.75rem;
+        }
+
+        .input-focus-anim {
+            position: absolute;
+            inset: -1px;
+            background: linear-gradient(90deg, transparent, rgba(var(--brand-rgb), 0.5), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            border-radius: 0.75rem;
+        }
+
+        select:focus~.input-focus-anim,
+        input[type="text"]:focus~.input-focus-anim {
+            opacity: 1;
+        }
+
+        /* Animation Base */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px) scale(0.98);
+            transition: all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            will-change: opacity, transform;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .reveal-delay-1 {
+            transition-delay: 100ms;
+        }
+
+        .reveal-delay-2 {
+            transition-delay: 200ms;
+        }
+
+        /* Card Light Beam (Active Card Effect) */
+        .light-beam-card {
+            position: relative;
+        }
+
+        .light-beam-card::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+
+        .light-beam-card:hover::before {
+            opacity: 1;
+        }
+
+        /* Holographic Sheen */
+        .holographic {
+            background-image: linear-gradient(75deg, transparent 30%, rgba(255, 255, 255, 0.2) 50%, transparent 70%);
+            background-size: 200% 100%;
+            background-position: 100% 0;
+            transition: background-position 0.6s ease;
+        }
+
+        .holographic:hover {
+            background-position: -100% 0;
+        }
+
+        /* Mobile Touch Ripples */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            transform: scale(0);
+            animation: ripple-anim 600ms linear;
+            background-color: rgba(255, 255, 255, 0.2);
+            pointer-events: none;
+        }
+
+        @keyframes ripple-anim {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* Magnetic Button Transition */
+        .magnetic {
+            transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.2s;
+            will-change: transform;
+        }
+
+        /* Component Overrides */
         #video-container {
             width: 100%;
             max-width: 600px;
             margin: 0 auto;
-            border-radius: 0.5rem;
+            border-radius: 1rem;
             overflow: hidden;
             position: relative;
             background-color: #000;
@@ -32,139 +222,235 @@
             width: 60px;
             height: 60px;
             object-fit: cover;
-            border-radius: 0.25rem;
-            border: 2px solid white;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
     </style>
 </head>
 
-<body class="bg-gray-50 text-gray-800 min-h-screen font-sans antialiased">
+<body class="min-h-screen font-sans antialiased overflow-x-hidden selection:bg-primary/30 relative bg-background">
 
-    <div class="max-w-4xl mx-auto p-4 md:p-6">
+    <!-- Scroll Progress Indicator -->
+    <div id="scroll-progress"
+        class="fixed top-0 left-0 h-1 bg-gradient-to-r from-primary to-accent z-50 transition-all duration-100 origin-left shadow-glow border-b border-primary"
+        style="width: 0%;"></div>
+
+    <!-- Depth Layer 1: Atmosphere (Dot Matrix + Single Spotlight Glow) -->
+    <div class="fixed inset-0 z-0 noise pointer-events-none"></div>
+    <div class="fixed inset-0 z-0 dot-matrix pointer-events-none opacity-50"></div>
+    <div
+        class="fixed top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-primary/10 blur-[120px] pointer-events-none z-0">
+    </div>
+
+    <!-- Depth Layer 3: Foreground Content -->
+    <div class="max-w-4xl mx-auto p-4 md:p-8 relative z-10 w-full animate-fade-in-up">
+
         <!-- Header -->
-        <header class="text-center mb-8 pt-4">
-            <h1 class="text-3xl font-bold text-indigo-700 mb-2"><i class="fa-solid fa-graduation-cap mr-2"></i>OCR
-                Grader</h1>
-            <p class="text-gray-600">Scan handwritten test scripts in batches of 10.</p>
+        <header class="text-center mb-16 pt-12 reveal visible relative">
+            <div
+                class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-primary/20 blur-[60px] rounded-full -z-10">
+            </div>
+            <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-extrabold text-white mb-4 tracking-tight">
+                <i
+                    class="fa-solid fa-graduation-cap mr-3 text-primary drop-shadow-[0_0_15px_rgba(var(--brand-rgb),0.5)]"></i>OCR
+                Grader
+            </h1>
+            <p class="text-muted-foreground text-lg max-w-xl mx-auto font-medium">Capture handwritten exam scripts and
+                let the model automatically extract, format, and rank the results directly to Excel.</p>
         </header>
 
-        <!-- Main Content Area -->
         <main>
-
             <!-- Step 1: Capture Area -->
-            <section id="capture-section" class="bg-white rounded-xl shadow-md p-4 md:p-6 mb-8">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold"><i class="fa-solid fa-camera mr-2"></i>Capture Scripts</h2>
-                    <span class="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">Batch:
-                        <span id="batch-count">0</span>/10</span>
+            <section id="capture-section"
+                class="reveal reveal-delay-1 bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
+                <!-- Inner subtle gradient for volume -->
+                <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent pointer-events-none">
                 </div>
 
-                <!-- Assessment Type Selector -->
-                <div class="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Assessment Type / Column Name</label>
-                    <select id="assessment-type"
-                        class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                        <option value="1st CA">1st CA</option>
-                        <option value="2nd CA">2nd CA</option>
-                        <option value="Assignment">Assignment</option>
-                        <option value="Exam">Exam</option>
-                        <option value="Open Day">Open Day</option>
-                        <option value="custom">-- Custom Name --</option>
-                    </select>
-                    <input type="text" id="custom-assessment"
-                        class="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm hidden"
-                        placeholder="e.g., Midterm Project">
+                <div
+                    class="flex flex-col md:flex-row md:justify-between items-start md:items-center mb-8 gap-3 relative z-10">
+                    <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight flex items-center">
+                        <span
+                            class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mr-3 border border-primary/20 shadow-glow"><i
+                                class="fa-solid fa-camera text-primary text-sm"></i></span>
+                        Capture Scripts
+                    </h2>
+                    <span
+                        class="bg-card text-foreground border border-white/10 text-xs font-semibold px-4 py-1.5 rounded-full flex items-center gap-2 shadow-sm">
+                        Batch Count
+                        <span id="batch-count"
+                            class="bg-primary text-white px-2 py-0.5 rounded-md text-[10px] font-bold shadow-glow border border-primary/30">0/10</span>
+                    </span>
+                </div>
+
+                <!-- Input Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8 relative z-10">
+                    <!-- Assessment Type -->
+                    <div class="space-y-2">
+                        <label
+                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Assessment
+                            Type</label>
+                        <div
+                            class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
+                            <select id="assessment-type"
+                                class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-medium">
+                                <option value="1st CA" class="bg-card">1st CA</option>
+                                <option value="2nd CA" class="bg-card">2nd CA</option>
+                                <option value="Assignment" class="bg-card">Assignment</option>
+                                <option value="Exam" class="bg-card">Exam</option>
+                                <option value="Open Day" class="bg-card">Open Day</option>
+                                <option value="custom" class="bg-card">-- Custom Name --</option>
+                            </select>
+                            <i
+                                class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
+                            <div class="input-focus-anim"></div>
+                        </div>
+                        <div class="input-wrapper border border-white/10 bg-black/40 mt-3 hidden"
+                            id="custom-assessment-wrapper">
+                            <input type="text" id="custom-assessment"
+                                class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
+                                placeholder="e.g., Midterm Project">
+                            <div class="input-focus-anim"></div>
+                        </div>
+                    </div>
+
+                    <!-- Target Class -->
+                    <div class="space-y-2 group">
+                        <label
+                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Target
+                            Class</label>
+                        <div
+                            class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
+                            <input type="text" id="target-class"
+                                class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
+                                placeholder="e.g., SS1Q" required>
+                            <div class="input-focus-anim"></div>
+                        </div>
+                        <p class="text-[11px] text-muted-foreground/60 mt-1 pl-1 flex items-start gap-1.5"><i
+                                class="fa-solid fa-circle-info text-primary/70 mt-[2px]"></i> Matches handwriting to
+                            known students.</p>
+                    </div>
                 </div>
 
                 <!-- Video Feed -->
-                <div id="video-container" class="mb-4 aspect-[3/4] md:aspect-video flex items-center justify-center">
-                    <video id="camera-feed" autoplay playsinline></video>
-                    <div id="camera-loading" class="absolute text-white text-sm">Requesting camera access...</div>
+                <div id="video-container"
+                    class="mb-6 border border-white/10 flex items-center justify-center bg-black shadow-inner overflow-hidden relative group z-10">
+                    <div
+                        class="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none">
+                    </div>
+                    <video id="camera-feed" class="w-full h-full object-cover relative z-0" autoplay
+                        playsinline></video>
+                    <div id="camera-loading"
+                        class="absolute z-20 text-muted-foreground text-sm flex flex-col items-center gap-3 bg-black/70 backdrop-blur-xl p-5 rounded-2xl border border-white/5">
+                        <i class="fa-solid fa-circle-notch fa-spin text-primary text-3xl"></i>
+                        <span class="font-medium tracking-wide">Initializing Camera...</span>
+                    </div>
                 </div>
 
                 <!-- Capture Controls -->
-                <div class="flex justify-center space-x-4 mb-4">
+                <div class="flex flex-row justify-center space-x-3 mb-8 relative z-10">
                     <button id="btn-camera"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 px-4 rounded-lg shadow-sm w-1/3 transition-colors flex items-center justify-center">
-                        <i class="fa-solid fa-rotate mr-2"></i> Switch Cam
+                        class="magnetic bg-black/40 hover:bg-black/80 border border-white/10 text-white font-semibold py-4 px-5 rounded-xl transition-colors active:scale-95 flex items-center justify-center text-sm w-1/3 shadow-sm hover:shadow-md hover:border-white/20">
+                        <i class="fa-solid fa-rotate mr-2 text-muted-foreground"></i> Flip
                     </button>
                     <button id="btn-capture"
-                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full shadow-lg w-1/2 md:w-1/3 transition-colors flex items-center justify-center">
-                        <i class="fa-solid fa-camera mr-2"></i> SNAP
+                        class="magnetic shadow-glow bg-primary hover:bg-primary/90 text-white font-bold py-4 px-8 rounded-xl w-2/3 transition-all active:scale-95 flex items-center justify-center tracking-wide overflow-hidden relative group">
+                        <!-- Custom Flash overlay -->
+                        <span
+                            class="absolute inset-0 w-full h-full bg-white opacity-0 active:opacity-40 transition-opacity duration-100 mix-blend-overlay"></span>
+                        <i class="fa-solid fa-camera mr-2 group-hover:scale-110 transition-transform"></i> <span
+                            class="tracking-widest">SNAP</span>
                     </button>
                 </div>
 
                 <!-- Captured Thumbnails -->
-                <div id="thumbnails-container" class="flex overflow-x-auto space-x-2 py-2 mb-4 min-h-[70px]">
+                <div id="thumbnails-container"
+                    class="flex overflow-x-auto space-x-3 py-2 mb-2 min-h-[70px] relative z-10 scrollbar-hide">
                     <!-- Thumbnails go here -->
-                </div>
-
-                <!-- Action Buttons -->
-                <button id="btn-process" disabled
-                    class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors flex justify-center items-center">
-                    <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Extract Data with AI
-                </button>
-                <div id="processing-indicator"
-                    class="hidden text-center mt-2 text-indigo-600 font-medium animate-pulse">
-                    Processing with Gemini 3.1 Pro... Might take a minute for 10 images.
                 </div>
             </section>
 
+            <!-- Action Area / Action Zone Divider -->
+            <div class="relative flex justify-center -my-6 z-20 reveal reveal-delay-2">
+                <button id="btn-process" disabled
+                    class="magnetic holographic shadow-glow-lg bg-card border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:bg-card disabled:holographic-none text-white font-extrabold text-sm uppercase px-10 py-5 rounded-full transition-all active:scale-95 flex items-center justify-center tracking-widest group">
+                    <span
+                        class="absolute inset-0 rounded-full border border-primary/30 group-hover:border-primary/60 transition-colors"></span>
+                    <i
+                        class="fa-solid fa-wand-magic-sparkles mr-2 text-primary group-hover:scale-110 transition-transform"></i>
+                    Extract Data
+                </button>
+            </div>
+
+            <div id="processing-indicator"
+                class="hidden text-center mt-12 mb-4 text-primary font-medium flex flex-col items-center justify-center gap-3">
+                <div class="relative flex items-center justify-center p-2">
+                    <div class="absolute inset-0 border-2 border-primary/20 border-t-primary rounded-full animate-spin">
+                    </div>
+                    <i class="fa-solid fa-microchip text-primary"></i>
+                </div>
+                <span
+                    class="text-xs font-bold tracking-widest uppercase border border-primary/20 bg-primary/10 px-5 py-2 rounded-full shadow-glow">Extracting
+                    via Model...</span>
+            </div>
+
             <!-- Step 2: Review Area -->
-            <section id="review-section" class="bg-white rounded-xl shadow-md p-4 md:p-6 hidden">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold"><i class="fa-solid fa-list-check mr-2"></i>Review & Edit</h2>
-                    <button id="btn-reset" class="text-sm text-gray-500 hover:text-red-500 hover:underline">Start
-                        Over</button>
+            <section id="review-section"
+                class="reveal bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mt-16 mb-8 hidden relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
+                <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent pointer-events-none">
                 </div>
 
-                <p class="text-sm text-gray-600 mb-4">Click any field to edit. Data will automatically be sorted
-                    alphabetically when saved to Excel.</p>
+                <div
+                    class="flex flex-col md:flex-row md:justify-between items-start md:items-center mb-10 gap-4 relative z-10">
+                    <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight flex items-center">
+                        <span
+                            class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mr-3 border border-white/10 shadow-sm"><i
+                                class="fa-solid fa-list-check text-white text-sm"></i></span>
+                        Data Review
+                    </h2>
+                    <button id="btn-reset"
+                        class="text-xs font-bold tracking-widest uppercase text-muted-foreground hover:text-white transition-colors px-4 py-2 rounded-lg border border-white/5 hover:border-white/20 bg-black/40 hover:bg-black/60 flex items-center shadow-sm">
+                        <i class="fa-solid fa-rotate-left mr-2"></i> Clear Batch
+                    </button>
+                </div>
 
-                <div class="overflow-x-auto mb-6">
-                    <table class="w-full text-sm text-left text-gray-500 border border-gray-200 rounded-lg">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                <div class="overflow-x-visible md:overflow-x-auto mb-10 relative z-10">
+                    <table class="w-full text-sm text-left block md:table">
+                        <thead
+                            class="hidden md:table-header-group text-[11px] uppercase bg-black/60 border-b border-white/5 tracking-widest font-bold text-muted-foreground/80">
                             <tr>
-                                <th scope="col" class="px-4 py-3 border-b border-r w-1/12 text-center text-xs">#</th>
-                                <th scope="col" class="px-4 py-3 border-b text-xs">Name <span
-                                        class="text-indigo-500">*</span></th>
-                                <th scope="col" class="px-4 py-3 border-b text-xs">Class</th>
-                                <th scope="col" class="px-4 py-3 border-b text-xs" id="score-th">Score</th>
+                                <th scope="col"
+                                    class="px-5 py-4 w-12 text-center rounded-tl-xl border-r border-white/5">#</th>
+                                <th scope="col" class="px-5 py-4 border-r border-white/5">Student Identity <span
+                                        class="text-primary">*</span></th>
+                                <th scope="col" class="px-5 py-4 border-r border-white/5">Class</th>
+                                <th scope="col" class="px-5 py-4 text-right rounded-tr-xl" id="score-th">Score</th>
                             </tr>
                         </thead>
-                        <tbody id="results-tbody">
-                            <!-- Results go here -->
-                            <tr class="bg-white border-b hover:bg-gray-50">
-                                <td class="px-3 py-2 border-r text-center text-gray-500">1</td>
-                                <td class="px-3 py-2">
-                                    <input type="text"
-                                        class="w-full min-w-[120px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-0 px-2 py-3 text-sm font-medium transition-colors"
-                                        value="John Doe">
-                                </td>
-                                <td class="px-3 py-2">
-                                    <input type="text"
-                                        class="w-full min-w-[70px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-0 px-2 py-3 text-sm transition-colors"
-                                        value="JSS 1">
-                                </td>
-                                <td class="px-3 py-2">
-                                    <input type="text"
-                                        class="w-full min-w-[60px] bg-transparent border-b border-transparent hover:border-red-300 focus:border-red-500 focus:ring-0 px-2 py-3 text-red-600 font-bold text-sm transition-colors"
-                                        value="8/10">
-                                </td>
-                            </tr>
+                        <tbody id="results-tbody" class="block md:table-row-group space-y-4 md:space-y-0">
+                            <!-- Results go here via JS -->
                         </tbody>
                     </table>
                 </div>
 
                 <button id="btn-export"
-                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors flex justify-center items-center">
-                    <i class="fa-solid fa-file-excel mr-2"></i> Save to Excel
+                    class="magnetic holographic shadow-glow w-full bg-primary hover:bg-primary/90 text-white font-extrabold text-sm uppercase tracking-widest py-5 px-6 rounded-xl transition-all active:scale-95 flex justify-center items-center group relative z-10 border border-t-white/30 border-primary shadow-[0_4px_14px_0_rgba(var(--brand-rgb),0.39)]">
+                    <i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Append to
+                    Results.xlsx
                 </button>
-                <div id="export-msg" class="text-center mt-3 text-sm font-medium hidden"></div>
-
+                <div id="export-msg" class="text-center mt-5 text-sm font-bold hidden relative z-10"></div>
             </section>
-
         </main>
+
+        <!-- Footer -->
+        <footer
+            class="mt-20 mb-10 text-center text-muted-foreground/40 text-[10px] uppercase font-bold tracking-widest animate-fade-in-up flex items-center justify-center gap-2"
+            style="animation-delay: 0.5s;">
+            <div class="w-8 h-px bg-white/10"></div>
+            <p>Made with <span class="text-destructive mx-1 animate-pulse inline-block opacity-80">❤️</span> for <span
+                    class="text-white/80">QSI</span></p>
+            <div class="w-8 h-px bg-white/10"></div>
+        </footer>
     </div>
 
     <!-- Invisible Canvas for capturing image frames -->
@@ -192,9 +478,9 @@
 
         // State
         const MAX_BATCH_SIZE = 10;
-        let imagesBatch = []; // Stores objects { id: number, base64: string }
-        let extractedData = []; // Stores final objects from AI
-        let currentFacingMode = 'environment'; // environment (rear) or user (front)
+        let imagesBatch = [];
+        let extractedData = [];
+        let currentFacingMode = 'environment';
         let stream = null;
         let imageIdCounter = 0;
         let finalAssessmentType = '';
@@ -202,13 +488,14 @@
         // UI Logic for Select Custom
         const assessmentTypeSelect = document.getElementById('assessment-type');
         const customAssessmentInput = document.getElementById('custom-assessment');
+        const customAssessmentWrapper = document.getElementById('custom-assessment-wrapper');
         const scoreTh = document.getElementById('score-th');
 
         assessmentTypeSelect.addEventListener('change', (e) => {
             if (e.target.value === 'custom') {
-                customAssessmentInput.classList.remove('hidden');
+                customAssessmentWrapper.classList.remove('hidden');
             } else {
-                customAssessmentInput.classList.add('hidden');
+                customAssessmentWrapper.classList.add('hidden');
             }
         });
 
@@ -223,7 +510,6 @@
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: currentFacingMode,
-                        // Try to request higher resolution for better OCR
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
                     },
@@ -231,7 +517,6 @@
                 });
                 video.srcObject = stream;
 
-                // Wait for video metadata to load to set canvas dimensions correctly
                 video.onloadedmetadata = () => {
                     loadingIndicator.classList.add('hidden');
                     canvas.width = video.videoWidth;
@@ -239,49 +524,39 @@
                 };
             } catch (err) {
                 console.error("Error accessing camera:", err);
-                loadingIndicator.innerHTML = `Error: Cannot access camera. <br/><span class="text-xs">Ensure you granted permissions or are using HTTPS/localhost.</span>`;
+                loadingIndicator.innerHTML = `Error: Cannot access camera. <br/><span class="text-xs opacity-70 mt-2 block font-normal">Ensure permissions are granted.</span>`;
             }
         }
 
         // Capture Image
         btnCapture.addEventListener('click', () => {
             if (imagesBatch.length >= MAX_BATCH_SIZE) {
-                alert(`You have reached the maximum batch size of ${MAX_BATCH_SIZE}.`);
+                alert(`Maximum batch size of ${MAX_BATCH_SIZE} reached.`);
                 return;
             }
 
-            // Draw current video frame to canvas
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // Convert to base64 jpeg
-            // We use peg and 0.8 quality to keep payload reasonably sized
             const base64Image = canvas.toDataURL('image/jpeg', 0.8);
-
-            // Create object with unique ID
             const imageId = imageIdCounter++;
             imagesBatch.push({ id: imageId, base64: base64Image });
             batchCountEl.innerText = imagesBatch.length;
 
-            // Add Thumbnail to UI with a cancel button
             const thumbDiv = document.createElement('div');
-            thumbDiv.className = 'relative flex-shrink-0 group';
+            thumbDiv.className = 'relative flex-shrink-0 group mt-2';
             thumbDiv.dataset.id = imageId;
 
             const img = document.createElement('img');
             img.src = base64Image;
-            img.className = 'captured-thumb shadow-sm';
+            img.className = 'captured-thumb shadow-sm group-hover:border-primary/50 transition-colors';
 
             const cancelBtn = document.createElement('button');
-            cancelBtn.className = 'absolute -top-2 -right-2 bg-red-500 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 transition-transform transform hover:scale-110';
+            cancelBtn.className = 'absolute -top-2 -right-2 bg-black backdrop-blur-md hover:bg-destructive text-white border border-white/20 rounded-full w-6 h-6 flex items-center justify-center text-[10px] shadow-lg z-10 transition-all transform hover:scale-110';
             cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
             cancelBtn.title = 'Remove image';
             cancelBtn.onclick = function () {
-                // Remove from array
                 imagesBatch = imagesBatch.filter(item => item.id !== imageId);
                 batchCountEl.innerText = imagesBatch.length;
-                // Remove from UI
                 thumbDiv.remove();
-                // Disable process button if empty
                 if (imagesBatch.length === 0) {
                     btnProcess.disabled = true;
                 }
@@ -291,15 +566,20 @@
             thumbDiv.appendChild(cancelBtn);
             thumbnailsContainer.appendChild(thumbDiv);
 
-            // Enable process button if we have at least 1 image
             btnProcess.disabled = false;
 
-            // Haptic feedback if supported (mostly mobile)
             if (navigator.vibrate) navigator.vibrate(50);
 
-            // Visual flash effect
-            video.style.opacity = 0;
-            setTimeout(() => video.style.opacity = 1, 100);
+            // Shutter flash effect
+            const container = document.getElementById('video-container');
+            const flash = document.createElement('div');
+            flash.className = 'absolute inset-0 bg-white z-50 mix-blend-overlay';
+            container.appendChild(flash);
+            setTimeout(() => {
+                flash.style.transition = 'opacity 0.2s';
+                flash.style.opacity = '0';
+                setTimeout(() => flash.remove(), 200);
+            }, 50);
         });
 
         // Switch Camera
@@ -312,21 +592,21 @@
         btnProcess.addEventListener('click', async () => {
             if (imagesBatch.length === 0) return;
 
-            // UI updates
             btnProcess.disabled = true;
             btnCapture.disabled = true;
             processingIndicator.classList.remove('hidden');
 
             try {
-                // Extract base64 strings for the backend API
                 const base64List = imagesBatch.map(item => item.base64);
+                const targetClassVal = document.getElementById('target-class').value.trim();
 
                 const response = await fetch('/upload-batch', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ images: base64List })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        images: base64List,
+                        targetClass: targetClassVal
+                    })
                 });
 
                 const data = await response.json();
@@ -334,17 +614,13 @@
 
                 extractedData = data.results;
 
-                // Determine assessment type
                 finalAssessmentType = assessmentTypeSelect.value === 'custom'
                     ? (customAssessmentInput.value.trim() || 'Score')
                     : assessmentTypeSelect.value;
-
                 scoreTh.innerText = finalAssessmentType;
 
-                // Render Review UI
                 renderReviewTable(extractedData);
 
-                // Switch Views
                 captureSection.classList.add('hidden');
                 reviewSection.classList.remove('hidden');
 
@@ -358,28 +634,32 @@
             }
         });
 
-        // Render Data to Table
         function renderReviewTable(data) {
             tbody.innerHTML = '';
             data.forEach((item, index) => {
                 const tr = document.createElement('tr');
-                tr.className = 'bg-white border-b hover:bg-gray-50';
 
-                // Ensure values aren't null visually
+                // 21st.dev UI: Premium solid cards with light beam reveal
+                tr.className = 'reveal light-beam-card flex flex-col md:table-row bg-background md:bg-transparent rounded-xl md:rounded-none border border-white/5 md:border-none md:border-b md:border-white/5 transition-colors group overflow-hidden md:hover:bg-white/[0.02] p-4 md:p-0 my-3 md:my-0 shadow-lg md:shadow-none';
+                tr.style.transitionDelay = `${index * 50}ms`;
+
                 const nameStr = item.name || '';
                 const classStr = item.class || '';
                 const scoreStr = item.score || '';
 
                 tr.innerHTML = `
-                <td class="px-3 py-2 border-r text-center text-gray-500">${index + 1}</td>
-                <td class="px-3 py-2"><input type="text" data-index="${index}" data-field="name" class="w-full min-w-[120px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-0 px-2 py-3 text-sm font-medium transition-colors" value="${nameStr}" placeholder="Student Name"></td>
-                <td class="px-3 py-2"><input type="text" data-index="${index}" data-field="class" class="w-full min-w-[70px] bg-transparent border-b border-transparent hover:border-gray-300 focus:border-indigo-500 focus:ring-0 px-2 py-3 text-sm transition-colors" value="${classStr}" placeholder="Class"></td>
-                <td class="px-3 py-2"><input type="text" data-index="${index}" data-field="score" class="w-full min-w-[60px] bg-transparent border-b border-transparent hover:border-red-300 focus:border-red-500 focus:ring-0 px-2 py-3 text-red-600 font-bold text-sm transition-colors" value="${scoreStr}" placeholder="Score"></td>
+                <td class="flex justify-between items-center md:table-cell px-2 md:px-5 py-2 md:py-4 border-b border-white/5 md:border-none text-muted-foreground/50 font-mono text-xs"><span class="md:hidden font-bold text-white/40 uppercase tracking-widest text-[10px]">ID</span> ${index + 1}</td>
+                <td class="flex flex-col md:table-cell px-2 md:px-5 py-3 border-b border-white/5 md:border-none md:border-l md:border-white/5"><span class="md:hidden text-[10px] text-muted-foreground/80 mb-1.5 uppercase tracking-widest font-bold">Student Identity <span class="text-primary">*</span></span><input type="text" data-index="${index}" data-field="name" class="w-full bg-transparent border-b border-transparent focus:border-white/20 focus:ring-0 px-0 py-1 text-white text-base md:text-sm font-semibold transition-colors outline-none placeholder:text-muted-foreground/30" value="${nameStr}" placeholder="Enter Name"></td>
+                <td class="flex flex-col md:table-cell px-2 md:px-5 py-3 border-b border-white/5 md:border-none md:border-l md:border-white/5"><span class="md:hidden text-[10px] text-muted-foreground/80 mb-1.5 uppercase tracking-widest font-bold">Class</span><input type="text" data-index="${index}" data-field="class" class="w-full bg-transparent border-b border-transparent focus:border-white/20 focus:ring-0 px-0 py-1 text-white text-base md:text-sm transition-colors outline-none placeholder:text-muted-foreground/30 font-medium" value="${classStr}" placeholder="Class"></td>
+                <td class="flex justify-between items-center md:table-cell px-2 md:px-5 py-4 bg-black/40 md:bg-transparent -mx-4 px-6 md:mx-0 mt-2 md:mt-0 rounded-b-xl md:rounded-none md:border-l md:border-white/5"><span class="md:hidden text-[11px] text-primary uppercase tracking-widest font-extrabold">Final Score</span><input type="text" data-index="${index}" data-field="score" class="w-24 md:w-full md:min-w-[70px] bg-white/[0.04] md:bg-transparent border border-white/10 md:border-none md:border-b md:border-transparent focus:border-primary/50 focus:bg-primary/5 focus:ring-0 md:px-2 py-2 text-primary md:text-foreground text-right font-bold text-lg md:text-sm rounded-lg md:rounded-none transition-colors outline-none placeholder:text-muted-foreground/30 shadow-inner md:shadow-none" value="${scoreStr}" placeholder="Score"></td>
             `;
                 tbody.appendChild(tr);
+
+                requestAnimationFrame(() => {
+                    setTimeout(() => tr.classList.add('visible'), 50);
+                });
             });
 
-            // Add event listeners to sync edits back to state array
             const inputs = tbody.querySelectorAll('input');
             inputs.forEach(input => {
                 input.addEventListener('input', (e) => {
@@ -393,15 +673,13 @@
         // Export to Excel
         btnExport.addEventListener('click', async () => {
             btnExport.disabled = true;
-            btnExport.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...`;
+            btnExport.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> APPENDING...`;
             exportMsg.classList.add('hidden');
 
             try {
                 const response = await fetch('/export-excel', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         results: extractedData,
                         assessmentType: finalAssessmentType
@@ -411,42 +689,158 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || "Export failed");
 
-                exportMsg.classList.remove('hidden', 'text-red-500');
-                exportMsg.classList.add('text-green-600');
-                exportMsg.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i> ${data.message}`;
+                exportMsg.classList.remove('hidden', 'text-destructive');
+                exportMsg.classList.add('text-primary');
+                exportMsg.innerHTML = `<i class="fa-solid fa-circle-check mr-2"></i> ${data.message}`;
 
             } catch (err) {
                 console.error("Export error:", err);
-                exportMsg.classList.remove('hidden', 'text-green-600');
-                exportMsg.classList.add('text-red-500');
-                exportMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> Error: ${err.message}`;
+                exportMsg.classList.remove('hidden', 'text-primary');
+                exportMsg.classList.add('text-destructive');
+                exportMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> Error: ${err.message}`;
             } finally {
                 btnExport.disabled = false;
-                btnExport.innerHTML = `<i class="fa-solid fa-file-excel mr-2"></i> Save to Excel`;
+                btnExport.innerHTML = `<i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Append to Results.xlsx`;
             }
         });
 
         // Reset Flow
         btnReset.addEventListener('click', () => {
             if (confirm("Are you sure? This will discard the current batch.")) {
-                // Reset state
                 imagesBatch = [];
                 extractedData = [];
                 batchCountEl.innerText = '0';
                 thumbnailsContainer.innerHTML = '';
 
-                // Reset UI
                 btnProcess.disabled = true;
                 btnCapture.disabled = false;
-                reviewSection.classList.add('hidden');
-                captureSection.classList.remove('hidden');
+
+                reviewSection.classList.remove('visible');
+                setTimeout(() => {
+                    reviewSection.classList.add('hidden');
+                    captureSection.classList.remove('hidden');
+                    setTimeout(() => {
+                        captureSection.classList.add('visible');
+                    }, 50);
+                }, 300);
+
                 exportMsg.classList.add('hidden');
             }
         });
 
         // Start video on load
-        window.addEventListener('load', initCamera);
+        window.addEventListener('load', () => {
+            initCamera();
+            triggerRevealObserver();
+            initMagneticButtons();
+            initTouchRipples();
+            initScrollProgress();
+        });
 
+        // 21st.dev Premium Animations
+
+        function triggerRevealObserver() {
+            const observerOptions = { root: null, rootMargin: '0px', threshold: 0.1 };
+            const observer = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, observerOptions);
+
+            document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+            setTimeout(() => {
+                document.querySelectorAll('.reveal:not(.hidden)').forEach(el => el.classList.add('visible'));
+            }, 100);
+        }
+
+        function initMagneticButtons() {
+            const magnetics = document.querySelectorAll('.magnetic');
+            magnetics.forEach(btn => {
+                btn.addEventListener('mousemove', (e) => {
+                    if (window.innerWidth < 768) return;
+                    const rect = btn.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const xc = rect.width / 2;
+                    const yc = rect.height / 2;
+                    const dx = x - xc;
+                    const dy = y - yc;
+                    const maxTranslate = 15;
+                    const tx = (dx / xc) * maxTranslate;
+                    const ty = (dy / yc) * maxTranslate;
+                    btn.style.transform = `translate(${tx}px, ${ty}px) scale(1.02)`;
+                });
+
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.transform = 'translate(0px, 0px) scale(1)';
+                });
+
+                btn.addEventListener('mousedown', () => {
+                    const span = btn.querySelector('span.absolute');
+                    if (span) {
+                        span.style.transform = 'scale(1)';
+                        span.style.opacity = '1';
+                        setTimeout(() => {
+                            span.style.transform = 'scale(0)';
+                            span.style.opacity = '0';
+                        }, 500);
+                    }
+                });
+            });
+        }
+
+        function initTouchRipples() {
+            const buttons = document.querySelectorAll('button:not(#btn-capture)');
+            buttons.forEach(btn => {
+                btn.style.position = 'relative';
+                btn.style.overflow = 'hidden';
+
+                const createRipple = (e) => {
+                    const circle = document.createElement('span');
+                    const diameter = Math.max(btn.clientWidth, btn.clientHeight);
+                    const radius = diameter / 2;
+
+                    let clientX, clientY;
+                    if (e.touches && e.touches.length > 0) {
+                        clientX = e.touches[0].clientX;
+                        clientY = e.touches[0].clientY;
+                    } else {
+                        clientX = e.clientX;
+                        clientY = e.clientY;
+                    }
+
+                    const rect = btn.getBoundingClientRect();
+
+                    circle.style.width = circle.style.height = `${diameter}px`;
+                    circle.style.left = `${clientX - rect.left - radius}px`;
+                    circle.style.top = `${clientY - rect.top - radius}px`;
+                    circle.classList.add('ripple');
+
+                    const ripple = btn.querySelector('.ripple');
+                    if (ripple) ripple.remove();
+
+                    btn.appendChild(circle);
+                };
+
+                btn.addEventListener('mousedown', createRipple);
+                btn.addEventListener('touchstart', createRipple, { passive: true });
+            });
+        }
+
+        function initScrollProgress() {
+            const progressBar = document.getElementById('scroll-progress');
+            if (!progressBar) return;
+
+            window.addEventListener('scroll', () => {
+                const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+                const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+                if (height <= 0) return;
+                const scrolled = (winScroll / height) * 100;
+                progressBar.style.width = scrolled + '%';
+            }, { passive: true });
+        }
     </script>
 </body>
 
