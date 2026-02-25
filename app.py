@@ -25,6 +25,7 @@ genai.configure(api_key=api_key)
 # Initialize Flask App
 app = Flask(__name__)
 CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024 # 100MB upload limit to support unlimited batches
 
 # The prompt instructions for Gemini
 SYSTEM_PROMPT = """
@@ -292,9 +293,9 @@ def export_excel():
                     exact_match_idx = df_existing.index[df_existing['Name'].str.strip().str.lower() == new_name.lower()].tolist()
                     
                     if exact_match_idx:
-                        # Update exact match
+                        # Update exact match using .loc to create the column safely if it doesn't exist
                         idx = exact_match_idx[0]
-                        df_existing.at[idx, assessment_type] = new_score
+                        df_existing.loc[idx, assessment_type] = new_score
                     else:
                         # 2. Fuzzy Match via thefuzz
                         existing_names = df_existing['Name'].dropna().astype(str).tolist()
@@ -306,7 +307,7 @@ def export_excel():
                             if best_match_tuple and best_match_tuple[1] >= 85:
                                 matched_name = best_match_tuple[0]
                                 matched_idx = df_existing.index[df_existing['Name'] == matched_name].tolist()[0]
-                                df_existing.at[matched_idx, assessment_type] = new_score
+                                df_existing.loc[matched_idx, assessment_type] = new_score
                                 print(f"Fuzzy Matched: OCR '{new_name}' -> DB '{matched_name}' ({best_match_tuple[1]}%)")
                                 continue
                                 
@@ -316,24 +317,7 @@ def export_excel():
                 
                 sheets_dict[sheet_name] = df_existing
 
-                    
-                # Set index to Name for easier merging/updating
-                df_existing = df_existing.set_index('Name')
-                class_data_new = class_data_new.set_index('Name')
-                
-                if assessment_type in df_existing.columns:
-                    # Update existing students' scores for this assessment, and add brand new students
-                    df_existing.update(class_data_new)
-                    
-                    new_names = class_data_new.index.difference(df_existing.index)
-                    if not new_names.empty:
-                        df_existing = pd.concat([df_existing, class_data_new.loc[new_names]])
-                else:
-                    # New assessment type, do an outer join to keep all students and add the new column
-                    df_existing = df_existing.join(class_data_new, how='outer')
-                    
-                # Reset index back to normal columns
-                df_existing = df_existing.reset_index()
+                # No secondary merge is needed; the loop above handles matching and appending exactly.
                 
                 # Sort alphabetically by default
                 df_existing = df_existing.sort_values(by='Name', ascending=True)
