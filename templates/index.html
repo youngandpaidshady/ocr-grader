@@ -303,131 +303,141 @@
                 <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent pointer-events-none">
                 </div>
 
-                <div
-                    class="flex flex-col md:flex-row md:justify-between items-start md:items-center mb-8 gap-3 relative z-10">
-                    <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight flex items-center">
+                <!-- Header (Compact) -->
+                <div class="flex justify-between items-center mb-4 relative z-10">
+                    <h2 class="text-xl font-heading font-bold text-white tracking-tight flex items-center">
                         <span
                             class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mr-3 border border-primary/20 shadow-glow"><i
                                 class="fa-solid fa-camera text-primary text-sm"></i></span>
                         Capture Scripts
                     </h2>
-                    <div class="flex items-center gap-3">
-                        <!-- Camera Flip Button -->
-                        <button id="btn-camera"
-                            class="p-4 rounded-xl bg-black/40 hover:bg-black/60 border border-white/10 text-white transition-all hover:scale-105 active:scale-95 shadow-sm">
-                            <i class="fa-solid fa-camera-rotate"></i>
-                        </button>
-                    </div>
-
-                    <!-- Auto-Capture Toggle -->
-                    <div class="mt-4 flex items-center gap-3 bg-black/30 p-3 rounded-xl border border-white/5">
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="auto-capture-toggle" class="sr-only peer">
-                            <div
-                                class="w-11 h-6 bg-muted-foreground/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary shadow-inner">
-                            </div>
-                        </label>
-                        <div class="flex flex-col">
-                            <span class="text-xs font-bold text-white tracking-wide">AI Auto-Capture</span>
-                            <span class="text-[10px] text-muted-foreground">Hold paper still for 1.5s to
-                                auto-snap</span>
-                        </div>
-                        <div id="auto-capture-status"
-                            class="ml-auto w-3 h-3 rounded-full bg-muted-foreground/30 transition-colors shadow-glow">
-                        </div>
-                    </div>
-                    <span
-                        class="bg-card text-foreground border border-white/10 text-xs font-semibold px-4 py-1.5 rounded-full flex items-center gap-2 shadow-sm">
-                        Batch Count
-                        <span id="batch-count"
-                            class="bg-primary text-white px-2 py-0.5 rounded-md text-[10px] font-bold shadow-glow border border-primary/30">0/10</span>
-                    </span>
                 </div>
 
-                <!-- Input Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8 relative z-10">
-                    <!-- Assessment Type -->
-                    <div class="space-y-2">
-                        <label
-                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Assessment
-                            Type</label>
-                        <div
-                            class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
-                            <select id="assessment-type"
-                                class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-medium">
-                                <option value="1st CA" class="bg-card">1st CA</option>
-                                <option value="2nd CA" class="bg-card">2nd CA</option>
-                                <option value="Assignment" class="bg-card">Assignment</option>
-                                <option value="Exam" class="bg-card">Exam</option>
-                                <option value="Open Day" class="bg-card">Open Day</option>
-                                <option value="custom" class="bg-card">-- Custom Name --</option>
-                            </select>
-                            <i
-                                class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
-                            <div class="input-focus-anim"></div>
-                        </div>
-                        <div class="input-wrapper border border-white/10 bg-black/40 mt-3 hidden"
-                            id="custom-assessment-wrapper">
-                            <input type="text" id="custom-assessment"
-                                class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
-                                placeholder="e.g., Midterm Project">
-                            <div class="input-focus-anim"></div>
-                        </div>
-                    </div>
-
-                    <!-- Target Class -->
-                    <div class="space-y-2 group">
-                        <label
-                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Target
-                            Class</label>
-                        <div
-                            class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
-                            <input type="text" id="target-class"
-                                class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
-                                placeholder="e.g., SS1Q" required>
-                            <div class="input-focus-anim"></div>
-                        </div>
-                        <p class="text-[11px] text-muted-foreground/60 mt-1 pl-1 flex items-start gap-1.5"><i
-                                class="fa-solid fa-circle-info text-primary/70 mt-[2px]"></i> Matches handwriting to
-                            known students.</p>
-                    </div>
-                </div>
-
-                <!-- Video Feed -->
+                <!-- Video Feed with Overlays -->
                 <div id="video-container"
                     class="mb-4 border border-white/10 flex items-center justify-center bg-black shadow-inner overflow-hidden relative group z-10 rounded-xl">
-                    <div
-                        class="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none">
-                    </div>
                     <video id="camera-feed" class="w-full h-full object-cover relative z-0" autoplay
                         playsinline></video>
+
+                    <!-- OpenCV Canvas Visualizer -->
+                    <canvas id="cv-visualizer"
+                        class="absolute inset-0 w-full h-full z-10 pointer-events-none opacity-80 mix-blend-screen"></canvas>
+
                     <div id="camera-loading"
                         class="absolute z-20 text-muted-foreground text-sm flex flex-col items-center gap-3 bg-black/70 backdrop-blur-xl p-5 rounded-2xl border border-white/5">
                         <i class="fa-solid fa-circle-notch fa-spin text-primary text-3xl"></i>
                         <span class="font-medium tracking-wide">Initializing Camera...</span>
                     </div>
+
+                    <!-- Top Overlays -->
+                    <div
+                        class="absolute top-3 left-3 right-3 flex justify-between items-start z-20 pointer-events-none">
+                        <!-- Batch Count -->
+                        <div
+                            class="pointer-events-auto bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm text-white uppercase tracking-widest">
+                            Batch
+                            <span id="batch-count"
+                                class="bg-primary text-white px-2 py-0.5 rounded-md text-[10px] font-bold shadow-glow border border-primary/30">0/10</span>
+                        </div>
+
+                        <!-- Flip Camera -->
+                        <button id="btn-camera"
+                            class="pointer-events-auto w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center">
+                            <i class="fa-solid fa-camera-rotate"></i>
+                        </button>
+                    </div>
+
+                    <!-- Bottom Overlays -->
+                    <div class="absolute bottom-3 inset-x-3 flex justify-center z-20 pointer-events-none">
+                        <!-- Auto-Capture Toggle -->
+                        <div
+                            class="pointer-events-auto flex items-center gap-3 bg-black/70 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.8)]">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="auto-capture-toggle" class="sr-only peer">
+                                <div
+                                    class="w-9 h-5 bg-muted-foreground/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner">
+                                </div>
+                            </label>
+                            <div class="flex flex-col">
+                                <span
+                                    class="text-[10px] font-bold text-white tracking-widest uppercase leading-tight drop-shadow-md">AI
+                                    Auto-Capture</span>
+                            </div>
+                            <div id="auto-capture-status"
+                                class="ml-1 w-2.5 h-2.5 rounded-full bg-muted-foreground/30 transition-colors shadow-glow">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Capture Controls -->
-                <div class="flex flex-row justify-center space-x-3 mb-8 relative z-10">
-                    <button id="btn-camera"
-                        class="magnetic bg-black/40 hover:bg-black/80 border border-white/10 text-white font-semibold py-4 px-5 rounded-xl transition-colors active:scale-95 flex items-center justify-center text-sm w-1/3 shadow-sm hover:shadow-md hover:border-white/20">
-                        <i class="fa-solid fa-rotate mr-2 text-muted-foreground"></i> Flip
-                    </button>
+                <!-- Capture Controls (SNAP button full width) -->
+                <div class="mb-6 relative z-10 px-2 lg:px-0">
                     <button id="btn-capture"
-                        class="magnetic shadow-glow bg-primary hover:bg-primary/90 text-white font-bold py-4 px-8 rounded-xl w-2/3 transition-all active:scale-95 flex items-center justify-center tracking-wide overflow-hidden relative group">
-                        <!-- Custom Flash overlay -->
+                        class="magnetic shadow-glow bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl w-full mx-auto transition-all active:scale-95 flex items-center justify-center tracking-wide overflow-hidden relative group">
                         <span
                             class="absolute inset-0 w-full h-full bg-white opacity-0 active:opacity-40 transition-opacity duration-100 mix-blend-overlay"></span>
                         <i class="fa-solid fa-camera mr-2 group-hover:scale-110 transition-transform"></i> <span
-                            class="tracking-widest">SNAP</span>
+                            class="tracking-widest uppercase text-sm">Snap Script</span>
                     </button>
                 </div>
 
                 <!-- Captured Thumbnails -->
                 <div id="thumbnails-container"
-                    class="flex overflow-x-auto space-x-3 py-2 mb-2 min-h-[70px] relative z-10 scrollbar-hide">
-                    <!-- Thumbnails go here -->
+                    class="flex overflow-x-auto space-x-3 py-2 mb-6 min-h-[70px] relative z-10 scrollbar-hide"></div>
+
+                <!-- Settings Box -->
+                <div class="bg-black/20 rounded-xl border border-white/5 p-4 md:p-6 relative z-10 shadow-inner">
+                    <h3
+                        class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4 flex items-center">
+                        <i class="fa-solid fa-sliders text-[10px] mr-2"></i> Batch Settings
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <!-- Assessment Type -->
+                        <div class="space-y-2">
+                            <label
+                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Assessment
+                                Type</label>
+                            <div
+                                class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
+                                <select id="assessment-type"
+                                    class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-medium">
+                                    <option value="1st CA" class="bg-card">1st CA</option>
+                                    <option value="2nd CA" class="bg-card">2nd CA</option>
+                                    <option value="Assignment" class="bg-card">Assignment</option>
+                                    <option value="Exam" class="bg-card">Exam</option>
+                                    <option value="Open Day" class="bg-card">Open Day</option>
+                                    <option value="custom" class="bg-card">-- Custom Name --</option>
+                                </select>
+                                <i
+                                    class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
+                                <div class="input-focus-anim"></div>
+                            </div>
+                            <div class="input-wrapper border border-white/10 bg-black/40 mt-3 hidden"
+                                id="custom-assessment-wrapper">
+                                <input type="text" id="custom-assessment"
+                                    class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
+                                    placeholder="e.g., Midterm Project">
+                                <div class="input-focus-anim"></div>
+                            </div>
+                        </div>
+
+                        <!-- Target Class -->
+                        <div class="space-y-2 group">
+                            <label
+                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Target
+                                Class</label>
+                            <div
+                                class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
+                                <input type="text" id="target-class"
+                                    class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
+                                    placeholder="e.g., SS1Q" required>
+                                <div class="input-focus-anim"></div>
+                            </div>
+                            <p class="text-[11px] text-muted-foreground/60 mt-1 pl-1 flex items-start gap-1.5"><i
+                                    class="fa-solid fa-circle-info text-primary/70 mt-[2px]"></i> Matches handwriting to
+                                known students.</p>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -822,6 +832,8 @@
         let anchorFrameData = null;
         let motionDetectorId = null;
         let stillTimeStart = null;
+        let lastHUDDrawTime = 0;
+        let lastDocumentFoundState = false;
         const MOTION_THRESHOLD = 15; // Pixel difference tolerance
         const STILL_DURATION_REQUIRED = 2000; // ms paper must be still (Increased to 2s)
 
@@ -834,12 +846,21 @@
                 return;
             }
 
-            // Document Heuristic Check: Uses OpenCV.js to find large document contours
-            function isDocumentPresent() {
+            // Document Heuristic Check: Uses Convex Hull Solidity and draws to HUD
+            function scanForDocument() {
+                const hudCanvas = document.getElementById('cv-visualizer');
+                if (!hudCanvas) return false;
+
+                // Match visualizer canvas size to video size
+                hudCanvas.width = video.videoWidth || 640;
+                hudCanvas.height = video.videoHeight || 480;
+                const hudCtx = hudCanvas.getContext('2d');
+                hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+
                 // Wait for OpenCV to load
                 if (typeof cv === 'undefined' || !cv.Mat) return false;
 
-                const checkW = 320; // Increased resolution for better contour detection
+                const checkW = 320;
                 const checkH = 240;
                 const docCanvas = document.createElement('canvas');
                 docCanvas.width = checkW;
@@ -849,54 +870,83 @@
                 try {
                     docCtx.drawImage(video, 0, 0, checkW, checkH);
 
-                    // Create OpenCV Mats
                     let src = cv.imread(docCanvas);
                     let dst = new cv.Mat();
                     let edges = new cv.Mat();
                     let contours = new cv.MatVector();
                     let hierarchy = new cv.Mat();
 
-                    // 1. Convert to grayscale & blur slightly to remove noise
                     cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
                     cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-
-                    // 2. Perform Canny edge detection (Lowered thresholds to catch faint paper edges)
                     cv.Canny(dst, edges, 40, 120, 3, false);
-
-                    // 3. Find contours
                     cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
                     let documentFound = false;
-                    const minDocumentArea = (checkW * checkH) * 0.15; // Document must take up at least 15% of the frame
+                    let bestContour = null;
+                    let maxArea = (checkW * checkH) * 0.15; // Minimum 15% of frame
 
                     for (let i = 0; i < contours.size(); ++i) {
                         let cnt = contours.get(i);
                         let area = cv.contourArea(cnt);
 
-                        if (area > minDocumentArea) {
-                            // Check if the contour is roughly rectangular
-                            let perimeter = cv.arcLength(cnt, true);
-                            let approx = new cv.Mat();
-                            cv.approxPolyDP(cnt, approx, 0.04 * perimeter, true);
+                        if (area > maxArea) {
+                            // Check Convex Hull Solidity
+                            let hull = new cv.Mat();
+                            cv.convexHull(cnt, hull, false, true);
+                            let hullArea = cv.contourArea(hull);
 
-                            // A physical document curved by lens distortion or page folds may have 4-8 vertices.
-                            // EXACTLY 4 is mathematically too strict for a webcam.
-                            if (approx.rows >= 4 && approx.rows <= 8) {
-                                documentFound = true;
+                            if (hullArea > 0) {
+                                let solidity = area / hullArea;
+                                // A rectangle/paper has high solidity (> 0.85). Hands have low solidity.
+                                if (solidity > 0.85) {
+                                    documentFound = true;
+                                    maxArea = area; // Keep the largest valid document contour
+                                    if (bestContour) bestContour.delete();
+                                    bestContour = cnt.clone();
+                                }
                             }
-                            approx.delete();
+                            hull.delete();
                         }
                     }
 
-                    // Cleanup memory (Critical for OpenCV.js)
-                    src.delete(); dst.delete(); edges.delete(); contours.delete(); hierarchy.delete();
+                    // Draw HUD Graphic if found
+                    if (documentFound && bestContour) {
+                        const scaleX = hudCanvas.width / checkW;
+                        const scaleY = hudCanvas.height / checkH;
 
+                        hudCtx.strokeStyle = '#10b981'; // Emerald 500
+                        hudCtx.lineWidth = 4;
+                        hudCtx.shadowColor = '#10b981';
+                        hudCtx.shadowBlur = 15;
+
+                        hudCtx.beginPath();
+                        let points = bestContour.data32S;
+                        for (let j = 0; j < points.length; j += 2) {
+                            let x = points[j] * scaleX;
+                            let y = points[j + 1] * scaleY;
+                            if (j === 0) hudCtx.moveTo(x, y);
+                            else hudCtx.lineTo(x, y);
+                        }
+                        hudCtx.closePath();
+                        hudCtx.stroke();
+
+                        bestContour.delete();
+                    }
+
+                    src.delete(); dst.delete(); edges.delete(); contours.delete(); hierarchy.delete();
                     return documentFound;
 
                 } catch (e) {
                     console.error("OpenCV detection error:", e);
                     return false;
                 }
+            }
+
+            // Throttle OpenCV HUD processing to ~6 FPS to save battery
+            const now = Date.now();
+            if (now - lastHUDDrawTime > 150) {
+                lastDocumentFoundState = scanForDocument();
+                lastHUDDrawTime = now;
             }
 
             // Draw current low-res frame for analysis
@@ -928,7 +978,7 @@
                         // Moving: Reset anchor to current flowing image
                         anchorFrameData = currentFrameData;
                         stillTimeStart = null;
-                        autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-yellow-500 transition-colors shadow-glow';
+                        autoCaptureStatus.className = 'ml-1 w-2.5 h-2.5 rounded-full bg-yellow-500 transition-colors shadow-glow';
                     } else {
                         // Still (relative to anchor)
                         if (!stillTimeStart) {
@@ -936,9 +986,9 @@
                         } else if (Date.now() - stillTimeStart > STILL_DURATION_REQUIRED) {
 
                             // Only snap if we actually detect a paper-like object
-                            if (isDocumentPresent()) {
+                            if (lastDocumentFoundState) {
                                 // Valid Auto-Capture!
-                                autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-emerald-500 transition-colors shadow-glow ring-2 ring-emerald-500/50';
+                                autoCaptureStatus.className = 'ml-1 w-2.5 h-2.5 rounded-full bg-emerald-500 transition-colors shadow-glow ring-2 ring-emerald-500/50';
                                 captureFrame();
                                 stillTimeStart = null; // Reset
 
@@ -950,7 +1000,7 @@
                                 return;
                             } else {
                                 // It's still, but it's not a document (e.g. wall, empty desk)
-                                autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-blue-500 transition-colors shadow-glow';
+                                autoCaptureStatus.className = 'ml-1 w-2.5 h-2.5 rounded-full bg-blue-500 transition-colors shadow-glow';
                                 anchorFrameData = null; // Reset anchor to keep looking
                                 stillTimeStart = null;
                             }
@@ -969,7 +1019,12 @@
                 detectMotion();
             } else {
                 if (motionDetectorId) cancelAnimationFrame(motionDetectorId);
-                autoCaptureStatus.className = 'ml-auto w-3 h-3 rounded-full bg-muted-foreground/30 transition-colors shadow-glow';
+                autoCaptureStatus.className = 'ml-1 w-2.5 h-2.5 rounded-full bg-muted-foreground/30 transition-colors shadow-glow';
+                const hudCanvas = document.getElementById('cv-visualizer');
+                if (hudCanvas) {
+                    const hudCtx = hudCanvas.getContext('2d');
+                    hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+                }
             }
         });
 
