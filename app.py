@@ -1,6 +1,7 @@
 import os
 import base64
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import google.generativeai as genai
@@ -29,8 +30,9 @@ For EACH image, extract the following information:
 1. Student Name (usually found at the top, e.g., "Name: ...")
 2. Student Class (usually found near the name, e.g., "Class: ...")
 3. Score (This is typically handwritten in **red ink**, often as a fraction like "7/10" or just a number circled in red on the margin).
+4. Confidence (How confident you are that the extracted data is correct: "High", "Medium", or "Low". Use "Low" when handwriting is very messy or fields are partially obscured.)
 
-If an image is unreadable or you cannot find a specific field, return null for that field.
+If an image is unreadable or you cannot find a specific field, return null for that field and set confidence to "Low".
 
 Return exactly a JSON array of objects, one object for each image provided, in the exact same order as the images are provided.
 Use the following JSON schema:
@@ -38,7 +40,8 @@ Use the following JSON schema:
   {
     "name": "Extracted Name",
     "class": "Extracted Class",
-    "score": "Extracted Score"
+    "score": "Extracted Score",
+    "confidence": "High | Medium | Low"
   },
   ...
 ]
@@ -94,35 +97,58 @@ def upload_batch():
         
         # Prepare contents for Gemini
         dynamic_prompt = SYSTEM_PROMPT + known_names_text
-        contents = [dynamic_prompt]
         
-        for index, img_b64 in enumerate(images_base64):
-            # Clean base64 string if it contains the data uri prefix (e.g., data:image/jpeg;base64,...)
-            if 'base64,' in img_b64:
-                img_b64 = img_b64.split('base64,')[1]
-                
-            contents.append({
-                "mime_type": "image/jpeg",
-                "data": img_b64
-            })
-            
-        # Call Gemini 2.5 Flash API
+        # Concurrent processing: split images into chunks and process in parallel
+        CHUNK_SIZE = 3  # Process 3 images per Gemini call for optimal speed/accuracy
         model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(contents)
         
-        response_text = response.text.strip()
-        print("Raw Gemini Response:")
-        print(response_text)
+        def process_chunk(chunk_images):
+            """Process a chunk of images through Gemini."""
+            contents = [dynamic_prompt]
+            for img_b64 in chunk_images:
+                if 'base64,' in img_b64:
+                    img_b64 = img_b64.split('base64,')[1]
+                contents.append({
+                    "mime_type": "image/jpeg",
+                    "data": img_b64
+                })
+            response = model.generate_content(contents)
+            response_text = response.text.strip()
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+            return json.loads(response_text.strip())
         
-        # Clean up the output if Gemini still wrapped it in markdown
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
+        # Split images into chunks
+        image_chunks = []
+        for i in range(0, len(images_base64), CHUNK_SIZE):
+            image_chunks.append(images_base64[i:i + CHUNK_SIZE])
+        
+        all_results = []
+        
+        if len(image_chunks) == 1:
+            # Single chunk, no need for threading
+            all_results = process_chunk(image_chunks[0])
+        else:
+            # Concurrent processing of multiple chunks
+            chunk_results = [None] * len(image_chunks)
+            with ThreadPoolExecutor(max_workers=min(len(image_chunks), 4)) as executor:
+                future_to_idx = {executor.submit(process_chunk, chunk): idx for idx, chunk in enumerate(image_chunks)}
+                for future in as_completed(future_to_idx):
+                    idx = future_to_idx[future]
+                    chunk_results[idx] = future.result()
             
-        results = json.loads(response_text.strip())
+            # Merge results in order
+            for chunk_result in chunk_results:
+                if isinstance(chunk_result, list):
+                    all_results.extend(chunk_result)
+                else:
+                    all_results.append(chunk_result)
         
-        return jsonify({"results": results})
+        print(f"Processed {len(all_results)} results from {len(image_chunks)} chunk(s)")
+        
+        return jsonify({"results": all_results})
 
     except Exception as e:
         print(f"Error processing batch: {e}")
