@@ -75,13 +75,8 @@ def upload_batch():
         
         # Pull known names for this class to improve accuracy (Smart Name Matching)
         known_names_text = ""
-        output_filename = "Results.xlsx"
-        try:
-            output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
-        except NameError:
-            output_path = output_filename
-            
-        if target_class and os.path.exists(output_path):
+        
+        if target_class and os.path.exists(WORKING_EXCEL_PATH):
             try:
                 # Find matching sheet based on formatting logic
                 import re
@@ -90,13 +85,13 @@ def upload_batch():
                 sheet_target = f"{match.group(1)} {match.group(2)}" if match else (target_class.upper() or "Unknown Class")
                 sheet_target = sheet_target[:31]
                 
-                sheets_dict = pd.read_excel(output_path, sheet_name=None)
+                sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
                 if sheet_target in sheets_dict:
                     df_existing = sheets_dict[sheet_target]
                     if 'Name' in df_existing.columns:
                         known_names = df_existing['Name'].dropna().tolist()
                         if known_names:
-                            known_names_text = f"\n\nCRITICAL INSTRUCTION: You are grading papers for class '{sheet_target}'. Here is the list of already known students in this class: {known_names}. If a handwritten name closely resembles one of these known names, you MUST use the exact spelling from this list."
+                            known_names_text = f"\n\nCRITICAL INSTRUCTION: You are grading papers for class '{sheet_target}'. Here is the authoritative list of known student names in this class: {known_names}. If the handwritten name on the paper resembles any of these, you MUST output the exact spelling from this list. Do not invent new names."
             except Exception as e:
                 print(f"Error checking known names: {e}")
         
