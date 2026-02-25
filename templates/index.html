@@ -923,13 +923,8 @@
                         }
                     }
 
-                    // Check 3: White Pixel Ratio (the KEY discriminator)
-                    // Paper has many near-white pixels (the background between text lines).
-                    // Floor tiles are uniformly beige (~140) with almost zero pixels above 180.
-                    // This test counts what % of the ROI is "white" (>180 brightness).
-                    //   - White paper with ink: 20-70% white pixels → PASS
-                    //   - Beige floor tiles: <5% white pixels → FAIL
-                    //   - Dark desk/metal: <1% white pixels → FAIL
+                    // Check 3: White Pixel Ratio
+                    // Paper has many near-white pixels. Floor/desk do not.
                     if (documentFound) {
                         let rx = Math.max(0, rect.x);
                         let ry = Math.max(0, rect.y);
@@ -937,7 +932,8 @@
                         let rh = Math.min(rect.height, checkH - ry);
 
                         if (rw > 5 && rh > 5) {
-                            let roi = gray.roi(new cv.Rect(rx, ry, rw, rh));
+                            let roiRect = new cv.Rect(rx, ry, rw, rh);
+                            let roi = gray.roi(roiRect);
 
                             // Threshold at 180: pixels brighter than 180 = "white"
                             let binary = new cv.Mat();
@@ -952,6 +948,26 @@
                             // Paper needs at least 20% white pixels
                             if (whiteRatio < 0.20) {
                                 documentFound = false;
+                            }
+
+                            // Check 4: Skin-Tone Rejection (Color Neutrality)
+                            // Paper is white/gray: R ≈ G ≈ B (neutral).
+                            // Skin is warm: R > G > B (red-shifted).
+                            // If the Red channel is much higher than Blue, it's skin, not paper.
+                            if (documentFound) {
+                                let colorRoi = src.roi(roiRect);
+                                let meanColor = cv.mean(colorRoi);
+                                colorRoi.delete();
+
+                                let meanR = meanColor[0]; // RGBA order from cv.imread
+                                let meanG = meanColor[1];
+                                let meanB = meanColor[2];
+
+                                // Paper: |R - B| < 25. Skin: R - B > 25-50
+                                let warmth = meanR - meanB;
+                                if (warmth > 25) {
+                                    documentFound = false; // Too warm → skin/wood, not paper
+                                }
                             }
                         } else {
                             documentFound = false;
