@@ -899,6 +899,42 @@
                     }
                 }
 
+                // Paper Brightness Discriminator:
+                // A test script is WHITE/CREAM paper with DARK ink.
+                // Check the grayscale ROI of the detected blob:
+                //   - Mean brightness > 120 = it's light-colored (paper, not a desk or metal bar)
+                //   - Std deviation > 20 = there's contrast (ink on paper, not a blank wall)
+                if (documentFound && bestContour) {
+                    let rect = cv.boundingRect(bestContour);
+                    // Clamp ROI to image bounds
+                    let rx = Math.max(0, rect.x);
+                    let ry = Math.max(0, rect.y);
+                    let rw = Math.min(rect.width, checkW - rx);
+                    let rh = Math.min(rect.height, checkH - ry);
+
+                    if (rw > 5 && rh > 5) {
+                        let roi = gray.roi(new cv.Rect(rx, ry, rw, rh));
+                        let mean = new cv.Mat();
+                        let stddev = new cv.Mat();
+                        cv.meanStdDev(roi, mean, stddev);
+
+                        let meanBrightness = mean.data64F[0];
+                        let stdDeviation = stddev.data64F[0];
+
+                        roi.delete();
+                        mean.delete();
+                        stddev.delete();
+
+                        // Paper is bright (white/cream). Dark objects like desks, bars, walls fail here.
+                        // StdDev ensures there's ink contrast (not a blank white surface).
+                        if (meanBrightness < 120 || stdDeviation < 20) {
+                            documentFound = false;
+                        }
+                    } else {
+                        documentFound = false;
+                    }
+                }
+
                 // Draw HUD when found
                 if (documentFound && bestContour) {
                     let hull = new cv.Mat();
