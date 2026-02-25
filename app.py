@@ -81,7 +81,7 @@ def upload_batch():
                 # Find matching sheet based on formatting logic
                 import re
                 c_cleaned = re.sub(r'[^A-Z0-9]', '', target_class.upper())
-                match = re.match(r'([A-Z]+)(\d+)', c_cleaned)
+                match = re.match(r'([A-Z]+)(\d+.*)', c_cleaned)
                 sheet_target = f"{match.group(1)} {match.group(2)}" if match else (target_class.upper() or "Unknown Class")
                 sheet_target = sheet_target[:31]
                 
@@ -330,10 +330,10 @@ def export_excel():
         for r in results:
             name = str(r.get('name', '')).strip().title()
             
-            # Extract letters and numbers for class formatting (e.g., JSS1 -> JSS 1)
+            # Extract letters and numbers for class formatting (e.g., JSS1Q -> JSS 1Q)
             c_raw = str(r.get('class', '')).strip().upper()
             c_cleaned = re.sub(r'[^A-Z0-9]', '', c_raw)
-            match = re.match(r'([A-Z]+)(\d+)', c_cleaned)
+            match = re.match(r'([A-Z]+)(\d+.*)', c_cleaned)
             class_name = f"{match.group(1)} {match.group(2)}" if match else (c_raw or "Unknown Class")
             
             score = str(r.get('score', '')).strip()
