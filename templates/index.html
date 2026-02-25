@@ -844,184 +844,124 @@
             const hudCanvas = document.getElementById('cv-visualizer');
             if (!hudCanvas) return false;
 
-            hudCanvas.width = video.videoWidth || 640;
-            hudCanvas.height = video.videoHeight || 480;
+            const vw = video.videoWidth || 640;
+            const vh = video.videoHeight || 480;
+            hudCanvas.width = vw;
+            hudCanvas.height = vh;
             const hudCtx = hudCanvas.getContext('2d');
-            hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+            hudCtx.clearRect(0, 0, vw, vh);
 
-            if (typeof cv === 'undefined' || !cv.Mat) return false;
-            if (!video.videoWidth) return false; // Video not ready
+            if (!video.videoWidth) return false;
 
-            const checkW = 320;
-            const checkH = 240;
-            const docCanvas = document.createElement('canvas');
-            docCanvas.width = checkW;
-            docCanvas.height = checkH;
-            const docCtx = docCanvas.getContext('2d', { willReadFrequently: true });
+            // Use a small canvas for fast pixel analysis
+            const aw = 160, ah = 120;
+            const ac = document.createElement('canvas');
+            ac.width = aw; ac.height = ah;
+            const actx = ac.getContext('2d', { willReadFrequently: true });
 
             try {
-                docCtx.drawImage(video, 0, 0, checkW, checkH);
+                actx.drawImage(video, 0, 0, aw, ah);
+                const imgData = actx.getImageData(0, 0, aw, ah).data;
 
-                let src = cv.imread(docCanvas);
-                let gray = new cv.Mat();
-                let edges = new cv.Mat();
-                let contours = new cv.MatVector();
-                let hierarchy = new cv.Mat();
+                // ── CENTER vs EDGE BRIGHTNESS ──────────────────────────
+                // When holding paper: center is BRIGHT (white paper), edges are DARK (background)
+                // When pointing at floor/wall: brightness is UNIFORM everywhere
+                // We measure the ratio to distinguish them.
 
-                // Grayscale + heavy blur to smooth out noise and merge nearby text strokes
-                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-                cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 0, 0, cv.BORDER_DEFAULT);
+                const margin = 0.2; // 20% border ring
+                let centerSum = 0, centerCount = 0;
+                let edgeSum = 0, edgeCount = 0;
+                let centerR = 0, centerG = 0, centerB = 0;
 
-                // Very sensitive Canny to catch faint pen strokes and paper edges
-                cv.Canny(gray, edges, 20, 60, 3, false);
+                for (let y = 0; y < ah; y++) {
+                    for (let x = 0; x < aw; x++) {
+                        const idx = (y * aw + x) * 4;
+                        const r = imgData[idx], g = imgData[idx + 1], b = imgData[idx + 2];
+                        const brightness = (r + g + b) / 3;
 
-                // Dilate to fuse individual text characters/lines into one solid blob
-                let kernel = cv.Mat.ones(7, 7, cv.CV_8U);
-                cv.dilate(edges, edges, kernel, new cv.Point(-1, -1), 2, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
-                kernel.delete();
+                        const inCenterX = x > aw * margin && x < aw * (1 - margin);
+                        const inCenterY = y > ah * margin && y < ah * (1 - margin);
 
-                // Find all contours
-                cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-                let documentFound = false;
-                let bestContour = null;
-                let maxArea = (checkW * checkH) * 0.10; // At least 10% of the frame
-
-                for (let i = 0; i < contours.size(); ++i) {
-                    let cnt = contours.get(i);
-                    let area = cv.contourArea(cnt);
-
-                    if (area > maxArea) {
-                        maxArea = area;
-                        if (bestContour) bestContour.delete();
-                        bestContour = cnt.clone();
-                        documentFound = true;
-                    }
-                }
-
-                // ── DISCRIMINATOR GATE ─────────────────────────────────────
-                // Reject false positives (floors, walls, desks) with 3 checks:
-                //   1. MAX AREA: if blob covers >75% of frame, it's the entire scene, not a document
-                //   2. ASPECT RATIO: paper is roughly rectangular (0.3 to 3.5 w/h ratio)
-                //   3. BRIGHTNESS: paper is WHITE (mean > 150), not beige tiles (~140)
-                //   4. INK CONTRAST: stddev > 30 means dark ink on light paper
-                if (documentFound && bestContour) {
-                    let rect = cv.boundingRect(bestContour);
-                    let blobArea = cv.contourArea(bestContour);
-                    let frameArea = checkW * checkH;
-
-                    // Check 1: Blob can't be the entire scene
-                    if (blobArea > frameArea * 0.75) {
-                        documentFound = false;
-                    }
-
-                    // Check 2: Aspect ratio must be paper-like
-                    if (documentFound && rect.width > 0 && rect.height > 0) {
-                        let aspectRatio = rect.width / rect.height;
-                        if (aspectRatio < 0.3 || aspectRatio > 3.5) {
-                            documentFound = false;
-                        }
-                    }
-
-                    // Check 3: White Pixel Ratio
-                    // Paper has many near-white pixels. Floor/desk do not.
-                    if (documentFound) {
-                        let rx = Math.max(0, rect.x);
-                        let ry = Math.max(0, rect.y);
-                        let rw = Math.min(rect.width, checkW - rx);
-                        let rh = Math.min(rect.height, checkH - ry);
-
-                        if (rw > 5 && rh > 5) {
-                            let roiRect = new cv.Rect(rx, ry, rw, rh);
-                            let roi = gray.roi(roiRect);
-
-                            // Threshold at 180: pixels brighter than 180 = "white"
-                            let binary = new cv.Mat();
-                            cv.threshold(roi, binary, 180, 255, cv.THRESH_BINARY);
-                            let whitePixels = cv.countNonZero(binary);
-                            let totalPixels = rw * rh;
-                            let whiteRatio = whitePixels / totalPixels;
-
-                            roi.delete();
-                            binary.delete();
-
-                            // Paper needs at least 20% white pixels
-                            if (whiteRatio < 0.20) {
-                                documentFound = false;
-                            }
-
-                            // Check 4: Skin-Tone Rejection (Color Neutrality)
-                            // Sample the CENTER 50% to avoid thumb at edges.
-                            if (documentFound) {
-                                let cx2 = rx + Math.floor(rw * 0.25);
-                                let cy2 = ry + Math.floor(rh * 0.25);
-                                let cw2 = Math.floor(rw * 0.5);
-                                let ch2 = Math.floor(rh * 0.5);
-                                if (cw2 > 3 && ch2 > 3 && cx2 + cw2 <= checkW && cy2 + ch2 <= checkH) {
-                                    let centerRoi = src.roi(new cv.Rect(cx2, cy2, cw2, ch2));
-                                    let mc = cv.mean(centerRoi);
-                                    centerRoi.delete();
-                                    let w4 = mc[0] - mc[2]; // R - B warmth
-                                    if (w4 > 35) documentFound = false;
-                                }
-                            }
+                        if (inCenterX && inCenterY) {
+                            centerSum += brightness;
+                            centerR += r; centerG += g; centerB += b;
+                            centerCount++;
                         } else {
-                            documentFound = false;
+                            edgeSum += brightness;
+                            edgeCount++;
                         }
                     }
                 }
 
-                // Draw HUD when found
-                if (documentFound && bestContour) {
-                    let hull = new cv.Mat();
-                    cv.convexHull(bestContour, hull, false, true);
+                if (centerCount === 0 || edgeCount === 0) return false;
 
-                    const scaleX = hudCanvas.width / checkW;
-                    const scaleY = hudCanvas.height / checkH;
+                const centerBright = centerSum / centerCount;
+                const edgeBright = edgeSum / edgeCount;
+                const avgR = centerR / centerCount;
+                const avgG = centerG / centerCount;
+                const avgB = centerB / centerCount;
 
-                    hudCtx.strokeStyle = '#10b981';
-                    hudCtx.lineWidth = 3;
-                    hudCtx.shadowColor = '#10b981';
-                    hudCtx.shadowBlur = 12;
-                    hudCtx.setLineDash([12, 6]);
+                // ── GATE 1: Center must be reasonably bright (paper is white/cream) ──
+                // This rejects dark scenes entirely
+                if (centerBright < 130) return false;
 
-                    hudCtx.beginPath();
-                    let points = hull.data32S;
-                    for (let j = 0; j < points.length; j += 2) {
-                        let x = points[j] * scaleX;
-                        let y = points[j + 1] * scaleY;
-                        if (j === 0) hudCtx.moveTo(x, y);
-                        else hudCtx.lineTo(x, y);
+                // ── GATE 2: Center-to-Edge Brightness Ratio ──
+                // Paper held by hand: center ~180, edge ~90 = ratio 2.0
+                // Floor tiles: center ~140, edge ~140 = ratio 1.0
+                // We want ratio > 1.2
+                const ratio = edgeBright > 0 ? centerBright / edgeBright : 0;
+                if (ratio < 1.2) return false;
+
+                // ── GATE 3: Skin-tone rejection ──
+                // Paper center: R - B < 30 (neutral white/gray)
+                // Skin center: R - B > 30 (warm tones)
+                const warmth = avgR - avgB;
+                if (warmth > 30) return false;
+
+                // ── GATE 4: Center must have texture (not a blank white wall) ──
+                // Count how many center pixels deviate significantly from the mean
+                let textureCount = 0;
+                for (let y = Math.floor(ah * margin); y < Math.floor(ah * (1 - margin)); y++) {
+                    for (let x = Math.floor(aw * margin); x < Math.floor(aw * (1 - margin)); x++) {
+                        const idx = (y * aw + x) * 4;
+                        const brightness = (imgData[idx] + imgData[idx + 1] + imgData[idx + 2]) / 3;
+                        if (Math.abs(brightness - centerBright) > 25) textureCount++;
                     }
-                    hudCtx.closePath();
-                    hudCtx.stroke();
-
-                    // Draw corner markers for a "targeting" feel
-                    hudCtx.setLineDash([]);
-                    hudCtx.lineWidth = 4;
-                    const cornerLen = 20;
-                    let rect = cv.boundingRect(bestContour);
-                    let rx = rect.x * scaleX, ry = rect.y * scaleY;
-                    let rw = rect.width * scaleX, rh = rect.height * scaleY;
-                    // Top-left
-                    hudCtx.beginPath(); hudCtx.moveTo(rx, ry + cornerLen); hudCtx.lineTo(rx, ry); hudCtx.lineTo(rx + cornerLen, ry); hudCtx.stroke();
-                    // Top-right
-                    hudCtx.beginPath(); hudCtx.moveTo(rx + rw - cornerLen, ry); hudCtx.lineTo(rx + rw, ry); hudCtx.lineTo(rx + rw, ry + cornerLen); hudCtx.stroke();
-                    // Bottom-left
-                    hudCtx.beginPath(); hudCtx.moveTo(rx, ry + rh - cornerLen); hudCtx.lineTo(rx, ry + rh); hudCtx.lineTo(rx + cornerLen, ry + rh); hudCtx.stroke();
-                    // Bottom-right
-                    hudCtx.beginPath(); hudCtx.moveTo(rx + rw - cornerLen, ry + rh); hudCtx.lineTo(rx + rw, ry + rh); hudCtx.lineTo(rx + rw, ry + rh - cornerLen); hudCtx.stroke();
-
-                    hull.delete();
                 }
+                const textureRatio = textureCount / centerCount;
+                // Paper with ink: ~15-40% pixels deviate. Blank wall: <5%
+                if (textureRatio < 0.08) return false;
 
-                // Cleanup
-                if (bestContour) bestContour.delete();
-                src.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete();
-                return documentFound;
+                // ── ALL GATES PASSED: Draw targeting HUD ──
+                const pad = 0.18; // 18% inset for the targeting box
+                const bx = vw * pad, by = vh * pad;
+                const bw = vw * (1 - 2 * pad), bh = vh * (1 - 2 * pad);
+
+                // Dashed green rectangle
+                hudCtx.strokeStyle = '#10b981';
+                hudCtx.lineWidth = 2;
+                hudCtx.shadowColor = '#10b981';
+                hudCtx.shadowBlur = 10;
+                hudCtx.setLineDash([10, 6]);
+                hudCtx.strokeRect(bx, by, bw, bh);
+
+                // Solid corner brackets
+                hudCtx.setLineDash([]);
+                hudCtx.lineWidth = 4;
+                const cLen = 25;
+                // Top-left
+                hudCtx.beginPath(); hudCtx.moveTo(bx, by + cLen); hudCtx.lineTo(bx, by); hudCtx.lineTo(bx + cLen, by); hudCtx.stroke();
+                // Top-right
+                hudCtx.beginPath(); hudCtx.moveTo(bx + bw - cLen, by); hudCtx.lineTo(bx + bw, by); hudCtx.lineTo(bx + bw, by + cLen); hudCtx.stroke();
+                // Bottom-left
+                hudCtx.beginPath(); hudCtx.moveTo(bx, by + bh - cLen); hudCtx.lineTo(bx, by + bh); hudCtx.lineTo(bx + cLen, by + bh); hudCtx.stroke();
+                // Bottom-right
+                hudCtx.beginPath(); hudCtx.moveTo(bx + bw - cLen, by + bh); hudCtx.lineTo(bx + bw, by + bh); hudCtx.lineTo(bx + bw, by + bh - cLen); hudCtx.stroke();
+
+                return true;
 
             } catch (e) {
-                console.error("OpenCV scan error:", e);
+                console.error("Scan error:", e);
                 return false;
             }
         }
