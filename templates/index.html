@@ -451,9 +451,15 @@
                                     class="magnetic w-full cursor-pointer bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm group">
                                     <i
                                         class="fa-solid fa-file-arrow-up text-primary group-hover:-translate-y-1 transition-transform"></i>
-                                    <span>Upload List (.txt/.xlsx)</span>
+                                    <span>Upload List</span>
                                 </label>
                             </div>
+                            <button id="btn-open-paste-modal"
+                                class="magnetic flex-1 bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm group">
+                                <i
+                                    class="fa-solid fa-paste text-primary group-hover:scale-110 transition-transform"></i>
+                                <span>Paste Names</span>
+                            </button>
                             <button id="btn-clear-roster"
                                 class="magnetic flex-1 bg-red-900/20 hover:bg-red-900/40 border border-red-500/20 text-red-100 font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm">
                                 <i class="fa-solid fa-trash-can"></i>
@@ -1459,6 +1465,96 @@
         const rosterUpload = document.getElementById('roster-upload');
         const btnClearRoster = document.getElementById('btn-clear-roster');
 
+        // Paste Modal Elements
+        const btnOpenPaste = document.getElementById('btn-open-paste-modal');
+        const pasteModal = document.getElementById('paste-modal');
+        const btnClosePaste = document.getElementById('btn-close-paste');
+        const btnSubmitPaste = document.getElementById('btn-submit-paste');
+        const pasteTargetClass = document.getElementById('paste-target-class');
+        const pasteRawText = document.getElementById('paste-raw-text');
+        const mainTargetClass = document.getElementById('target-class');
+
+        if (btnOpenPaste && pasteModal) {
+            btnOpenPaste.addEventListener('click', () => {
+                // Pre-fill class if already set
+                if (mainTargetClass && mainTargetClass.value) {
+                    pasteTargetClass.value = mainTargetClass.value;
+                }
+
+                pasteModal.classList.remove('hidden');
+                pasteModal.classList.add('flex');
+
+                // Animate in
+                setTimeout(() => {
+                    pasteModal.classList.remove('opacity-0');
+                    pasteModal.querySelector('div').classList.remove('scale-95');
+                }, 10);
+
+                pasteRawText.focus();
+            });
+
+            const closePasteModal = () => {
+                pasteModal.classList.add('opacity-0');
+                pasteModal.querySelector('div').classList.add('scale-95');
+                setTimeout(() => {
+                    pasteModal.classList.add('hidden');
+                    pasteModal.classList.remove('flex');
+                }, 300);
+            };
+
+            btnClosePaste.addEventListener('click', closePasteModal);
+            pasteModal.addEventListener('click', (e) => {
+                if (e.target === pasteModal) closePasteModal();
+            });
+
+            btnSubmitPaste.addEventListener('click', async () => {
+                const targetClass = pasteTargetClass.value.trim();
+                const rawText = pasteRawText.value.trim();
+
+                if (!targetClass) {
+                    alert('Please enter a Target Class.');
+                    pasteTargetClass.focus();
+                    return;
+                }
+                if (!rawText) {
+                    alert('Please paste the list of student names.');
+                    pasteRawText.focus();
+                    return;
+                }
+
+                const originalBtnText = btnSubmitPaste.innerHTML;
+                btnSubmitPaste.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Processing...';
+
+                try {
+                    const response = await fetch('/paste-sheet', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ targetClass, rawText })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        alert(`Success: ${result.message}\n\nThe OCR AI will now strictly match extracted names against this official roster.`);
+                        // Keep UI in sync
+                        if (mainTargetClass) mainTargetClass.value = targetClass;
+                        // Clear textarea
+                        pasteRawText.value = '';
+                        closePasteModal();
+                    } else {
+                        alert(`Error: ${result.error}`);
+                    }
+                } catch (error) {
+                    console.error('Error pasting roster:', error);
+                    alert('An error occurred. Please check the console.');
+                } finally {
+                    btnSubmitPaste.innerHTML = originalBtnText;
+                }
+            });
+        }
+
         if (rosterUpload) {
             rosterUpload.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
@@ -1531,6 +1627,55 @@
             }, { passive: true });
         }
     </script>
+
+    <!-- Paste Roster Modal -->
+    <div id="paste-modal"
+        class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/80 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+        <div
+            class="bg-card w-full max-w-md mx-4 rounded-2xl border border-white/10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.8)] p-6 transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center mb-5">
+                <h3 class="text-white font-bold text-lg tracking-wide"><i
+                        class="fa-solid fa-paste text-primary mr-2"></i>Paste Class List</h3>
+                <button id="btn-close-paste"
+                    class="text-white/50 hover:text-white transition-colors w-8 h-8 flex justify-center items-center rounded-full hover:bg-white/10">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="space-y-2 group">
+                    <label
+                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Target
+                        Class</label>
+                    <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
+                        <input type="text" id="paste-target-class"
+                            class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
+                            placeholder="e.g., SS1Q" required>
+                        <div class="input-focus-anim"></div>
+                    </div>
+                </div>
+
+                <div class="space-y-2 group">
+                    <label
+                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 flex justify-between">
+                        <span>Student Names</span>
+                        <span class="text-primary/70">One per line</span>
+                    </label>
+                    <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
+                        <textarea id="paste-raw-text" rows="8"
+                            class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide resize-none"
+                            placeholder="Ajayi Elizabeth&#x0a;Oluwatoyin Jewel&#x0a;..."></textarea>
+                        <div class="input-focus-anim"></div>
+                    </div>
+                </div>
+
+                <button id="btn-submit-paste"
+                    class="magnetic w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl transition-all shadow-glow mt-2 flex justify-center items-center">
+                    Parse & Save Roster
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

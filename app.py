@@ -261,6 +261,59 @@ def upload_sheet():
             return jsonify({"error": str(e)}), 500
     return jsonify({"error": "Invalid file type. Please upload Excel, CSV, or Text (.txt)."}), 400
 
+@app.route('/paste-sheet', methods=['POST'])
+def paste_sheet():
+    """Accepts raw text pasted from the UI and saves it as the active roster sheet."""
+    try:
+        data = request.json
+        if not data or 'rawText' not in data or 'targetClass' not in data:
+            return jsonify({"error": "Missing rawText or targetClass"}), 400
+            
+        raw_text = data['rawText']
+        target_class = data['targetClass'].strip()
+        
+        if not raw_text.strip():
+            return jsonify({"error": "Pasted text is empty"}), 400
+            
+        if not target_class:
+            return jsonify({"error": "Please provide a target class name"}), 400
+            
+        # Parse lines
+        lines = [line.strip().title() for line in raw_text.split('\n') if line.strip()]
+        
+        if not lines:
+            return jsonify({"error": "No valid names found in pasted text"}), 400
+            
+        # Create DataFrame
+        df = pd.DataFrame({"Name": lines})
+        
+        # Format Class Name for Excel Sheet
+        import re
+        c_clean = re.sub(r'[^A-Z0-9]', '', target_class.upper())
+        match = re.match(r'([A-Z]+)(\d+.*)', c_clean)
+        sheet_name = f"{match.group(1)} {match.group(2)}" if match else (target_class.upper() or "General")
+        sheet_name = sheet_name[:31] # Excel sheet length limit
+        
+        # Load existing or create new
+        sheets_dict = {}
+        if os.path.exists(WORKING_EXCEL_PATH):
+            try:
+                 sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
+            except Exception as e:
+                 print(f"Warning: Could not read existing excel file, creating fresh. {e}")
+        
+        # Update specific sheet and save all
+        sheets_dict[sheet_name] = df
+        with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
+            for s_name, s_df in sheets_dict.items():
+                s_df.to_excel(writer, index=False, sheet_name=s_name)
+                
+        return jsonify({"message": f"Successfully parsed {len(lines)} names into sheet '{sheet_name}'.", "status": "success"}), 200
+        
+    except Exception as e:
+        print(f"Error processing pasted sheet: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/export-excel', methods=['POST'])
 def export_excel():
     try:
