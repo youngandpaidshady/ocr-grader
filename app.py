@@ -191,26 +191,75 @@ def start_blank_sheet():
 
 @app.route('/upload-sheet', methods=['POST'])
 def upload_sheet():
-    """Accepts an Excel file from the frontend and saves it as the active roster."""
+    """Accepts an Excel, CSV, or Text file from the frontend and saves it as the active roster."""
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
-    if file and file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        
+    if file and file.filename.lower().endswith(('.xlsx', '.xls', '.csv', '.txt', '.md')):
         try:
-            # Just save it as the working path regardless of original extension, 
-            # though we should enforce saving as clean xlsx
-            if file.filename.endswith('.csv'):
+            # Handle Raw Text Lists
+            if file.filename.lower().endswith(('.txt', '.md')):
+                # Read all lines
+                content = file.read().decode('utf-8')
+                lines = [line.strip().title() for line in content.split('\n') if line.strip()]
+                
+                # Check for empty file
+                if not lines:
+                    return jsonify({"error": "Text file is empty or contains only whitespace"}), 400
+                
+                # Create DataFrame
+                df = pd.DataFrame({"Name": lines})
+                
+                # Infer Class Name from Filename (e.g., "SS1Q.txt" -> "SS 1Q")
+                import re
+                base_name = os.path.splitext(file.filename)[0].upper()
+                c_clean = re.sub(r'[^A-Z0-9]', '', base_name)
+                match = re.match(r'([A-Z]+)(\d+.*)', c_clean)
+                sheet_name = f"{match.group(1)} {match.group(2)}" if match else (base_name or "General")
+                sheet_name = sheet_name[:31] # Excel sheet length limit
+                
+                # Load existing or create new
+                sheets_dict = {}
+                if os.path.exists(WORKING_EXCEL_PATH):
+                    try:
+                         sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
+                    except Exception as e:
+                         print(f"Warning: Could not read existing excel file, creating fresh. {e}")
+                
+                # Update specific sheet and save all
+                sheets_dict[sheet_name] = df
+                with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
+                    for s_name, s_df in sheets_dict.items():
+                        s_df.to_excel(writer, index=False, sheet_name=s_name)
+                        
+            # Handle CSV
+            elif file.filename.lower().endswith('.csv'):
                 df = pd.read_csv(file)
-                df.to_excel(WORKING_EXCEL_PATH, index=False)
+                base_name = os.path.splitext(file.filename)[0][:31] or "General"
+                
+                sheets_dict = {}
+                if os.path.exists(WORKING_EXCEL_PATH):
+                    try:
+                         sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
+                    except Exception:
+                         pass
+                sheets_dict[base_name] = df
+                with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
+                    for s_name, s_df in sheets_dict.items():
+                        s_df.to_excel(writer, index=False, sheet_name=s_name)
+                        
+            # Handle Excel
             else:
                 file.save(WORKING_EXCEL_PATH)
-            return jsonify({"message": "Roster successfully uploaded and set as active.", "status": "success"}), 200
+                
+            return jsonify({"message": f"Roster '{file.filename}' successfully uploaded and parsed.", "status": "success"}), 200
         except Exception as e:
             print(f"Error saving uploaded sheet: {e}")
             return jsonify({"error": str(e)}), 500
-    return jsonify({"error": "Invalid file type. Please upload an Excel or CSV file."}), 400
+    return jsonify({"error": "Invalid file type. Please upload Excel, CSV, or Text (.txt)."}), 400
 
 @app.route('/export-excel', methods=['POST'])
 def export_excel():

@@ -389,9 +389,9 @@
                 <div class="bg-black/20 rounded-xl border border-white/5 p-4 md:p-6 relative z-10 shadow-inner">
                     <h3
                         class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4 flex items-center">
-                        <i class="fa-solid fa-sliders text-[10px] mr-2"></i> Batch Settings
+                        <i class="fa-solid fa-sliders text-[10px] mr-2"></i> Batch Settings & Roster
                     </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                         <!-- Assessment Type -->
                         <div class="space-y-2">
                             <label
@@ -436,6 +436,29 @@
                             <p class="text-[11px] text-muted-foreground/60 mt-1 pl-1 flex items-start gap-1.5"><i
                                     class="fa-solid fa-circle-info text-primary/70 mt-[2px]"></i> Matches handwriting to
                                 known students.</p>
+                        </div>
+                    </div>
+
+                    <!-- Roster Management -->
+                    <div class="pt-5 border-t border-white/5 space-y-3">
+                        <label
+                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Roster
+                            Management</label>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <div class="relative flex-1">
+                                <input type="file" id="roster-upload" accept=".txt,.md,.xlsx,.csv" class="hidden">
+                                <label for="roster-upload"
+                                    class="magnetic w-full cursor-pointer bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm group">
+                                    <i
+                                        class="fa-solid fa-file-arrow-up text-primary group-hover:-translate-y-1 transition-transform"></i>
+                                    <span>Upload List (.txt/.xlsx)</span>
+                                </label>
+                            </div>
+                            <button id="btn-clear-roster"
+                                class="magnetic flex-1 bg-red-900/20 hover:bg-red-900/40 border border-red-500/20 text-red-100 font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm">
+                                <i class="fa-solid fa-trash-can"></i>
+                                <span>Init Blank Roster</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1429,6 +1452,69 @@
 
                 btn.addEventListener('mousedown', createRipple);
                 btn.addEventListener('touchstart', createRipple, { passive: true });
+            });
+        }
+
+        // Roster Management Event Listeners
+        const rosterUpload = document.getElementById('roster-upload');
+        const btnClearRoster = document.getElementById('btn-clear-roster');
+
+        if (rosterUpload) {
+            rosterUpload.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch('/upload-sheet', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    if (response.ok) {
+                        alert(`Success: ${result.message}\n\nThe OCR AI will now strictly match extracted names against this official roster to ensure 100% accuracy.`);
+                        // Auto-fill target class if it was a text file
+                        if (file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.md')) {
+                            let baseName = file.name.replace(/\.[^/.]+$/, "");
+                            let clean = baseName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                            let match = clean.match(/([A-Z]+)(\d+.*)/);
+                            if (match && document.getElementById('target-class')) {
+                                document.getElementById('target-class').value = `${match[1]} ${match[2]}`;
+                            }
+                        }
+                    } else {
+                        alert(`Error: ${result.error}`);
+                    }
+                } catch (error) {
+                    console.error('Error uploading roster:', error);
+                    alert('An error occurred while uploading. Please check the console.');
+                }
+
+                // Reset file input so the same file can be uploaded again if needed
+                e.target.value = '';
+            });
+        }
+
+        if (btnClearRoster) {
+            btnClearRoster.addEventListener('click', async () => {
+                if (!confirm("Are you sure you want to initialize a blank roster? This will overwrite existing unsaved data in ActiveRoaster.xlsx.")) return;
+
+                try {
+                    const response = await fetch('/start-blank-sheet', {
+                        method: 'POST'
+                    });
+                    const result = await response.json();
+                    if (response.ok) {
+                        alert('Blank roster initialized successfully.');
+                    } else {
+                        alert(`Error: ${result.error}`);
+                    }
+                } catch (error) {
+                    console.error('Error clearing roster:', error);
+                }
             });
         }
 
