@@ -1,13 +1,14 @@
 import os
 import base64
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, jsonify, render_template, send_file, Response, stream_with_context
 from flask_cors import CORS
 import google.generativeai as genai
 import pandas as pd
 from thefuzz import process, fuzz
 from dotenv import load_dotenv
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +27,50 @@ genai.configure(api_key=api_key)
 app = Flask(__name__)
 CORS(app)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024 # 100MB upload limit to support unlimited batches
+
+# Configure SQLite Database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///smartgrader.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+# Database Models
+class ClassModel(db.Model):
+    __tablename__ = 'classes'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    students = db.relationship('StudentModel', backref='class_obj', lazy=True, cascade="all, delete-orphan")
+
+class StudentModel(db.Model):
+    __tablename__ = 'students'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    class_id = db.Column(db.Integer, db.ForeignKey('classes.id'), nullable=False)
+    scores = db.relationship('ScoreModel', backref='student_obj', lazy=True, cascade="all, delete-orphan")
+    enrollments = db.relationship('EnrollmentModel', backref='student_obj', lazy=True, cascade="all, delete-orphan")
+
+class EnrollmentModel(db.Model):
+    __tablename__ = 'enrollments'
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    subject_name = db.Column(db.String(100), nullable=False)
+
+class ScoreModel(db.Model):
+    __tablename__ = 'scores'
+    id = db.Column(db.Integer, primary_key=True)
+    score_value = db.Column(db.String(50), nullable=False)
+    assessment_type = db.Column(db.String(100), default='Score')
+    subject_name = db.Column(db.String(100), default='Uncategorized', server_default='Uncategorized')
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+
+from sqlalchemy import text
+with app.app_context():
+    db.create_all()
+    try:
+        db.session.execute(text("ALTER TABLE scores ADD COLUMN subject_name VARCHAR(100) DEFAULT 'Uncategorized'"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        pass
 
 # The prompt instructions for Gemini
 SYSTEM_PROMPT = """
@@ -58,6 +103,282 @@ Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like ```
 def index():
     return render_template('index.html')
 
+@app.route('/api/classes', methods=['GET', 'POST'])
+def handle_classes():
+    if request.method == 'GET':
+        classes = ClassModel.query.order_by(ClassModel.name).all()
+        # seen = set() # Original line
+        unique_classes = []
+        seen_names = set() # Added as per instruction
+        for c in classes:
+            normalized_name = c.name.lower().replace(" ", "") # Modified as per instruction
+            if normalized_name not in seen_names: # Modified as per instruction
+                seen_names.add(normalized_name) # Modified as per instruction
+                unique_classes.append({"id": c.id, "name": c.name})
+        return jsonify(unique_classes), 200
+        
+    if request.method == 'POST':
+        # Support both JSON (fallback) and Form Data (new UI)
+        if request.is_json:
+            data = request.get_json()
+            raw_name = data.get('name', '').strip()
+            names_text = data.get('names_text', '')
+            subject_name = data.get('subject', 'Uncategorized')
+            if not subject_name.strip(): subject_name = 'Uncategorized'
+            file = None
+        else:
+            raw_name = request.form.get('name', '').strip()
+            names_text = request.form.get('names_text', '')
+            subject_name = request.form.get('subject', 'Uncategorized')
+            if not subject_name.strip(): subject_name = 'Uncategorized'
+            file = request.files.get('file')
+
+        if not raw_name:
+            return jsonify({"error": "Class name is required"}), 400
+            
+        print("Upserting class: {}".format(raw_name))
+            
+        # Get or Create class (Upsert mechanism)
+        c = ClassModel.query.filter(func.lower(ClassModel.name) == raw_name.lower()).first()
+        if not c:
+            c = ClassModel(name=raw_name)
+            db.session.add(c)
+            db.session.commit()
+        
+        names_added = 0
+        scores_imported = 0
+        
+        # Process Pasted Text
+        if names_text:
+            lines = [line.strip().title() for line in names_text.split('\n') if line.strip()]
+            for name in lines:
+                if not StudentModel.query.filter_by(class_id=c.id, name=name).first():
+                    db.session.add(StudentModel(class_id=c.id, name=name))
+                    names_added += 1
+            db.session.commit()
+            
+        # Process Uploaded File
+        if file and file.filename:
+            if file.filename.lower().endswith(('.txt', '.md')):
+                content = file.read().decode('utf-8')
+                lines = [line.strip().title() for line in content.split('\n') if line.strip()]
+                for name in lines:
+                    if not StudentModel.query.filter_by(class_id=c.id, name=name).first():
+                        db.session.add(StudentModel(class_id=c.id, name=name))
+                        names_added += 1
+                db.session.commit()
+            else:
+                try:
+                    if file.filename.lower().endswith('.csv'):
+                        df = pd.read_csv(file)
+                    else:
+                        df = pd.read_excel(file)
+                    
+                    if 'Name' in df.columns:
+                        for index, row in df.iterrows():
+                            # Clean Name
+                            name = str(row['Name']).strip().title()
+                            if not name or name.lower() == 'nan' or name.lower() == 'none':
+                                continue
+                                
+                            student = StudentModel.query.filter_by(class_id=c.id, name=name).first()
+                            if not student:
+                                student = StudentModel(class_id=c.id, name=name)
+                                db.session.add(student)
+                                db.session.commit() # Need ID for score associations
+                                names_added += 1
+                                
+                            # Import Excel scores
+                            for col in df.columns:
+                                if col.strip() in ['Name', 'Total Score', 'Position', 'Rank'] or col.startswith('Unnamed'):
+                                    continue
+                                    
+                                val = str(row[col]).strip()
+                                if val and val.lower() != 'nan' and val.lower() != 'none':
+                                    s_rec = ScoreModel.query.filter_by(
+                                        student_id=student.id, 
+                                        assessment_type=col.strip(), 
+                                        subject_name=subject_name
+                                    ).first()
+                                    if s_rec:
+                                        s_rec.score_value = val
+                                    else:
+                                        s_rec = ScoreModel(
+                                            student_id=student.id, 
+                                            score_value=val, 
+                                            assessment_type=col.strip(), 
+                                            subject_name=subject_name
+                                        )
+                                        db.session.add(s_rec)
+                                        scores_imported += 1
+                                        
+                        db.session.commit()
+                    else:
+                        return jsonify({"error": "Excel/CSV file MUST contain a 'Name' column header."}), 400
+                except Exception as e:
+                    return jsonify({"error": "Error parsing file: {}".format(str(e))}), 500
+                    
+        msg = "Class '{}' ready. Added {} new students.".format(raw_name, names_added)
+        if scores_imported > 0:
+            msg += " Imported {} absolute scores.".format(scores_imported)
+        elif names_text and names_added == 0:
+            msg = "Class '{}' recognized. All provided students were already enrolled (0 duplicates injected). You are good to go!".format(raw_name)
+            
+        return jsonify({
+            "success": True, 
+            "message": msg
+        }), 201
+
+@app.route('/api/students', methods=['GET', 'POST'])
+def handle_students():
+    if request.method == 'GET':
+        class_id = request.args.get('class_id')
+        if not class_id:
+            return jsonify({"error": "class_id is required"}), 400
+        students = StudentModel.query.filter_by(class_id=class_id).order_by(StudentModel.name).all()
+        return jsonify([{"id": s.id, "name": s.name} for s in students]), 200
+        
+    if request.method == 'POST':
+        data = request.json
+        name = data.get('name', '').strip().title()
+        class_id = data.get('class_id')
+        
+        if not name or not class_id:
+            return jsonify({"error": "name and class_id are required"}), 400
+            
+        c = ClassModel.query.get(class_id)
+        if not c:
+            return jsonify({"error": "Class not found"}), 404
+            
+        # Check if student exists
+        existing = StudentModel.query.filter_by(class_id=class_id, name=name).first()
+        if existing:
+            return jsonify({"error": "Student '{}' already exists in this class.".format(name), "student": {"id": existing.id, "name": existing.name}}), 409
+            
+        s = StudentModel(class_id=class_id, name=name)
+        db.session.add(s)
+        db.session.commit()
+        
+        return jsonify({"message": "Student added successfully.", "student": {"id": s.id, "name": s.name}}), 201
+
+@app.route('/api/enrollments', methods=['GET', 'POST'])
+def handle_enrollments():
+    if request.method == 'GET':
+        class_id = request.args.get('class_id')
+        subject_name = request.args.get('subject_name')
+        if not class_id or not subject_name:
+            return jsonify({"error": "class_id and subject_name are required"}), 400
+            
+        students = StudentModel.query.filter_by(class_id=class_id).all()
+        enrolled_ids = []
+        for s in students:
+            enr = EnrollmentModel.query.filter_by(student_id=s.id, subject_name=subject_name).first()
+            if enr:
+                enrolled_ids.append(s.id)
+                
+        return jsonify({"enrolled": enrolled_ids}), 200
+        
+    if request.method == 'POST':
+        data = request.json
+        class_id = data.get('class_id')
+        subject_name = data.get('subject_name')
+        student_ids = data.get('student_ids', [])
+        
+        if not class_id or not subject_name:
+            return jsonify({"error": "class_id and subject_name are required"}), 400
+            
+        # Clear existing enrollments for this class+subject
+        students = StudentModel.query.filter_by(class_id=class_id).all()
+        for s in students:
+            EnrollmentModel.query.filter_by(student_id=s.id, subject_name=subject_name).delete()
+            
+        # Add new enrollments
+        for sid in student_ids:
+            enr = EnrollmentModel(student_id=sid, subject_name=subject_name)
+            db.session.add(enr)
+            
+        db.session.commit()
+        return jsonify({"message": "Enrollments updated successfully"}), 200
+
+@app.route('/upload-scoresheet', methods=['POST'])
+def upload_scoresheet():
+    try:
+        data = request.json
+        if not data or 'image' not in data:
+            return jsonify({"error": "No image provided"}), 400
+            
+        img_b64 = data['image']
+        target_class = data.get('targetClass', '').strip()
+        
+        # Pull known names for this class
+        known_names = []
+        if target_class:
+            try:
+                c = ClassModel.query.filter(func.lower(ClassModel.name) == target_class.lower()).first()
+                if c:
+                    students = StudentModel.query.filter_by(class_id=c.id).all()
+                    known_names = [s.name for s in students]
+            except Exception as e:
+                print("Error fetching known names: {}".format(e))
+                
+        # Engineer the Prompt per User Request
+        roster_context = ""
+        if known_names:
+            roster_context = "\nCRITICAL ROSTER MAPPING: The students in this class are exactly: {}. You MUST map the extracted handwritten/typed names to exactly match a name from this list whenever visually possible. Do not invent alternate spellings if a direct visual resemblance exists in this roster.".format(known_names)
+            
+        system_prompt = """
+You are an expert OCR Assistant helping a teacher digitize an entire grading score sheet.
+I will provide you with an image of a score sheet (which may be handwritten or typed).
+CRITICAL CONTEXT: The teacher has noted that some score sheets contain MULTIPLE columns of distinct grades for each student (e.g., a "1st CA" column, a "2nd CA" column, and an "Exam" column all on the same paper).
+
+Your task is to:
+1. Identify the table of students and extract ALL distinct score columns present.
+2. Analyze the headers, title, or surrounding context to determine the precise names for these 'Assessment Types' (e.g., 1st CA, 2nd CA, Final Exam).
+3. If only one column exists, infer its assessment type from context or label it "Score".
+
+{}
+
+Return EXACTLY a JSON object with two keys:
+1. "assessment_types_found": A JSON array of strings listing the distinct assessment columns detected.
+2. "records": A JSON array of objects. Each object must have a "name" string, and a "scores" dictionary mapping each detected assessment type string to its corresponding score value.
+
+Use the following JSON schema:
+{{
+  "assessment_types_found": ["1st CA", "2nd CA", "Exam"],
+  "records": [
+    {{ 
+       "name": "...", 
+       "scores": {{ "1st CA": "...", "2nd CA": "...", "Exam": "..." }}
+    }},
+    {{ 
+       "name": "...", 
+       "scores": {{ "1st CA": "...", "2nd CA": "...", "Exam": "..." }}
+    }}
+  ]
+}}
+
+Return ONLY the raw JSON object. DO NOT wrap it in markdown block quotes like ```json ... ```.
+""".format(roster_context)
+
+        # Process with Gemini
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
+        
+        response = model.generate_content(contents)
+        raw_text = response.text.strip()
+        
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+            
+        result_json = json.loads(raw_text.strip())
+        return jsonify(result_json), 200
+        
+    except Exception as e:
+        print("Error processing score sheet: {}".format(e))
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/upload-batch', methods=['POST'])
 def upload_batch():
     try:
@@ -67,36 +388,36 @@ def upload_batch():
         
         images_base64 = data['images']
         target_class = data.get('targetClass', '').strip()
+        smart_instruction = data.get('smartInstruction', '').strip()
         
         if not images_base64:
              return jsonify({"error": "Empty images list"}), 400
 
-        print(f"Received a batch of {len(images_base64)} images for processing...")
+        print("Received a batch of {} images for processing...".format(len(images_base64)))
+        if smart_instruction:
+            print(f"Smart Instruction Applied: {smart_instruction}")
         
         # Pull known names for this class to improve accuracy (Smart Name Matching)
         known_names_text = ""
+        known_names = []
         
-        if target_class and os.path.exists(WORKING_EXCEL_PATH):
+        if target_class:
             try:
-                # Find matching sheet based on formatting logic
-                import re
-                c_cleaned = re.sub(r'[^A-Z0-9]', '', target_class.upper())
-                match = re.match(r'([A-Z]+)(\d+.*)', c_cleaned)
-                sheet_target = f"{match.group(1)} {match.group(2)}" if match else (target_class.upper() or "Unknown Class")
-                sheet_target = sheet_target[:31]
-                
-                sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
-                if sheet_target in sheets_dict:
-                    df_existing = sheets_dict[sheet_target]
-                    if 'Name' in df_existing.columns:
-                        known_names = df_existing['Name'].dropna().tolist()
-                        if known_names:
-                            known_names_text = f"\n\nCRITICAL INSTRUCTION: You are grading papers for class '{sheet_target}'. Here is the authoritative list of known student names in this class: {known_names}. If the handwritten name on the paper resembles any of these, you MUST output the exact spelling from this list. Do not invent new names."
+                # Fetch class exactly as specified in the dropdown
+                c = ClassModel.query.filter(func.lower(ClassModel.name) == target_class.lower()).first()
+                if c:
+                    students = StudentModel.query.filter_by(class_id=c.id).all()
+                    known_names = [s.name for s in students]
+                    if known_names:
+                        known_names_text = "\n\nCRITICAL INSTRUCTION: You are grading papers for class '{}'. Here is the authoritative list of known student names in this class: {}. If the handwritten name on the paper resembles any of these, you MUST output the exact spelling from this list. Do not invent new names.".format(c.name, known_names)
             except Exception as e:
-                print(f"Error checking known names: {e}")
+                print("Error checking known names: {}".format(e))
         
         # Prepare contents for Gemini
         dynamic_prompt = SYSTEM_PROMPT + known_names_text
+
+        if smart_instruction:
+            dynamic_prompt += f"\n\n--- TEACHER'S CUSTOM SMART INSTRUCTION ---\n{smart_instruction}\n--- END OF CUSTOM INSTRUCTION ---\nYou MUST strictly obey the above manual instruction given by the teacher when processing these images and finalizing the output JSON."
         
         # Concurrent processing: split images into chunks and process in parallel
         CHUNK_SIZE = 3  # Process 3 images per Gemini call for optimal speed/accuracy
@@ -129,7 +450,7 @@ def upload_batch():
             try:
                 results = json.loads(response_text.strip())
             except Exception as e:
-                print(f"Error parsing JSON from Gemini: {e}")
+                print("Error parsing JSON from Gemini: {}".format(e))
                 results = []
                 
             # Map back the global index to the result
@@ -143,171 +464,49 @@ def upload_batch():
                     if raw_score and '/' in raw_score:
                         res['score'] = raw_score.split('/')[0].strip()
                         
+                    name = str(res.get('name', '')).strip().title()
+                    confidence = str(res.get('confidence', 'high')).lower()
+                    if target_class:
+                        res['class'] = target_class
+
+                    if name and known_names:
+                        if confidence in ['low', 'medium'] or name not in known_names:
+                            best_matches = process.extract(name, known_names, scorer=fuzz.token_set_ratio, limit=3)
+                            
+                            # Smart auto-correction if the top match is very high confidence and distinct
+                            if best_matches and best_matches[0][1] >= 85:
+                                # Check for ambiguity string ties
+                                if len(best_matches) == 1 or best_matches[0][1] > best_matches[1][1] + 5:
+                                    res['name'] = best_matches[0][0]
+                                    res['needs_resolution'] = False
+                                    res['fuzzy_matches'] = []
+                                else:
+                                    res['needs_resolution'] = True
+                                    res['fuzzy_matches'] = [(m[0], m[1]) for m in best_matches]
+                            elif best_matches:
+                                res['needs_resolution'] = True
+                                res['fuzzy_matches'] = [(m[0], m[1]) for m in best_matches]
+                        
                     paired_results.append({"index": global_idx, "result": res})
             return paired_results
         
         @stream_with_context
         def generate():
-            if len(image_chunks) == 1:
-                # Single chunk
-                chunk_res = process_chunk(image_chunks[0])
-                for r in chunk_res:
-                    yield f"data: {json.dumps(r)}\n\n"
-            else:
-                # Concurrent processing of multiple chunks
-                with ThreadPoolExecutor(max_workers=min(len(image_chunks), 4)) as executor:
-                    futures = [executor.submit(process_chunk, chunk) for chunk in image_chunks]
-                    for future in as_completed(futures):
-                        try:
-                            chunk_res = future.result()
-                            for r in chunk_res:
-                                yield f"data: {json.dumps(r)}\n\n"
-                        except Exception as exc:
-                            print(f'Chunk generated an exception: {exc}')
+            for chunk in image_chunks:
+                try:
+                    chunk_res = process_chunk(chunk)
+                    for r in chunk_res:
+                        yield "data: {}\n\n".format(json.dumps(r))
+                except Exception as exc:
+                    print('Chunk generated an exception: {}'.format(exc))
             yield "data: [DONE]\n\n"
         
         return Response(generate(), mimetype='text/event-stream')
 
     except Exception as e:
-        print(f"Error processing batch: {e}")
+        print("Error processing batch: {}".format(e))
         return jsonify({"error": str(e)}), 500
 
-@app.route('/start-blank-sheet', methods=['POST'])
-def start_blank_sheet():
-    """Initializes a blank active roster and clears the old one."""
-    try:
-        # Create a single empty dataframe with generic columns to start
-        df = pd.DataFrame(columns=["Name", "Class"])
-        df.to_excel(WORKING_EXCEL_PATH, index=False, sheet_name="General")
-        return jsonify({"message": "Blank sheet initialized.", "status": "success"}), 200
-    except Exception as e:
-        print(f"Error starting blank sheet: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/upload-sheet', methods=['POST'])
-def upload_sheet():
-    """Accepts an Excel, CSV, or Text file from the frontend and saves it as the active roster."""
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-        
-    if file and file.filename.lower().endswith(('.xlsx', '.xls', '.csv', '.txt', '.md')):
-        try:
-            # Handle Raw Text Lists
-            if file.filename.lower().endswith(('.txt', '.md')):
-                # Read all lines
-                content = file.read().decode('utf-8')
-                lines = [line.strip().title() for line in content.split('\n') if line.strip()]
-                
-                # Check for empty file
-                if not lines:
-                    return jsonify({"error": "Text file is empty or contains only whitespace"}), 400
-                
-                # Create DataFrame
-                df = pd.DataFrame({"Name": lines})
-                
-                # Infer Class Name from Filename (e.g., "SS1Q.txt" -> "SS 1Q")
-                import re
-                base_name = os.path.splitext(file.filename)[0].upper()
-                c_clean = re.sub(r'[^A-Z0-9]', '', base_name)
-                match = re.match(r'([A-Z]+)(\d+.*)', c_clean)
-                sheet_name = f"{match.group(1)} {match.group(2)}" if match else (base_name or "General")
-                sheet_name = sheet_name[:31] # Excel sheet length limit
-                
-                # Load existing or create new
-                sheets_dict = {}
-                if os.path.exists(WORKING_EXCEL_PATH):
-                    try:
-                         sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
-                    except Exception as e:
-                         print(f"Warning: Could not read existing excel file, creating fresh. {e}")
-                
-                # Update specific sheet and save all
-                sheets_dict[sheet_name] = df
-                with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
-                    for s_name, s_df in sheets_dict.items():
-                        s_df.to_excel(writer, index=False, sheet_name=s_name)
-                        
-            # Handle CSV
-            elif file.filename.lower().endswith('.csv'):
-                df = pd.read_csv(file)
-                base_name = os.path.splitext(file.filename)[0][:31] or "General"
-                
-                sheets_dict = {}
-                if os.path.exists(WORKING_EXCEL_PATH):
-                    try:
-                         sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
-                    except Exception:
-                         pass
-                sheets_dict[base_name] = df
-                with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
-                    for s_name, s_df in sheets_dict.items():
-                        s_df.to_excel(writer, index=False, sheet_name=s_name)
-                        
-            # Handle Excel
-            else:
-                file.save(WORKING_EXCEL_PATH)
-                
-            return jsonify({"message": f"Roster '{file.filename}' successfully uploaded and parsed.", "status": "success"}), 200
-        except Exception as e:
-            print(f"Error saving uploaded sheet: {e}")
-            return jsonify({"error": str(e)}), 500
-    return jsonify({"error": "Invalid file type. Please upload Excel, CSV, or Text (.txt)."}), 400
-
-@app.route('/paste-sheet', methods=['POST'])
-def paste_sheet():
-    """Accepts raw text pasted from the UI and saves it as the active roster sheet."""
-    try:
-        data = request.json
-        if not data or 'rawText' not in data or 'targetClass' not in data:
-            return jsonify({"error": "Missing rawText or targetClass"}), 400
-            
-        raw_text = data['rawText']
-        target_class = data['targetClass'].strip()
-        
-        if not raw_text.strip():
-            return jsonify({"error": "Pasted text is empty"}), 400
-            
-        if not target_class:
-            return jsonify({"error": "Please provide a target class name"}), 400
-            
-        # Parse lines
-        lines = [line.strip().title() for line in raw_text.split('\n') if line.strip()]
-        
-        if not lines:
-            return jsonify({"error": "No valid names found in pasted text"}), 400
-            
-        # Create DataFrame
-        df = pd.DataFrame({"Name": lines})
-        
-        # Format Class Name for Excel Sheet
-        import re
-        c_clean = re.sub(r'[^A-Z0-9]', '', target_class.upper())
-        match = re.match(r'([A-Z]+)(\d+.*)', c_clean)
-        sheet_name = f"{match.group(1)} {match.group(2)}" if match else (target_class.upper() or "General")
-        sheet_name = sheet_name[:31] # Excel sheet length limit
-        
-        # Load existing or create new
-        sheets_dict = {}
-        if os.path.exists(WORKING_EXCEL_PATH):
-            try:
-                 sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
-            except Exception as e:
-                 print(f"Warning: Could not read existing excel file, creating fresh. {e}")
-        
-        # Update specific sheet and save all
-        sheets_dict[sheet_name] = df
-        with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
-            for s_name, s_df in sheets_dict.items():
-                s_df.to_excel(writer, index=False, sheet_name=s_name)
-                
-        return jsonify({"message": f"Successfully parsed {len(lines)} names into sheet '{sheet_name}'.", "status": "success"}), 200
-        
-    except Exception as e:
-        print(f"Error processing pasted sheet: {e}")
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/export-excel', methods=['POST'])
 def export_excel():
@@ -318,14 +517,16 @@ def export_excel():
             
         results = data['results']
         assessment_type = data.get('assessmentType', 'Score').strip()
+        subject_name = data.get('subjectType', 'Uncategorized').strip()
         if not assessment_type:
             assessment_type = 'Score'
+        if not subject_name:
+            subject_name = 'Uncategorized'
             
         if not results:
              return jsonify({"error": "No data to export"}), 400
              
-        # Format the incoming data
-        formatted_results = []
+        # Map incoming OCR data to DB
         import re
         for r in results:
             name = str(r.get('name', '')).strip().title()
@@ -334,185 +535,137 @@ def export_excel():
             c_raw = str(r.get('class', '')).strip().upper()
             c_cleaned = re.sub(r'[^A-Z0-9]', '', c_raw)
             match = re.match(r'([A-Z]+)(\d+.*)', c_cleaned)
-            class_name = f"{match.group(1)} {match.group(2)}" if match else (c_raw or "Unknown Class")
+            class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
             
-            score = str(r.get('score', '')).strip()
+            score_val = str(r.get('score', '')).strip()
             
             if not name:
                 continue
                 
-            formatted_results.append({
-                'Name': name,
-                'Class': class_name,
-                assessment_type: score
-            })
+            # Find class in DB
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if not c:
+                # If class doesn't exist, create it (fallback mechanism if front-end failed to send valid class)
+                c = ClassModel(name=class_name)
+                db.session.add(c)
+                db.session.commit()
+                
+            # Find student
+            student = StudentModel.query.filter_by(class_id=c.id, name=name).first()
+            if not student:
+                 # Attempt fuzzy match
+                 existing_students = StudentModel.query.filter_by(class_id=c.id).all()
+                 existing_names = [s.name for s in existing_students]
+                 if existing_names:
+                     best_match_tuple = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
+                     if best_match_tuple and best_match_tuple[1] >= 85:
+                         student = StudentModel.query.filter_by(class_id=c.id, name=best_match_tuple[0]).first()
+                         
+                 # If still no student, create
+                 if not student:
+                     student = StudentModel(class_id=c.id, name=name)
+                     db.session.add(student)
+                     db.session.commit()
+                     
+            # Save score safely under the Subject tag!
+            score_record = ScoreModel.query.filter_by(student_id=student.id, assessment_type=assessment_type, subject_name=subject_name).first()
+            if score_record:
+                score_record.score_value = score_val
+            else:
+                score_record = ScoreModel(student_id=student.id, score_value=score_val, assessment_type=assessment_type, subject_name=subject_name)
+                db.session.add(score_record)
+            db.session.commit()
             
-        if not formatted_results:
-            return jsonify({"error": "No valid data could be formatted"}), 400
-            
-        df_new = pd.DataFrame(formatted_results)
-        
-        # Dictionary to hold dataframes for each sheet (Class)
+        # Now generate Excel from DB cleanly organized by Class and Subject
+        classes = ClassModel.query.order_by(ClassModel.name).all()
         sheets_dict = {}
         
-        # Load existing if available
-        if os.path.exists(WORKING_EXCEL_PATH):
-            try:
-                sheets_dict = pd.read_excel(WORKING_EXCEL_PATH, sheet_name=None)
-            except Exception as e:
-                print(f"Could not read existing Excel: {e}")
-                
-        # Group by Class and process
-        classes = df_new['Class'].unique()
-        
         for c in classes:
-            # Safe sheet name (Excel limits to 31 chars)
-            sheet_name = str(c)[:31]
-            if not sheet_name:
-                sheet_name = "General"
+            all_students = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
+            if not all_students:
+                continue
                 
-            # Get the new data for this specific class
-            class_data_new = df_new[df_new['Class'] == c][['Name', assessment_type]]
-            
-            # Keep only the last scanned entry if there are duplicate names in this single batch
-            class_data_new = class_data_new.drop_duplicates(subset=['Name'], keep='last')
-            
-            if sheet_name in sheets_dict:
-                df_existing = sheets_dict[sheet_name]
-                
-                # Ensure Name column exists
-                if 'Name' not in df_existing.columns:
-                    df_existing['Name'] = ''
+            # Accumulate subjects currently known for this class
+            class_subjects = set()
+            for s in all_students:
+                for score in ScoreModel.query.filter_by(student_id=s.id).all():
+                    class_subjects.add(score.subject_name)
                     
-                # Defeat Pandas strict dtype assignment rules by converting column to object first
-                if assessment_type in df_existing.columns:
-                    df_existing[assessment_type] = df_existing[assessment_type].astype(object)
+            if not class_subjects:
+                # Provide a blank worksheet if the class has absolutely no grades yet
+                sheet_name = c.name[:31]
+                data_rows = [{'Name': s.name} for s in all_students]
+                sheets_dict[sheet_name] = pd.DataFrame(data_rows)
+                continue
                 
-                # Iterate over new grades to insert/update smartly
-                for _, row in class_data_new.iterrows():
-                    new_name = str(row['Name']).strip()
-                    new_score = row[assessment_type]
+            for subj in class_subjects:
+                # Format specific worksheet per subject limit max Excel width 31
+                sheet_name = "{} - {}".format(c.name, subj)[:31]
+                data_rows = []
+                
+                # Enrollment Guard: If ANY Selective Enrollments exist for this Subject, lock the roster
+                enrollments = EnrollmentModel.query.filter_by(subject_name=subj).filter(EnrollmentModel.student_id.in_([s.id for s in all_students])).all()
+                valid_student_ids = [e.student_id for e in enrollments] if enrollments else [s.id for s in all_students]
+                
+                filtered_students = [s for s in all_students if s.id in valid_student_ids]
+                
+                for s in filtered_students:
+                    row = {'Name': s.name}
+                    scores = ScoreModel.query.filter_by(student_id=s.id, subject_name=subj).all()
                     
-                    if not new_name:
+                    if not scores and enrollments:
+                        # If they are selectively enrolled but have no scores, STILL show them!
+                        pass
+                    elif not scores:
+                        # Skip strictly general students who have absolutely zero grades logged under this specific Subject
                         continue
-                        
-                    # 1. Exact Match first
-                    exact_match_idx = df_existing.index[df_existing['Name'].str.strip().str.lower() == new_name.lower()].tolist()
-                    
-                    if exact_match_idx:
-                        # Update exact match using .loc to create the column safely if it doesn't exist
-                        idx = exact_match_idx[0]
-                        df_existing.loc[idx, assessment_type] = new_score
-                    else:
-                        # 2. Fuzzy Match via thefuzz
-                        existing_names = df_existing['Name'].dropna().astype(str).tolist()
-                        if existing_names:
-                            # Use token set ratio which is good for rearranged names e.g. "Smith, John" vs "John Smith"
-                            best_match_tuple = process.extractOne(new_name, existing_names, scorer=fuzz.token_set_ratio)
-                            
-                            # If we find a good enough match (e.g. 85+ out of 100)
-                            if best_match_tuple and best_match_tuple[1] >= 85:
-                                matched_name = best_match_tuple[0]
-                                matched_idx = df_existing.index[df_existing['Name'] == matched_name].tolist()[0]
-                                df_existing.loc[matched_idx, assessment_type] = new_score
-                                print(f"Fuzzy Matched: OCR '{new_name}' -> DB '{matched_name}' ({best_match_tuple[1]}%)")
-                                continue
-                                
-                        # 3. No match found, append new row
-                        new_row_dict = {'Name': new_name, assessment_type: new_score}
-                        df_existing = pd.concat([df_existing, pd.DataFrame([new_row_dict])], ignore_index=True)
-                
-                sheets_dict[sheet_name] = df_existing
 
-                # No secondary merge is needed; the loop above handles matching and appending exactly.
+                    total_score = 0.0
+                    for score in scores:
+                        row[score.assessment_type] = score.score_value
+                        # Auto tally
+                        try:
+                            val = str(score.score_value)
+                            if '/' in val: val = val.split('/')[0]
+                            total_score += float(val)
+                        except:
+                            pass
+                    row['Total Score'] = total_score
+                    data_rows.append(row)
+                    
+                if not data_rows:
+                    continue
+                    
+                df = pd.DataFrame(data_rows)
                 
-                # Sort alphabetically by default
-                df_existing = df_existing.sort_values(by='Name', ascending=True)
-                
-                # ---- Calculate Total Score and Position ----
-                if 'Total Score' in df_existing.columns:
-                    df_existing = df_existing.drop(columns=['Total Score'])
-                if 'Position' in df_existing.columns:
-                    df_existing = df_existing.drop(columns=['Position'])
-                
-                def parse_score(val):
-                    try:
-                        val_str = str(val).strip()
-                        if not val_str or val_str.lower() in ['nan', 'none']:
-                            return 0.0
-                        if '/' in val_str:
-                            val_str = val_str.split('/')[0]
-                        return float(val_str)
-                    except:
-                        return 0.0
-                        
-                score_cols = [col for col in df_existing.columns if col not in ['Name', 'Class']]
-                
-                # Pandas 2.1+ deprecates applymap, use map or apply depending on version, apply(lambda x: x.map(parse_score)) is safe
-                df_existing['Total Score'] = df_existing[score_cols].apply(lambda x: x.map(parse_score)).sum(axis=1)
-                
-                # Compute Ranking (min method handles ties: 1, 1, 3)
-                df_existing['Rank'] = df_existing['Total Score'].rank(method='min', ascending=False)
+                # Ranking
+                df['Rank'] = df['Total Score'].rank(method='min', ascending=False)
                 
                 def format_position(rank):
                     if pd.isna(rank): return ''
                     r = int(rank)
-                    if 11 <= (r % 100) <= 13:
-                        suffix = 'th'
-                    else:
-                        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
-                    return f"{r}{suffix}"
+                    if 11 <= (r % 100) <= 13: return "{}th".format(r)
+                    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+                    return "{}{}".format(r, suffix)
                     
-                df_existing['Position'] = df_existing['Rank'].apply(format_position)
-                df_existing = df_existing.drop(columns=['Rank'])
+                df['Position'] = df['Rank'].apply(format_position)
+                df = df.drop(columns=['Rank'])
                 
-                # Reorder so Total and Position are at the end
-                final_cols = [c for c in df_existing.columns if c not in ['Total Score', 'Position']] + ['Total Score', 'Position']
-                df_existing = df_existing[final_cols]
-                # --------------------------------------------
-                
-                sheets_dict[sheet_name] = df_existing
-            else:
-                # Brand new class sheet
-                class_data_new = class_data_new.sort_values(by='Name', ascending=True)
-                
-                # ---- Calculate Total Score and Position ----
-                def parse_score(val):
-                    try:
-                        val_str = str(val).strip()
-                        if not val_str or val_str.lower() in ['nan', 'none']:
-                            return 0.0
-                        if '/' in val_str:
-                            val_str = val_str.split('/')[0]
-                        return float(val_str)
-                    except:
-                        return 0.0
-                
-                class_data_new['Total Score'] = class_data_new[assessment_type].apply(parse_score)
-                class_data_new['Rank'] = class_data_new['Total Score'].rank(method='min', ascending=False)
-                
-                def format_position(rank):
-                    if pd.isna(rank): return ''
-                    r = int(rank)
-                    if 11 <= (r % 100) <= 13:
-                        suffix = 'th'
-                    else:
-                        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
-                    return f"{r}{suffix}"
-                    
-                class_data_new['Position'] = class_data_new['Rank'].apply(format_position)
-                class_data_new = class_data_new.drop(columns=['Rank'])
-                sheets_dict[sheet_name] = class_data_new
-                
-        # Save all sheets back to Excel
+                sheets_dict[sheet_name] = df
+            
+        if not sheets_dict:
+             # Create an empty template if absolutely no data exists
+             sheets_dict['General'] = pd.DataFrame(columns=["Name", "Class", "Total Score", "Position"])
+             
+        # Generate the Excel file
         with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
             for s_name, df_sheet in sheets_dict.items():
                 df_sheet.to_excel(writer, sheet_name=s_name, index=False)
                 
-        return jsonify({"message": f"Successfully mapped and saved {len(results)} grades to Active Sheet."}), 200
+        return jsonify({"message": "Successfully mapped grades to Database and generated Active Sheet."}), 200
 
     except Exception as e:
-        print(f"Excel export error: {e}")
+        print("Excel export error: {}".format(e))
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -532,6 +685,66 @@ def download_sheet():
             return jsonify({"error": str(e)}), 500
     else:
         return jsonify({"error": "No active sheet found. Start a batch first."}), 404
+
+@app.route('/api/extract-names', methods=['POST'])
+def extract_names():
+    try:
+        data = request.json
+        if not data or 'image' not in data:
+            return jsonify({"error": "No image provided"}), 400
+            
+        img_b64 = data['image']
+        target_class = data.get('targetClass', '').strip()
+        
+        known_names = []
+        if target_class:
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == target_class.lower()).first()
+            if c:
+                students = StudentModel.query.filter_by(class_id=c.id).all()
+                known_names = [s.name for s in students]
+                
+        system_prompt = """
+You are an OCR assistant. I will provide an image of a handwritten or typed list of student names.
+Extract the names you see.
+
+Return EXACTLY a JSON array of strings, where each string is an extracted name.
+For example: ["John Doe", "Jane Smith"]
+
+Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like `json ... `.
+"""
+        if known_names:
+            system_prompt += "\nCRITICAL CONTEXT: Here is the authoritative list of known students in this class: {}. You MUST map the extracted handwritten names to exactly match a name from this list whenever visually possible.".format(known_names)
+            
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
+        
+        response = model.generate_content(contents)
+        raw_text = response.text.strip()
+        
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+            
+        result_json = json.loads(raw_text.strip())
+        
+        final_names = []
+        for name in result_json:
+            name_str = str(name).strip().title()
+            if known_names:
+                best_matches = process.extract(name_str, known_names, scorer=fuzz.token_set_ratio, limit=1)
+                if best_matches and best_matches[0][1] >= 85:
+                    final_names.append(best_matches[0][0])
+                else:
+                    final_names.append(name_str)
+            else:
+                final_names.append(name_str)
+                
+        return jsonify({"names": list(set(final_names))}), 200
+        
+    except Exception as e:
+        print("Error extracting names: {}".format(e))
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     # Make sure templates folder exists

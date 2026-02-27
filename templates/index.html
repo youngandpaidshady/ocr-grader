@@ -160,6 +160,7 @@
             padding: 1px;
             background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
             opacity: 0;
@@ -209,13 +210,22 @@
         /* Component Overrides */
         #video-container {
             width: 100%;
-            max-width: 600px;
-            aspect-ratio: 4/3;
+            max-width: 800px;
+            aspect-ratio: 3/4;
+            /* Optimized for portrait document scanning */
             margin: 0 auto;
-            border-radius: 1rem;
+            border-radius: 1.5rem;
             overflow: hidden;
             position: relative;
             background-color: #000;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+
+        @media (min-width: 768px) {
+            #video-container {
+                /* Larger screens can handle wider or taller boxes nicely */
+                aspect-ratio: 4/5;
+            }
         }
 
         #camera-feed {
@@ -269,51 +279,179 @@
         <main>
             <!-- Step 0: Start Screen -->
             <section id="start-section"
-                class="reveal bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] text-center">
-                <i
-                    class="fa-solid fa-file-excel text-5xl text-emerald-500 mb-6 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]"></i>
-                <h2 class="text-2xl font-heading font-bold text-white mb-2 tracking-tight">Welcome to QSI Auto-Grader
-                </h2>
-                <p class="text-muted-foreground mb-8 max-w-lg mx-auto text-sm leading-relaxed">To make sure the AI
-                    assigns grades to the correct students, how would you like to provide your class list?</p>
+                class="bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)]">
+                <div class="text-center mb-6">
+                    <i
+                        class="fa-solid fa-triangle-exclamation text-5xl text-yellow-500 mb-4 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)]"></i>
+                    <h2 class="text-2xl font-heading font-bold text-white mb-2 tracking-tight">Important Notice</h2>
+                    <p class="text-muted-foreground max-w-lg mx-auto text-sm leading-relaxed">
+                        Teachers must locally save their score sheets on their devices. The central database is purged
+                        every term to maintain speed and privacy.
+                    </p>
+                </div>
 
-                <div class="flex flex-col sm:flex-row justify-center gap-3 max-w-3xl mx-auto">
-                    <!-- Option 1: Upload File -->
-                    <div class="relative flex-1">
-                        <input type="file" id="upload-roster-input" accept=".txt,.md,.xlsx,.csv" class="hidden">
-                        <button id="btn-upload-roster" onclick="document.getElementById('upload-roster-input').click()"
-                            class="w-full h-full bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-4 px-4 rounded-xl transition-all flex flex-col items-center justify-center group gap-2">
-                            <i
-                                class="fa-solid fa-file-arrow-up text-xl text-primary group-hover:-translate-y-1 transition-transform"></i>
-                            <span class="text-sm font-bold">1. Upload Class List</span>
-                            <span class="text-[10px] text-muted-foreground/70">Excel, CSV, or Text file</span>
-                        </button>
+                <div
+                    class="bg-black/20 rounded-xl border border-white/5 p-4 md:p-6 relative z-10 shadow-inner max-w-2xl mx-auto">
+                    <h3
+                        class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4 flex items-center">
+                        <i class="fa-solid fa-sliders text-[10px] mr-2"></i> Session Configuration
+                    </h3>
+
+                    <!-- Target Class -->
+                    <div class="space-y-4 group mb-5">
+                        <label
+                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Class
+                            Name</label>
+                        <div class="flex items-center gap-2">
+                            <div
+                                class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-1 relative">
+                                <select id="target-class"
+                                    class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-medium tracking-wide">
+                                    <option value="" disabled selected class="bg-card">-- Select a Class --</option>
+                                </select>
+                                <i
+                                    class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
+                                <div class="input-focus-anim"></div>
+                            </div>
+                            <button type="button" id="btn-open-paste-modal"
+                                class="shrink-0 bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30 font-bold px-4 py-4 rounded-xl transition-all shadow-glow text-sm flex items-center gap-2"
+                                title="Add New Class">
+                                <i class="fa-solid fa-plus"></i> Add
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Option 2: Paste Names -->
-                    <button id="btn-open-paste-modal-start"
-                        onclick="document.getElementById('btn-open-paste-modal').click()"
-                        class="flex-1 bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-4 px-4 rounded-xl transition-all flex flex-col items-center justify-center group gap-2">
-                        <i
-                            class="fa-solid fa-paste text-xl text-primary group-hover:scale-110 transition-transform"></i>
-                        <span class="text-sm font-bold">2. Paste Student Names</span>
-                        <span class="text-[10px] text-muted-foreground/70">Copy from Word/WhatsApp</span>
-                    </button>
+                    <!-- Subject Select -->
+                    <div class="space-y-4 focus-within:z-20 relative mb-5">
+                        <label
+                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Subject
+                            Name</label>
+                        <div class="flex gap-2 relative">
+                            <div
+                                class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-[2] relative">
+                                <select id="subject-name"
+                                    class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-medium">
+                                    <option value="" disabled selected class="bg-card">-- Select a Subject --</option>
+                                    <option value="Mathematics" class="bg-card">Mathematics</option>
+                                    <option value="English" class="bg-card">English</option>
+                                    <option value="Basic Science" class="bg-card">Basic Science</option>
+                                    <option value="Biology" class="bg-card">Biology</option>
+                                    <option value="Chemistry" class="bg-card">Chemistry</option>
+                                    <option value="Physics" class="bg-card">Physics</option>
+                                    <option value="custom" class="bg-card">-- Custom Subject --</option>
+                                </select>
+                                <i
+                                    class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
+                            </div>
+                        </div>
+                        <div class="input-wrapper border border-white/10 bg-black/40 mt-2 hidden"
+                            id="custom-subject-wrapper">
+                            <input type="text" id="custom-subject"
+                                class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
+                                placeholder="e.g., History">
+                            <div class="input-focus-anim"></div>
+                        </div>
+                    </div>
 
-                    <!-- Option 3: Skip -->
-                    <button id="btn-start-blank"
-                        class="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-4 px-4 rounded-xl transition-all shadow-glow flex flex-col items-center justify-center group gap-2">
-                        <i class="fa-solid fa-forward-step text-xl group-hover:translate-x-1 transition-transform"></i>
-                        <span class="text-sm font-bold">3. Skip (No Names Yet)</span>
-                        <span class="text-[10px] text-white/80">Grade raw numbers only</span>
-                    </button>
+                    <!-- Assessment Type -->
+                    <div class="space-y-4 focus-within:z-20 relative mb-5">
+                        <label
+                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Assessment
+                            Type</label>
+                        <div class="flex gap-2 relative">
+                            <div
+                                class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-[2] relative">
+                                <select id="assessment-type"
+                                    class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-medium tracking-wide">
+                                    <option value="" disabled selected class="bg-card">-- Select Assessment Type --
+                                    </option>
+                                    <option value="1st CA" class="bg-card">1st CA</option>
+                                    <option value="2nd CA" class="bg-card">2nd CA</option>
+                                    <option value="Exam" class="bg-card">Exam</option>
+                                    <option value="Open Day" class="bg-card">Open Day</option>
+                                    <option value="Assignment" class="bg-card">Assignment</option>
+                                    <option value="custom" class="bg-card">-- Custom --</option>
+                                </select>
+                                <i
+                                    class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
+                                <div class="input-focus-anim"></div>
+                            </div>
+                        </div>
+                        <div class="input-wrapper border border-white/10 bg-black/40 mt-2 hidden"
+                            id="custom-assessment-wrapper">
+                            <input type="text" id="custom-assessment"
+                                class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
+                                placeholder="e.g., Final Project">
+                            <div class="input-focus-anim"></div>
+                        </div>
+                    </div>
+
+                    <!-- Enrollment Toggle -->
+                    <div
+                        class="flex items-center justify-between bg-black/20 border border-white/5 rounded-xl p-3 mb-4">
+                        <div>
+                            <label
+                                class="text-[11px] font-bold text-white uppercase tracking-widest pl-1 block">Enrollment
+                                Type</label>
+                            <p class="text-[10px] text-muted-foreground pl-1 mt-0.5" id="enrollment-desc">All students
+                                take this subject</p>
+                        </div>
+                        <div class="flex bg-black/60 rounded-lg p-1 relative border border-white/5 shadow-inner">
+                            <button type="button" id="btn-enroll-general"
+                                class="relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-white bg-primary/20 shadow-[0_0_10px_rgba(16,185,129,0.3)]">General</button>
+                            <button type="button" id="btn-enroll-selective"
+                                class="relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-muted-foreground hover:text-white">Selective</button>
+                        </div>
+                    </div>
+
+                    <!-- Smart Mode Standalone Toggle -->
+                    <div class="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 mb-6">
+                        <div class="flex items-center justify-between w-full cursor-pointer group"
+                            id="btn-toggle-smart-mode">
+                            <div>
+                                <label
+                                    class="text-[11px] font-bold text-indigo-300 uppercase tracking-widest pl-1 block cursor-pointer flex items-center gap-2 group-hover:text-indigo-200 transition-colors"><i
+                                        class="fa-solid fa-wand-magic-sparkles"></i> AI Smart Mode</label>
+                                <p class="text-[10px] text-indigo-200/50 pl-1 mt-0.5 max-w-[200px] leading-tight">
+                                    Provide custom instructions to the AI grader.</p>
+                            </div>
+                            <div class="w-10 h-5 bg-black/50 rounded-full relative shadow-inner border border-white/10 transition-colors"
+                                id="smart-mode-switch-bg">
+                                <div class="w-3 h-3 bg-muted-foreground rounded-full absolute top-1 left-1 transition-all"
+                                    id="smart-mode-switch-knob"></div>
+                            </div>
+                        </div>
+
+                        <!-- Smart Instruction Textarea (Hidden by default) -->
+                        <div id="smart-instruction-wrapper" class="hidden mt-3 animation-fade-in relative w-full">
+                            <textarea id="smart-instruction-input" rows="2"
+                                class="w-full p-3 bg-black/40 border border-indigo-500/30 rounded-lg text-white text-xs outline-none placeholder:text-muted-foreground/50 focus:border-indigo-400 focus:bg-black/60 transition-all font-medium tracking-wide resize-none"
+                                placeholder="e.g., 'Grade against JSS 1, but add John Doe to the list. Ignore any absent grades.'"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Action Area Div -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-5 border-t border-white/5">
+                        <button id="btn-start-camera"
+                            class="magnetic bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl w-full transition-all shadow-glow flex items-center justify-center gap-3 group text-sm tracking-widest uppercase">
+                            <i class="fa-solid fa-camera group-hover:scale-110 transition-transform"></i>
+                            <span>Start Scanning</span>
+                        </button>
+
+                        <button id="btn-upload-scoresheet"
+                            onclick="document.getElementById('upload-scoresheet-modal').classList.remove('hidden'); document.getElementById('upload-scoresheet-modal').classList.add('flex'); setTimeout(() => document.getElementById('upload-scoresheet-modal').classList.remove('opacity-0'), 10);"
+                            class="magnetic border border-white/10 bg-black/40 hover:bg-black/60 text-white font-bold py-4 rounded-xl w-full transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] flex items-center justify-center gap-3 group text-sm tracking-widest uppercase relative overflow-hidden">
+                            <i
+                                class="fa-solid fa-file-invoice text-indigo-400 group-hover:-translate-y-1 transition-transform"></i>
+                            <span>Upload Sheet</span>
+                        </button>
+                    </div>
                 </div>
-                <div id="start-msg" class="text-sm font-semibold mt-6 hidden"></div>
             </section>
 
             <!-- Step 1: Capture Area -->
             <section id="capture-section"
-                class="hidden reveal reveal-delay-1 bg-card rounded-[1rem] border border-white/5 p-4 md:p-10 mb-12 relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
+                class="hidden reveal reveal-delay-1 bg-card rounded-[1.5rem] border border-white/5 p-2 md:p-6 mb-12 relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
                 <!-- Inner subtle gradient for volume -->
                 <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent pointer-events-none">
                 </div>
@@ -330,7 +468,7 @@
 
                 <!-- Video Feed with Overlays -->
                 <div id="video-container"
-                    class="mb-4 border border-white/10 flex items-center justify-center bg-black shadow-inner overflow-hidden relative group z-10 rounded-xl">
+                    class="mb-6 border-2 border-primary/20 flex items-center justify-center bg-black shadow-inner overflow-hidden relative group z-10 rounded-2xl">
                     <video id="camera-feed" class="w-full h-full object-cover relative z-0" autoplay
                         playsinline></video>
 
@@ -347,19 +485,27 @@
                     <!-- Top Overlays -->
                     <div
                         class="absolute top-3 left-3 right-3 flex justify-between items-start z-20 pointer-events-none">
-                        <!-- Batch Count -->
+                        <!-- Queue Count -->
                         <div
-                            class="pointer-events-auto bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm text-white uppercase tracking-widest">
-                            Batch
+                            class="pointer-events-auto bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm text-white uppercase tracking-widest hidden">
+                            Queue
                             <span id="batch-count"
                                 class="bg-primary text-white px-2 py-0.5 rounded-md text-[10px] font-bold shadow-glow border border-primary/30">0/10</span>
                         </div>
 
-                        <!-- Flip Camera -->
-                        <button id="btn-camera"
-                            class="pointer-events-auto w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center">
-                            <i class="fa-solid fa-camera-rotate"></i>
-                        </button>
+                        <div class="flex gap-2">
+                            <!-- Flashlight Toggle -->
+                            <button id="btn-flashlight"
+                                class="pointer-events-auto w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center hidden">
+                                <i class="fa-solid fa-bolt"></i>
+                            </button>
+
+                            <!-- Flip Camera -->
+                            <button id="btn-camera"
+                                class="pointer-events-auto w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center">
+                                <i class="fa-solid fa-camera-rotate"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Bottom Overlays -->
@@ -392,7 +538,7 @@
                         <span
                             class="absolute inset-0 w-full h-full bg-white opacity-0 active:opacity-40 transition-opacity duration-100 mix-blend-overlay"></span>
                         <i class="fa-solid fa-camera mr-2 group-hover:scale-110 transition-transform"></i> <span
-                            class="tracking-widest uppercase text-sm">Snap Script</span>
+                            class="tracking-widest uppercase text-sm">Capture Script</span>
                     </button>
                 </div>
 
@@ -400,89 +546,7 @@
                 <div id="thumbnails-container"
                     class="flex overflow-x-auto space-x-3 py-2 mb-6 min-h-[70px] relative z-10 scrollbar-hide"></div>
 
-                <!-- Settings Box -->
-                <div class="bg-black/20 rounded-xl border border-white/5 p-4 md:p-6 relative z-10 shadow-inner">
-                    <h3
-                        class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4 flex items-center">
-                        <i class="fa-solid fa-sliders text-[10px] mr-2"></i> Batch Settings & Roster
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                        <!-- Assessment Type -->
-                        <div class="space-y-2">
-                            <label
-                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">What
-                                are you grading?</label>
-                            <div
-                                class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
-                                <select id="assessment-type"
-                                    class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-medium">
-                                    <option value="1st CA" class="bg-card">1st CA</option>
-                                    <option value="2nd CA" class="bg-card">2nd CA</option>
-                                    <option value="Assignment" class="bg-card">Assignment</option>
-                                    <option value="Exam" class="bg-card">Exam</option>
-                                    <option value="Open Day" class="bg-card">Open Day</option>
-                                    <option value="custom" class="bg-card">-- Custom Name --</option>
-                                </select>
-                                <i
-                                    class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
-                                <div class="input-focus-anim"></div>
-                            </div>
-                            <div class="input-wrapper border border-white/10 bg-black/40 mt-3 hidden"
-                                id="custom-assessment-wrapper">
-                                <input type="text" id="custom-assessment"
-                                    class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
-                                    placeholder="e.g., Midterm Project">
-                                <div class="input-focus-anim"></div>
-                            </div>
-                        </div>
 
-                        <!-- Target Class -->
-                        <div class="space-y-2 group">
-                            <label
-                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Class
-                                Name</label>
-                            <div
-                                class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
-                                <input type="text" id="target-class"
-                                    class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
-                                    placeholder="e.g., JSS 1, SS 2A" required>
-                                <div class="input-focus-anim"></div>
-                            </div>
-                            <p class="text-[11px] text-muted-foreground/60 mt-1 pl-1 flex items-start gap-1.5"><i
-                                    class="fa-solid fa-circle-info text-primary/70 mt-[2px]"></i> Matches handwriting to
-                                known students.</p>
-                        </div>
-                    </div>
-
-                    <!-- Roster Management -->
-                    <div class="pt-5 border-t border-white/5 space-y-3">
-                        <label
-                            class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Manage
-                            Class List</label>
-                        <div class="flex flex-col sm:flex-row gap-3">
-                            <div class="relative flex-1">
-                                <input type="file" id="roster-upload" accept=".txt,.md,.xlsx,.csv" class="hidden">
-                                <label for="roster-upload"
-                                    class="magnetic w-full cursor-pointer bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm group">
-                                    <i
-                                        class="fa-solid fa-file-arrow-up text-primary group-hover:-translate-y-1 transition-transform"></i>
-                                    <span>Upload List</span>
-                                </label>
-                            </div>
-                            <button id="btn-open-paste-modal"
-                                class="magnetic flex-1 bg-black/40 hover:bg-black/60 border border-white/10 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm group">
-                                <i
-                                    class="fa-solid fa-paste text-primary group-hover:scale-110 transition-transform"></i>
-                                <span>Type or Paste Names</span>
-                            </button>
-                            <button id="btn-clear-roster"
-                                class="magnetic flex-1 bg-red-900/20 hover:bg-red-900/40 border border-red-500/20 text-red-100 font-medium py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm">
-                                <i class="fa-solid fa-trash-can"></i>
-                                <span>Clear Class List</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
             </section>
 
             <!-- Action Area / Action Zone Divider -->
@@ -493,7 +557,7 @@
                         class="absolute inset-0 rounded-full border border-primary/30 group-hover:border-primary/60 transition-colors"></span>
                     <i
                         class="fa-solid fa-wand-magic-sparkles mr-2 text-primary group-hover:scale-110 transition-transform"></i>
-                    Mark Papers Now!
+                    Grade Scanned Scripts
                 </button>
             </div>
 
@@ -622,6 +686,101 @@
         </footer>
     </div>
 
+    <!-- Modal: Selective Enrollment -->
+    <div id="selective-enrollment-modal"
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm items-center justify-center p-4 transition-all duration-300 opacity-0">
+        <div
+            class="bg-card w-full max-w-md rounded-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
+            <div
+                class="px-6 py-4 border-b border-primary/20 flex justify-between items-center bg-black/40 relative overflow-hidden shrink-0">
+                <div class="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent pointer-events-none"></div>
+                <h3 class="text-lg font-heading font-bold text-white tracking-tight flex items-center relative z-10"><i
+                        class="fa-solid fa-users-viewfinder text-primary mr-3 text-xl drop-shadow-glow"></i> Selective
+                    Subject</h3>
+                <button id="btn-close-selective-modal"
+                    class="text-muted-foreground hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5 relative z-10"><i
+                        class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div class="p-6 md:p-8 overflow-y-auto flex-1">
+                <div class="space-y-1.5 focus-within:z-20 relative border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors rounded-xl p-6 border-dashed cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.05)] group flex flex-col items-center justify-center mb-6"
+                    onclick="document.getElementById('enrollment-list-file').click()">
+                    <i
+                        class="fa-solid fa-wand-magic-sparkles text-3xl text-primary/80 mb-2 group-hover:scale-110 transition-transform"></i>
+                    <p class="text-[11px] font-bold text-white uppercase tracking-widest relative z-10">Model
+                        Auto-Extract Handwritten List</p>
+                    <p class="text-xs text-muted-foreground mt-1 text-center max-w-[80%] relative z-10"
+                        id="enrollment-file-label">Snap a photo of the handwritten list.</p>
+                    <input type="file" id="enrollment-list-file" accept="image/*, .pdf" class="hidden"
+                        onchange="document.getElementById('enrollment-file-label').innerText = this.files[0] ? this.files[0].name : 'Snap a photo of the handwritten list.';">
+                </div>
+
+                <div class="space-y-1.5 focus-within:z-20 relative">
+                    <label
+                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 mb-2">Class
+                        Roster</label>
+                    <div class="bg-black/40 border border-white/10 rounded-xl max-h-48 overflow-y-auto p-2"
+                        id="selective-students-list">
+                        <div class="p-4 text-center text-sm text-muted-foreground">Select a class first to view
+                            students.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 border-t border-white/5 bg-black/20 shrink-0">
+                <button type="button" id="btn-save-selective"
+                    class="bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl w-full transition-all shadow-glow flex items-center justify-center gap-2 group text-sm tracking-widest uppercase"><i
+                        class="fa-solid fa-check group-hover:scale-110 transition-transform"></i> Save
+                    Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Upload Batch Score Sheet -->
+    <div id="upload-scoresheet-modal"
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm items-center justify-center p-4 transition-all duration-300 opacity-0">
+        <div
+            class="bg-card w-full max-w-md rounded-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
+            <div
+                class="px-6 py-4 border-b border-indigo-500/20 flex justify-between items-center bg-black/40 relative overflow-hidden shrink-0">
+                <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent pointer-events-none">
+                </div>
+                <h3 class="text-lg font-heading font-bold text-white tracking-tight flex items-center relative z-10"><i
+                        class="fa-solid fa-file-invoice text-indigo-400 mr-3 text-xl drop-shadow-[0_0_10px_rgba(99,102,241,0.5)]"></i>
+                    Upload Score Sheet</h3>
+                <button id="btn-close-scoresheet-modal"
+                    class="text-muted-foreground hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5 relative z-10"><i
+                        class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div class="p-6 md:p-8 overflow-y-auto flex-1">
+                <p class="text-sm text-muted-foreground mb-6 text-center leading-relaxed">Upload a typed or handwritten
+                    sheet containing multiple students and their scores. Gemini will parse the full document at once.
+                </p>
+                <div class="space-y-1.5 focus-within:z-20 relative border border-indigo-500/30 bg-indigo-500/5 hover:bg-indigo-500/10 transition-colors rounded-xl p-6 border-dashed cursor-pointer shadow-[0_0_15px_rgba(99,102,241,0.05)] group flex flex-col items-center justify-center"
+                    onclick="document.getElementById('scoresheet-file').click()">
+                    <i
+                        class="fa-solid fa-cloud-arrow-up text-4xl text-indigo-400/80 mb-3 group-hover:-translate-y-1 transition-transform"></i>
+                    <p class="text-[11px] font-bold text-white uppercase tracking-widest text-center">Select Score Sheet
+                        Image</p>
+                    <p class="text-xs text-muted-foreground mt-1 truncate px-2 text-center" id="scoresheet-file-label">
+                        Tap to open camera or gallery</p>
+                    <input type="file" id="scoresheet-file" accept="image/*, .pdf" class="hidden"
+                        onchange="document.getElementById('scoresheet-file-label').innerText = this.files[0] ? this.files[0].name : 'Tap to open camera or gallery';">
+                </div>
+            </div>
+
+            <div class="p-6 border-t border-white/5 bg-black/20 shrink-0">
+                <button type="button" id="btn-submit-scoresheet"
+                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl w-full transition-all shadow-[0_0_15px_rgba(79,70,229,0.4)] flex items-center justify-center gap-2 group text-sm tracking-widest uppercase"><i
+                        class="fa-solid fa-brain group-hover:scale-110 transition-transform"></i> Analyze Sheet</button>
+                <div id="scoresheet-msg"
+                    class="text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-white">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Invisible Canvas for capturing image frames -->
     <canvas id="canvas" class="hidden"></canvas>
 
@@ -659,6 +818,8 @@
                         <span>Student Names</span>
                         <span class="text-primary/70">One per line</span>
                     </label>
+                    <p class="text-[10px] text-yellow-500/80 px-1 mb-2 leading-tight">Must upload the <b>COMPLETE class
+                            list</b> so the AI has 100% handwriting recognition accuracy.</p>
                     <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
                         <textarea id="paste-raw-text" rows="8"
                             class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide resize-none"
@@ -703,63 +864,38 @@
 
         // Start Section Elements
         const startSection = document.getElementById('start-section');
-        const btnStartBlank = document.getElementById('btn-start-blank');
-        const uploadRosterInput = document.getElementById('upload-roster-input');
-        const startMsg = document.getElementById('start-msg');
+        const btnStartCamera = document.getElementById('btn-start-camera');
 
-        // Start Blank Flow
-        btnStartBlank.addEventListener('click', async () => {
-            btnStartBlank.disabled = true;
-            btnStartBlank.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Initializing...`;
-            startMsg.classList.add('hidden');
-            try {
-                const res = await fetch('/start-blank-sheet', { method: 'POST' });
-                if (!res.ok) throw new Error("Failed to initialize");
-                startSection.classList.add('hidden');
-                captureSection.classList.remove('hidden');
-                initCamera();
-            } catch (e) {
-                startMsg.classList.remove('hidden', 'text-primary');
-                startMsg.classList.add('text-destructive');
-                startMsg.innerText = e.message;
-            } finally {
-                btnStartBlank.disabled = false;
-                btnStartBlank.innerHTML = `<i class="fa-solid fa-file-lines mr-3 group-hover:scale-110 transition-transform"></i> Start Blank Sheet`;
+        // Target Class validation before scanning
+        btnStartCamera.addEventListener('click', () => {
+            const classSelect = document.getElementById('target-class');
+            if (!classSelect.value) {
+                alert("Please select a Target Class before starting.");
+                return;
             }
+
+            // Apply a loading state
+            btnStartCamera.disabled = true;
+            btnStartCamera.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i><span>Initializing...</span>`;
+
+            // Immediate UI transition
+            startSection.classList.add('hidden');
+            captureSection.classList.remove('hidden');
+
+            // Start the actual Camera
+            initCamera();
         });
 
-        // Upload Existing Flow
-        uploadRosterInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+        // Config Elements
+        const targetClassSelect = document.getElementById('target-class');
+        const subjectNameSelect = document.getElementById('subject-name');
+        const customSubjectWrapper = document.getElementById('custom-subject-wrapper');
+        const customSubjectInput = document.getElementById('custom-subject');
 
-            const btnUploadRoster = document.getElementById('btn-upload-roster');
-            btnUploadRoster.disabled = true;
-            btnUploadRoster.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Uploading...`;
-            startMsg.classList.add('hidden');
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const res = await fetch('/upload-sheet', {
-                    method: 'POST',
-                    body: formData
-                });
-                if (!res.ok) throw new Error("Upload failed");
-                startSection.classList.add('hidden');
-                captureSection.classList.remove('hidden');
-                initCamera();
-            } catch (err) {
-                startMsg.classList.remove('hidden', 'text-primary');
-                startMsg.classList.add('text-destructive');
-                startMsg.innerText = err.message;
-            } finally {
-                btnUploadRoster.disabled = false;
-                btnUploadRoster.innerHTML = `<i class="fa-solid fa-file-arrow-up mr-3 group-hover:-translate-y-1 transition-transform"></i> Upload Existing Sheet`;
-                uploadRosterInput.value = '';
-            }
-        });
+        const assessmentTypeSelect = document.getElementById('assessment-type');
+        const customAssessmentWrapper = document.getElementById('custom-assessment-wrapper');
+        const customAssessmentInput = document.getElementById('custom-assessment');
+        const scoreTh = document.getElementById('score-th');
 
         // Analytics Elements
         const statAvg = document.getElementById('stat-avg');
@@ -776,21 +912,7 @@
         let imageIdCounter = 0;
         let finalAssessmentType = '';
 
-        // UI Logic for Select Custom
-        const assessmentTypeSelect = document.getElementById('assessment-type');
-        const customAssessmentInput = document.getElementById('custom-assessment');
-        const customAssessmentWrapper = document.getElementById('custom-assessment-wrapper');
-        const scoreTh = document.getElementById('score-th');
 
-        assessmentTypeSelect.addEventListener('change', (e) => {
-            if (e.target.value === 'custom') {
-                customAssessmentWrapper.classList.remove('hidden');
-            } else {
-                customAssessmentWrapper.classList.add('hidden');
-            }
-        });
-
-        // Initialize Camera
         async function initCamera() {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
@@ -854,18 +976,70 @@
                     },
                     audio: false
                 });
-                video.srcObject = stream;
 
+                // Define loader removal handler BEFORE assigning the stream
                 video.onloadedmetadata = () => {
                     loadingIndicator.classList.add('hidden');
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                 };
+
+                video.srcObject = stream;
+
+                // Fallback in case onloadedmetadata fails to fire
+                setTimeout(() => {
+                    if (!loadingIndicator.classList.contains('hidden')) {
+                        // If video width > 0, it means it loaded but didn't fire
+                        if (video.videoWidth > 0) {
+                            loadingIndicator.classList.add('hidden');
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                        }
+                    }
+                }, 2000);
+
+                // Torch/Flashlight Capability Check
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities && track.getCapabilities();
+                const btnFlashlight = document.getElementById('btn-flashlight');
+                if (capabilities && capabilities.torch) {
+                    btnFlashlight.classList.remove('hidden');
+                } else {
+                    btnFlashlight.classList.add('hidden');
+                }
             } catch (err) {
                 console.error("Error accessing camera:", err);
                 loadingIndicator.innerHTML = `Error: Cannot access camera. <br/><span class="text-xs opacity-70 mt-2 block font-normal">Ensure permissions are granted.</span>`;
             }
         }
+
+        // Flashlight Toggle Logic
+        let flashEnabled = false;
+        const btnFlashlight = document.getElementById('btn-flashlight');
+        btnFlashlight.addEventListener('click', async () => {
+            if (!stream) return;
+            const track = stream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities && track.getCapabilities();
+            if (capabilities && capabilities.torch) {
+                flashEnabled = !flashEnabled;
+                try {
+                    await track.applyConstraints({
+                        advanced: [{ torch: flashEnabled }]
+                    });
+                    if (flashEnabled) {
+                        btnFlashlight.classList.remove('bg-black/60', 'text-white');
+                        btnFlashlight.classList.add('bg-yellow-500', 'text-black');
+                        btnFlashlight.innerHTML = '<i class="fa-solid fa-bolt text-black"></i>';
+                    } else {
+                        btnFlashlight.classList.remove('bg-yellow-500', 'text-black');
+                        btnFlashlight.classList.add('bg-black/60', 'text-white');
+                        btnFlashlight.innerHTML = '<i class="fa-solid fa-bolt"></i>';
+                    }
+                } catch (e) {
+                    console.error("Could not toggle flashlight:", e);
+                }
+            }
+        });
 
         // Capture Image
         function captureFrame() {
@@ -1145,12 +1319,18 @@
                 tbody.innerHTML = '';
                 extractedData = new Array(base64List.length).fill({});
 
+                // Check Smart Mode
+                const smartSwitchBg = document.getElementById('smart-mode-switch-bg');
+                const isSmartMode = smartSwitchBg && smartSwitchBg.classList.contains('bg-indigo-500');
+                const smartInstruction = isSmartMode ? document.getElementById('smart-instruction-input').value.trim() : "";
+
                 const response = await fetch('/upload-batch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         images: base64List,
-                        targetClass: targetClassVal
+                        targetClass: targetClassVal,
+                        smartInstruction: smartInstruction
                     })
                 });
 
@@ -1425,10 +1605,8 @@
             }
         });
 
-        // Start video on load
         window.addEventListener('load', () => {
-            initCamera();
-            triggerRevealObserver();
+            fetchClasses();
             initMagneticButtons();
             initTouchRipples();
             initScrollProgress();
@@ -1537,8 +1715,8 @@
         const btnSubmitPaste = document.getElementById('btn-submit-paste');
         const pasteTargetClass = document.getElementById('paste-target-class');
         const pasteRawText = document.getElementById('paste-raw-text');
-        const mainTargetClass = document.getElementById('target-class');
 
+        // Enrollment logic handled at the bottom of the file where loadSelectiveStudents is defined.
         if (btnOpenPaste && pasteModal) {
             btnOpenPaste.addEventListener('click', () => {
                 // Pre-fill class if already set
@@ -1591,20 +1769,37 @@
                 btnSubmitPaste.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Processing...';
 
                 try {
-                    const response = await fetch('/paste-sheet', {
+                    const response = await fetch('/api/classes', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ targetClass, rawText })
+                        body: JSON.stringify({ name: targetClass, names_text: rawText })
                     });
 
                     const result = await response.json();
 
                     if (response.ok) {
                         alert(`Success: ${result.message}\n\nThe OCR AI will now strictly match extracted names against this official roster.`);
+
                         // Keep UI in sync
-                        if (mainTargetClass) mainTargetClass.value = targetClass;
+                        if (mainTargetClass) {
+                            // Let's add the new class to the dropdown list if it doesn't already exist
+                            let exists = false;
+                            for (let i = 0; i < mainTargetClass.options.length; i++) {
+                                if (mainTargetClass.options[i].text === targetClass) {
+                                    exists = true;
+                                    mainTargetClass.selectedIndex = i;
+                                    break;
+                                }
+                            }
+                            if (!exists) {
+                                const newOption = new Option(targetClass, targetClass, false, true);
+                                newOption.className = "bg-card";
+                                mainTargetClass.add(newOption);
+                            }
+                        }
+
                         // Clear textarea
                         pasteRawText.value = '';
                         closePasteModal();
@@ -1659,25 +1854,427 @@
             });
         }
 
-        if (btnClearRoster) {
-            btnClearRoster.addEventListener('click', async () => {
-                if (!confirm("Are you sure you want to initialize a blank roster? This will overwrite existing unsaved data in ActiveRoaster.xlsx.")) return;
-
-                try {
-                    const response = await fetch('/start-blank-sheet', {
-                        method: 'POST'
-                    });
-                    const result = await response.json();
-                    if (response.ok) {
-                        alert('Blank roster initialized successfully.');
-                    } else {
-                        alert(`Error: ${result.error}`);
-                    }
-                } catch (error) {
-                    console.error('Error clearing roster:', error);
+        // ------ Added UI Hooks & Processing Logic ------
+        if (subjectNameSelect && customSubjectWrapper) {
+            subjectNameSelect.addEventListener('change', (e) => {
+                if (e.target.value === 'custom') {
+                    customSubjectWrapper.classList.remove('hidden');
+                    customSubjectInput.focus();
+                } else {
+                    customSubjectWrapper.classList.add('hidden');
                 }
             });
         }
+
+        if (assessmentTypeSelect && customAssessmentWrapper) {
+            assessmentTypeSelect.addEventListener('change', (e) => {
+                if (e.target.value === 'custom') {
+                    customAssessmentWrapper.classList.remove('hidden');
+                    customAssessmentInput.focus();
+                } else {
+                    customAssessmentWrapper.classList.add('hidden');
+                }
+            });
+        }
+
+        async function fetchClasses() {
+            try {
+                const response = await fetch('/api/classes');
+                if (response.ok) {
+                    const classes = await response.json();
+                    if (targetClassSelect) {
+                        targetClassSelect.innerHTML = '<option value="" disabled selected class="bg-card">-- Select a Class --</option>';
+                        classes.forEach(c => {
+                            const opt = document.createElement('option');
+                            opt.value = c.name;
+                            opt.textContent = c.name;
+                            opt.className = 'bg-card text-white font-medium';
+                            targetClassSelect.appendChild(opt);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching classes:', error);
+            }
+        }
+
+        window.addEventListener('load', () => {
+            fetchClasses();
+            // Removed old initCamera from early load
+        });
+
+        const btnStartCameraArea = document.getElementById('btn-start-camera');
+        if (btnStartCameraArea) {
+            btnStartCameraArea.addEventListener('click', () => {
+                const selClass = document.getElementById('target-class').value;
+                if (!selClass) {
+                    alert("Please select a Target Class first.");
+                    return;
+                }
+                document.getElementById('start-section').classList.add('hidden');
+                document.getElementById('capture-section').classList.remove('hidden');
+                if (typeof initCamera === 'function') {
+                    initCamera();
+                }
+                // Trigger reveals
+                if (typeof triggerRevealObserver === 'function') {
+                    triggerRevealObserver();
+                }
+            });
+        }
+
+        const btnEnrollGeneral = document.getElementById('btn-enroll-general');
+        const btnEnrollSelective = document.getElementById('btn-enroll-selective');
+        const btnToggleSmartMode = document.getElementById('btn-toggle-smart-mode');
+        const smartSwitchBg = document.getElementById('smart-mode-switch-bg');
+        const smartSwitchKnob = document.getElementById('smart-mode-switch-knob');
+        const smartInstructionWrapper = document.getElementById('smart-instruction-wrapper');
+        const selectiveModal = document.getElementById('selective-enrollment-modal');
+        const btnCloseSelective = document.getElementById('btn-close-selective-modal');
+
+        if (btnEnrollGeneral && btnEnrollSelective) {
+            btnEnrollGeneral.addEventListener('click', () => {
+                btnEnrollGeneral.className = "relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-white bg-primary/20 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
+                btnEnrollSelective.className = "relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-muted-foreground hover:text-white";
+                document.getElementById('enrollment-desc').textContent = "All students take this subject";
+            });
+            btnEnrollSelective.addEventListener('click', () => {
+                btnEnrollSelective.className = "relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-white bg-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.3)] text-yellow-400";
+                btnEnrollGeneral.className = "relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-muted-foreground hover:text-white";
+                document.getElementById('enrollment-desc').textContent = "Only selected students take this";
+                if (selectiveModal) {
+                    selectiveModal.classList.remove('hidden');
+                    selectiveModal.classList.add('flex');
+                    loadSelectiveStudents();
+                }
+            });
+        }
+
+        if (btnToggleSmartMode && smartSwitchBg && smartSwitchKnob && smartInstructionWrapper) {
+            btnToggleSmartMode.addEventListener('click', () => {
+                const isSmartOn = smartSwitchBg.classList.contains('bg-indigo-500');
+                if (isSmartOn) {
+                    // Turn off
+                    smartSwitchBg.className = 'w-10 h-5 bg-black/50 rounded-full relative shadow-inner border border-white/10 transition-colors';
+                    smartSwitchKnob.className = 'w-3 h-3 bg-muted-foreground rounded-full absolute top-1 left-1 transition-all';
+                    smartInstructionWrapper.classList.add('hidden');
+                } else {
+                    // Turn on
+                    smartSwitchBg.className = 'w-10 h-5 bg-indigo-500 rounded-full relative shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-colors border border-indigo-400';
+                    smartSwitchKnob.className = 'w-3 h-3 bg-white rounded-full absolute top-1 left-6 shadow-md transition-all';
+                    smartInstructionWrapper.classList.remove('hidden');
+                    document.getElementById('smart-instruction-input').focus();
+                }
+            });
+        }
+
+        async function loadSelectiveStudents() {
+            const tc = document.getElementById('target-class').value;
+            const sn = document.getElementById('subject-name').value === 'custom'
+                ? document.getElementById('custom-subject').value.trim()
+                : document.getElementById('subject-name').value;
+
+            const listContainer = document.getElementById('selective-students-list');
+
+            if (!tc || !sn) {
+                listContainer.innerHTML = '<div class="p-4 text-center text-sm text-muted-foreground">Please select a Target Class and Subject first.</div>';
+                return;
+            }
+
+            listContainer.innerHTML = '<div class="p-4 text-center text-sm text-primary"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading students...</div>';
+
+            try {
+                const classesRes = await fetch('/api/classes');
+                const classes = await classesRes.json();
+                const cls = classes.find(c => c.name === tc);
+                if (!cls) {
+                    listContainer.innerHTML = '<div class="p-4 text-center text-sm text-destructive">Class not found in database.</div>';
+                    return;
+                }
+
+                const studentsRes = await fetch(`/api/students?class_id=${cls.id}`);
+                const students = await studentsRes.json();
+
+                const enrollRes = await fetch(`/api/enrollments?class_id=${cls.id}&subject_name=${encodeURIComponent(sn)}`);
+                const enrollData = await enrollRes.json();
+                const enrolledIds = enrollData.enrolled || [];
+
+                if (students.length === 0) {
+                    listContainer.innerHTML = '<div class="p-4 text-center text-sm text-muted-foreground">No students found in this class.</div>';
+                    return;
+                }
+
+                let html = '';
+                students.forEach(student => {
+                    const isChecked = enrolledIds.includes(student.id) ? 'checked' : '';
+                    html += `
+                        <label class="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg cursor-pointer transition-colors border-b border-white/5 last:border-0">
+                            <input type="checkbox" class="selective-student-checkbox h-5 w-5 rounded border-white/20 bg-black/40 text-primary focus:ring-primary focus:ring-offset-background" value="${student.id}" data-name="${student.name}" ${isChecked}>
+                            <span class="text-sm font-medium text-white">${student.name}</span>
+                        </label>
+                     `;
+                });
+                listContainer.innerHTML = html;
+                listContainer.dataset.classId = cls.id;
+            } catch (err) {
+                console.error(err);
+                listContainer.innerHTML = '<div class="p-4 text-center text-sm text-destructive">Failed to load students.</div>';
+            }
+        }
+
+        const btnSaveSelective = document.getElementById('btn-save-selective');
+        if (btnSaveSelective) {
+            btnSaveSelective.addEventListener('click', async () => {
+                const listContainer = document.getElementById('selective-students-list');
+                const classId = listContainer.dataset.classId;
+                const sn = document.getElementById('subject-name').value === 'custom'
+                    ? document.getElementById('custom-subject').value.trim()
+                    : document.getElementById('subject-name').value;
+
+                if (!classId || !sn) {
+                    alert("Invalid class or subject configuration.");
+                    return;
+                }
+
+                const checkboxes = listContainer.querySelectorAll('.selective-student-checkbox');
+                const studentIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => parseInt(cb.value));
+
+                const origHtml = btnSaveSelective.innerHTML;
+                btnSaveSelective.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...';
+
+                try {
+                    const res = await fetch('/api/enrollments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            class_id: classId,
+                            subject_name: sn,
+                            student_ids: studentIds
+                        })
+                    });
+
+                    if (!res.ok) throw new Error("Failed to save enrollments");
+
+                    btnSaveSelective.innerHTML = '<i class="fa-solid fa-check"></i> Saved successfully!';
+                    setTimeout(() => {
+                        const selectiveModal = document.getElementById('selective-enrollment-modal');
+                        if (selectiveModal) {
+                            selectiveModal.classList.remove('flex');
+                            selectiveModal.classList.add('hidden');
+                        }
+                        btnSaveSelective.innerHTML = origHtml;
+                    }, 1000);
+                } catch (err) {
+                    alert(err.message);
+                    btnSaveSelective.innerHTML = origHtml;
+                }
+            });
+        }
+
+        const enrollmentListFile = document.getElementById('enrollment-list-file');
+        const enrollmentFileLabel = document.getElementById('enrollment-file-label');
+        if (enrollmentListFile) {
+            enrollmentListFile.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const tc = document.getElementById('target-class').value;
+                if (!tc) {
+                    alert('Please select a Target Class in the main form first.');
+                    return;
+                }
+
+                enrollmentFileLabel.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-primary"></i> Extracting names...';
+
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const base64Data = event.target.result.split(',')[1];
+                    try {
+                        const response = await fetch('/api/extract-names', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                image: base64Data,
+                                targetClass: tc
+                            })
+                        });
+
+                        const result = await response.json();
+                        if (response.ok && result.names) {
+                            enrollmentFileLabel.innerHTML = `<span class="text-emerald-400"><i class="fa-solid fa-check"></i> Found ${result.names.length} names. Updating checklist...</span>`;
+
+                            const listContainer = document.getElementById('selective-students-list');
+                            const checkboxes = listContainer.querySelectorAll('.selective-student-checkbox');
+
+                            checkboxes.forEach(cb => {
+                                cb.checked = false;
+                                const studentName = cb.dataset.name.toLowerCase();
+                                if (result.names.some(n => studentName === String(n).toLowerCase())) {
+                                    cb.checked = true;
+                                }
+                            });
+
+                            setTimeout(() => {
+                                enrollmentFileLabel.innerText = 'Snap a photo of the handwritten list.';
+                                enrollmentListFile.value = '';
+                            }, 3000);
+                        } else {
+                            throw new Error(result.error || "Failed to extract names");
+                        }
+                    } catch (err) {
+                        console.error('Extraction error:', err);
+                        enrollmentFileLabel.innerHTML = `<span class="text-destructive"><i class="fa-solid fa-triangle-exclamation"></i> Error extracting. Try again.</span>`;
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        if (btnCloseSelective) {
+            btnCloseSelective.addEventListener('click', () => {
+                if (selectiveModal) {
+                    selectiveModal.classList.remove('flex');
+                    selectiveModal.classList.add('hidden');
+                }
+            });
+        }
+
+        const btnCloseScoresheetModal = document.getElementById('btn-close-scoresheet-modal');
+        if (btnCloseScoresheetModal) {
+            btnCloseScoresheetModal.addEventListener('click', () => {
+                const uModal = document.getElementById('upload-scoresheet-modal');
+                if (uModal) {
+                    uModal.classList.remove('flex');
+                    uModal.classList.add('hidden');
+                }
+            });
+        }
+
+        const btnSubmitScoresheet = document.getElementById('btn-submit-scoresheet');
+        const scoresheetFile = document.getElementById('scoresheet-file');
+        const scoresheetMsg = document.getElementById('scoresheet-msg');
+
+        if (btnSubmitScoresheet) {
+            btnSubmitScoresheet.addEventListener('click', async () => {
+                if (!scoresheetFile || !scoresheetFile.files || scoresheetFile.files.length === 0) {
+                    if (scoresheetMsg) {
+                        scoresheetMsg.textContent = "Please select an image file first.";
+                        scoresheetMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-yellow-400";
+                    }
+                    return;
+                }
+                const tc = document.getElementById('target-class');
+                if (!tc || !tc.value) {
+                    if (scoresheetMsg) {
+                        scoresheetMsg.textContent = "Please set a target class in the main setup window first.";
+                        scoresheetMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-yellow-400";
+                    }
+                    return;
+                }
+
+                btnSubmitScoresheet.disabled = true;
+                const originalHtml = btnSubmitScoresheet.innerHTML;
+                btnSubmitScoresheet.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Processing...`;
+                if (scoresheetMsg) {
+                    scoresheetMsg.textContent = "Gemini is analyzing the batch score sheet. This may take 10-30 seconds...";
+                    scoresheetMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-indigo-300";
+                }
+
+                const formData = new FormData();
+                formData.append('file', scoresheetFile.files[0]);
+                formData.append('target_class', tc.value);
+
+                try {
+                    const response = await fetch('/upload-scoresheet', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        if (scoresheetMsg) {
+                            scoresheetMsg.textContent = `Success! Extracting ${result.records ? result.records.length : 0} student records.`;
+                            scoresheetMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-emerald-400";
+                        }
+
+                        setTimeout(() => {
+                            const uModal = document.getElementById('upload-scoresheet-modal');
+                            if (uModal) {
+                                uModal.classList.add('hidden');
+                                uModal.classList.remove('flex');
+                            }
+
+                            // Route result.records array into the Review table
+                            if (typeof extractedData !== 'undefined') {
+                                extractedData = [];
+                            }
+                            const tbody = document.getElementById('results-tbody');
+                            if (tbody) tbody.innerHTML = '';
+
+                            const stSec = document.getElementById('start-section');
+                            if (stSec) stSec.classList.add('hidden');
+
+                            const capSec = document.getElementById('capture-section');
+                            if (capSec) capSec.classList.add('hidden');
+
+                            const rs = document.getElementById('review-section');
+                            if (rs) rs.classList.remove('hidden');
+
+                            setTimeout(() => {
+                                if (rs) rs.classList.add('visible');
+                            }, 50);
+
+                            const primaryAssesment = result.assessment_types_found && result.assessment_types_found.length > 0 ? result.assessment_types_found[0] : 'Score';
+
+                            if (result.records) {
+                                result.records.forEach((record, idx) => {
+                                    let finalScore = '';
+                                    if (record.scores) {
+                                        if (record.scores[primaryAssesment] !== undefined) {
+                                            finalScore = record.scores[primaryAssesment];
+                                        } else {
+                                            const firstKey = Object.keys(record.scores)[0];
+                                            if (firstKey) finalScore = record.scores[firstKey];
+                                        }
+                                    }
+
+                                    const item = {
+                                        name: record.name,
+                                        class: tc.value,
+                                        score: finalScore,
+                                        confidence: 'high'
+                                    };
+                                    if (typeof extractedData !== 'undefined') {
+                                        extractedData[idx] = item;
+                                    }
+                                    if (typeof renderSingleRow === 'function') {
+                                        renderSingleRow(item, idx);
+                                    }
+                                });
+                            }
+                        }, 1000);
+                    } else {
+                        if (scoresheetMsg) {
+                            scoresheetMsg.textContent = `Error: ${result.error || 'Failed to analyze'}`;
+                            scoresheetMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-destructive";
+                        }
+                    }
+
+                    btnSubmitScoresheet.innerHTML = originalHtml;
+                    btnSubmitScoresheet.disabled = false;
+                } catch (error) {
+                    console.error('Error processing batch score sheet:', error);
+                    if (scoresheetMsg) {
+                        scoresheetMsg.textContent = `Error: ${error.message}`;
+                        scoresheetMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-destructive";
+                    }
+                    btnSubmitScoresheet.innerHTML = originalHtml;
+                    btnSubmitScoresheet.disabled = false;
+                }
+            });
+        }
+
 
         function initScrollProgress() {
             const progressBar = document.getElementById('scroll-progress');
