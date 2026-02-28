@@ -9,6 +9,15 @@ venv.bak/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
+*.pyc
+*.db
+venv/
+.env
+*.xlsx
+crash.txt
+err.txt
+trace.txt
+*.log
 *.py[cod]
 *$py.class
 
