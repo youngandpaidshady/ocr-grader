@@ -1,5 +1,0 @@
-like a teacher graded with the app
-she downloaded the excel sheet, now she wants to upload it back to the app to continue grading, but there is no clear path in the workflow to do this, she may not know where to start, so add a button to upload scorelist in the workflow
-a smart system that reads data, auto detect names, class, subject, test type, and other details from the excel sheet 
-then give the feedback on the read sheet, ask for what to do next eg edit a column, name or grade another test
-add a new workflow for this process, lets discuss the pla extensively, class column is broken

@@ -662,7 +662,7 @@ def export_excel():
             if not class_subjects:
                 # Provide a blank worksheet if the class has absolutely no grades yet
                 sheet_name = c.name[:31]
-                data_rows = [{'Name': s.name} for s in all_students]
+                data_rows = [{'Name': s.name, 'Class': c.name, 'Total Score': 0, 'Position': ''} for s in all_students]
                 sheets_dict[sheet_name] = pd.DataFrame(data_rows)
                 continue
                 

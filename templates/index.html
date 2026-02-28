@@ -4,7 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OCR Grader Assistant</title>
+    <meta name="description"
+        content="QSI Smart Grader — AI-powered school grading assistant. Capture handwritten exam scripts with your camera and let AI automatically extract, match, and rank student scores directly to Excel.">
+    <meta name="theme-color" content="#0a0a0c">
+    <title>QSI Smart Grader — AI Exam Script Grading Assistant</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>"
+        type="image/svg+xml">
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Canvas Confetti -->
@@ -56,6 +62,9 @@
         rel="stylesheet">
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Three.js for 3D Background Scene -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 
     <!-- OpenCV.js for Advanced Document Detection -->
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="console.log('OpenCV loaded');"
@@ -438,10 +447,257 @@
             position: absolute;
             visibility: hidden;
         }
+
+        /* ═══════════════════════════════════════════════
+           PHASE 3: 3D PREMIUM ANIMATIONS
+           ═══════════════════════════════════════════════ */
+
+        /* Three.js Background Canvas */
+        #three-bg {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* 3D Card Tilt Container */
+        .tilt-card {
+            perspective: 800px;
+            transform-style: preserve-3d;
+        }
+
+        .tilt-card-inner {
+            transition: transform 0.15s ease-out;
+            transform-style: preserve-3d;
+            will-change: transform;
+        }
+
+        .tilt-card-inner::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: radial-gradient(circle at var(--glow-x, 50%) var(--glow-y, 50%), rgba(var(--brand-rgb), 0.15) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .tilt-card:hover .tilt-card-inner::after {
+            opacity: 1;
+        }
+
+        /* 3D Floating Icon Wobble */
+        @keyframes wobble3D {
+
+            0%,
+            100% {
+                transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+            }
+
+            25% {
+                transform: rotateY(12deg) rotateX(-5deg) translateZ(5px);
+            }
+
+            50% {
+                transform: rotateY(-8deg) rotateX(3deg) translateZ(8px);
+            }
+
+            75% {
+                transform: rotateY(6deg) rotateX(-2deg) translateZ(3px);
+            }
+        }
+
+        .wobble-3d {
+            animation: wobble3D 6s ease-in-out infinite;
+            transform-style: preserve-3d;
+        }
+
+        .wobble-3d-delay-1 {
+            animation-delay: 0.5s;
+        }
+
+        .wobble-3d-delay-2 {
+            animation-delay: 1s;
+        }
+
+        /* 3D Modal Flip */
+        .modal-3d-container {
+            perspective: 1200px;
+        }
+
+        .modal-3d-flip {
+            transform: rotateY(-15deg) scale(0.85);
+            opacity: 0;
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+            transform-style: preserve-3d;
+        }
+
+        .modal-3d-flip.modal-active {
+            transform: rotateY(0deg) scale(1);
+            opacity: 1;
+        }
+
+        /* Step Progress Indicator */
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            position: relative;
+        }
+
+        .step-dot {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            z-index: 2;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            background: hsl(215, 10%, 8%);
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .step-dot.step-active {
+            background: hsl(215, 90%, 55%);
+            border-color: hsl(215, 90%, 65%);
+            color: white;
+            transform: scale(1.15) translateZ(10px);
+            box-shadow: 0 0 20px rgba(var(--brand-rgb), 0.5), 0 0 40px rgba(var(--brand-rgb), 0.2);
+        }
+
+        .step-dot.step-done {
+            background: hsl(160, 84%, 39%);
+            border-color: hsl(160, 84%, 49%);
+            color: white;
+        }
+
+        .step-line {
+            flex: 1;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-line-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, hsl(160, 84%, 39%), hsl(215, 90%, 55%));
+            transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border-radius: 1px;
+        }
+
+        /* Stat Counter Pulse */
+        @keyframes countPulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.08);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .stat-counted {
+            animation: countPulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* Particle Canvas */
+        #particle-canvas {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 9998;
+        }
+
+        /* 3D Section Entrance */
+        @keyframes sectionEnter3D {
+            from {
+                opacity: 0;
+                transform: perspective(800px) rotateY(8deg) translateZ(-60px) translateX(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: perspective(800px) rotateY(0deg) translateZ(0) translateX(0);
+            }
+        }
+
+        @keyframes sectionExit3D {
+            from {
+                opacity: 1;
+                transform: perspective(800px) rotateY(0deg) translateZ(0) translateX(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: perspective(800px) rotateY(-8deg) translateZ(-60px) translateX(-30px);
+            }
+        }
+
+        .section-enter-3d {
+            animation: sectionEnter3D 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .section-exit-3d {
+            animation: sectionExit3D 0.4s cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
+        }
+
+        /* Performance: Reduced Motion */
+        @media (prefers-reduced-motion: reduce) {
+
+            .wobble-3d,
+            .floating,
+            .animate-pulse-glow,
+            .animate-spin-slow {
+                animation: none !important;
+            }
+
+            .tilt-card-inner {
+                transition: none !important;
+            }
+
+            .modal-3d-flip {
+                transition: opacity 0.2s ease !important;
+                transform: none !important;
+            }
+
+            .modal-3d-flip.modal-active {
+                transform: none !important;
+            }
+
+            .section-enter-3d,
+            .section-exit-3d {
+                animation: none !important;
+                opacity: 1 !important;
+                transform: none !important;
+            }
+
+            #three-bg {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 
 <body class="min-h-screen font-sans antialiased overflow-x-hidden selection:bg-primary/30 relative bg-background">
+
+    <!-- Three.js 3D Background -->
+    <canvas id="three-bg"></canvas>
+
+    <!-- Particle Sparkle Canvas -->
+    <canvas id="particle-canvas"></canvas>
 
     <!-- Toast Container -->
     <div id="toast-container"></div>
@@ -507,8 +763,42 @@
     <!-- Depth Layer 3: Foreground Content -->
     <div class="max-w-4xl mx-auto p-4 md:p-8 relative z-10 w-full animate-fade-in-up">
 
+        <!-- Step Progress Indicator -->
+        <div id="step-progress" class="mb-8 pt-6 max-w-md mx-auto px-4">
+            <div class="step-indicator">
+                <div class="step-dot step-active" data-step="start" title="Start">
+                    <i class="fa-solid fa-play text-[10px]"></i>
+                </div>
+                <div class="step-line">
+                    <div class="step-line-fill" data-line="1"></div>
+                </div>
+                <div class="step-dot" data-step="capture" title="Capture">
+                    <i class="fa-solid fa-camera text-[10px]"></i>
+                </div>
+                <div class="step-line">
+                    <div class="step-line-fill" data-line="2"></div>
+                </div>
+                <div class="step-dot" data-step="review" title="Review">
+                    <i class="fa-solid fa-list-check text-[10px]"></i>
+                </div>
+                <div class="step-line">
+                    <div class="step-line-fill" data-line="3"></div>
+                </div>
+                <div class="step-dot" data-step="results" title="Results">
+                    <i class="fa-solid fa-trophy text-[10px]"></i>
+                </div>
+            </div>
+            <div
+                class="flex justify-between mt-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                <span class="w-9 text-center">Start</span>
+                <span class="w-9 text-center">Scan</span>
+                <span class="w-9 text-center">Review</span>
+                <span class="w-9 text-center">Results</span>
+            </div>
+        </div>
+
         <!-- Header -->
-        <header class="text-center mb-16 pt-12 reveal visible relative">
+        <header class="text-center mb-16 pt-6 reveal visible relative">
             <div
                 class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-primary/20 blur-[60px] rounded-full -z-10">
             </div>
@@ -590,263 +880,243 @@
                         </button>
                     </div>
 
-                    <!-- How It Works Guide -->
-                    <div
-                        class="mt-12 border border-white/10 bg-white/5 rounded-2xl p-4 md:p-6 shadow-inner relative z-10 transition-colors hover:border-white/20">
-                        <h3
-                            class="text-white font-bold text-sm tracking-wide mb-3 flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-circle-question text-primary"></i> How It Works</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                            <div class="flex items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/5">
-                                <span class="text-2xl w-10 text-center drop-shadow-md">📋</span>
+                    <!-- PHASE 2: SETUP (shown after entry choice) -->
+                    <div id="setup-phase"
+                        class="hidden bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)]">
+
+                        <!-- Back button -->
+                        <button id="btn-back-to-landing" type="button"
+                            onclick="window.showLanding && window.showLanding()"
+                            class="text-muted-foreground hover:text-white text-sm font-bold mb-4 flex items-center gap-2 transition-colors">
+                            <i class="fa-solid fa-arrow-left"></i> Back
+                        </button>
+
+                        <!-- Context banner (shown for returning teachers) -->
+                        <div id="setup-context-banner"
+                            class="hidden bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 mb-6">
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-circle-check text-emerald-400 text-lg mt-0.5"></i>
                                 <div>
-                                    <span class="font-bold text-white text-[13px] tracking-wide block">Step 1</span>
-                                    <span class="text-muted-foreground font-medium text-xs">Choose class/subject</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/5">
-                                <span class="text-2xl w-10 text-center drop-shadow-md">📸</span>
-                                <div>
-                                    <span class="font-bold text-white text-[13px] tracking-wide block">Step 2</span>
-                                    <span class="text-muted-foreground font-medium text-xs">Photograph papers</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/5">
-                                <span class="text-2xl w-10 text-center drop-shadow-md">✅</span>
-                                <div>
-                                    <span class="font-bold text-white text-[13px] tracking-wide block">Step 3</span>
-                                    <span class="text-muted-foreground font-medium text-xs">Review & download</span>
+                                    <p id="setup-context-text" class="text-sm font-bold text-white"></p>
+                                    <p id="setup-context-sub" class="text-xs text-emerald-300/70 mt-1"></p>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <!-- PHASE 2: SETUP (shown after entry choice) -->
-                <div id="setup-phase"
-                    class="hidden bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)]">
+                        <div
+                            class="bg-black/20 rounded-xl border border-white/5 p-4 md:p-6 relative z-10 shadow-inner max-w-2xl mx-auto">
 
-                    <!-- Back button -->
-                    <button id="btn-back-to-landing" type="button" onclick="window.showLanding && window.showLanding()"
-                        class="text-muted-foreground hover:text-white text-sm font-bold mb-4 flex items-center gap-2 transition-colors">
-                        <i class="fa-solid fa-arrow-left"></i> Back
-                    </button>
+                            <!-- Class & Subject -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                                <!-- Target Class -->
+                                <div class="space-y-2 group">
+                                    <label
+                                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Class
+                                        Name</label>
+                                    <div class="flex items-center gap-2">
+                                        <div
+                                            class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-1 relative rounded-xl">
+                                            <select id="target-class"
+                                                class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-bold tracking-wide">
+                                                <option value="" disabled selected class="bg-card">-- Select a Class --
+                                                </option>
+                                            </select>
+                                            <i
+                                                class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
+                                            <div class="input-focus-anim rounded-xl"></div>
+                                        </div>
+                                        <button type="button" id="btn-open-paste-modal"
+                                            class="shrink-0 bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30 font-bold px-4 py-4 rounded-xl transition-all shadow-glow text-sm flex items-center gap-2"
+                                            title="Add New Class">
+                                            <i class="fa-solid fa-plus"></i> <span>Add Class</span>
+                                        </button>
+                                    </div>
+                                </div>
 
-                    <!-- Context banner (shown for returning teachers) -->
-                    <div id="setup-context-banner"
-                        class="hidden bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 mb-6">
-                        <div class="flex items-start gap-3">
-                            <i class="fa-solid fa-circle-check text-emerald-400 text-lg mt-0.5"></i>
-                            <div>
-                                <p id="setup-context-text" class="text-sm font-bold text-white"></p>
-                                <p id="setup-context-sub" class="text-xs text-emerald-300/70 mt-1"></p>
+                                <!-- Subject Select -->
+                                <div class="space-y-2 focus-within:z-20 relative">
+                                    <label
+                                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Subject
+                                        Name</label>
+                                    <div class="flex gap-2 relative">
+                                        <div
+                                            class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-1 relative rounded-xl">
+                                            <select id="subject-name"
+                                                class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-bold">
+                                                <option value="" disabled selected class="bg-card">-- Select a Subject
+                                                    --
+                                                </option>
+                                                <option value="Mathematics" class="bg-card">Mathematics</option>
+                                                <option value="English" class="bg-card">English</option>
+                                                <option value="Basic Science" class="bg-card">Basic Science</option>
+                                                <option value="Biology" class="bg-card">Biology</option>
+                                                <option value="Chemistry" class="bg-card">Chemistry</option>
+                                                <option value="Physics" class="bg-card">Physics</option>
+                                                <option value="custom" class="bg-card">-- Custom Subject --</option>
+                                            </select>
+                                            <i
+                                                class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
+                                            <div class="input-focus-anim rounded-xl"></div>
+                                        </div>
+                                    </div>
+                                    <div class="input-wrapper border border-white/10 bg-black/40 mt-2 hidden rounded-xl"
+                                        id="custom-subject-wrapper">
+                                        <input type="text" id="custom-subject"
+                                            class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-bold tracking-wide"
+                                            placeholder="e.g., History">
+                                        <div class="input-focus-anim rounded-xl"></div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
 
-                    <div
-                        class="bg-black/20 rounded-xl border border-white/5 p-4 md:p-6 relative z-10 shadow-inner max-w-2xl mx-auto">
-
-                        <!-- Class & Subject -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-                            <!-- Target Class -->
-                            <div class="space-y-2 group">
+                            <!-- Assessment Type -->
+                            <div id="assessment-type-container"
+                                class="space-y-2 focus-within:z-20 relative mb-5 pt-4 border-t border-white/5 border-dashed">
                                 <label
-                                    class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Class
-                                    Name</label>
-                                <div class="flex items-center gap-2">
+                                    class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Assessment
+                                    Type</label>
+                                <div class="flex gap-2 relative">
                                     <div
-                                        class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-1 relative rounded-xl">
-                                        <select id="target-class"
+                                        class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-[2] relative rounded-xl">
+                                        <select id="assessment-type"
                                             class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-bold tracking-wide">
-                                            <option value="" disabled selected class="bg-card">-- Select a Class --
+                                            <option value="" disabled selected class="bg-card">-- Select Assessment Type
+                                                --
                                             </option>
+                                            <option value="1st CA" class="bg-card">1st CA</option>
+                                            <option value="2nd CA" class="bg-card">2nd CA</option>
+                                            <option value="Exam" class="bg-card">Exam</option>
+                                            <option value="Open Day" class="bg-card">Open Day</option>
+                                            <option value="Assignment" class="bg-card">Assignment</option>
+                                            <option value="custom" class="bg-card">-- Custom --</option>
                                         </select>
                                         <i
                                             class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
                                         <div class="input-focus-anim rounded-xl"></div>
                                     </div>
-                                    <button type="button" id="btn-open-paste-modal"
-                                        class="shrink-0 bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30 font-bold px-4 py-4 rounded-xl transition-all shadow-glow text-sm flex items-center gap-2"
-                                        title="Add New Class">
-                                        <i class="fa-solid fa-plus"></i> <span>Add Class</span>
+                                </div>
+                                <p id="assessment-hint" class="text-[10px] text-primary/70 pl-1 hidden"><i
+                                        class="fa-solid fa-wand-magic-sparkles mr-1"></i><span></span></p>
+                                <div class="input-wrapper border border-white/10 bg-black/40 mt-2 hidden rounded-xl"
+                                    id="custom-assessment-wrapper">
+                                    <input type="text" id="custom-assessment"
+                                        class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-bold tracking-wide"
+                                        placeholder="e.g., Final Project">
+                                    <div class="input-focus-anim rounded-xl"></div>
+                                </div>
+                            </div>
+
+                            <!-- Enrollment: Who takes this subject? -->
+                            <div id="enrollment-section" class="pt-4 border-t border-white/5 border-dashed mb-5 hidden">
+                                <label
+                                    class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 mb-3">Who
+                                    takes this subject?</label>
+                                <div class="flex rounded-xl overflow-hidden border border-white/10 bg-black/30">
+                                    <button type="button" id="btn-enroll-general"
+                                        class="flex-1 py-3 px-4 text-xs font-bold transition-all text-white bg-primary/20 border-r border-white/10 flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                                        <i class="fa-solid fa-users text-primary"></i> Everyone in Class
+                                    </button>
+                                    <button type="button" id="btn-enroll-selective"
+                                        class="flex-1 py-3 px-4 text-xs font-bold transition-all text-muted-foreground hover:text-white flex items-center justify-center gap-2">
+                                        <i class="fa-solid fa-user-check text-yellow-400/50"></i> Only Some Students
+                                    </button>
+                                </div>
+                                <p id="enrollment-desc" class="text-[10px] text-muted-foreground/70 pl-1 mt-2">All
+                                    students
+                                    take this subject</p>
+
+                                <!-- Selective students inline container -->
+                                <div id="selective-inline-container"
+                                    class="hidden mt-4 border border-yellow-500/30 rounded-xl p-4 md:p-6 bg-yellow-500/5 shadow-inner">
+                                    <label
+                                        class="block text-[11px] font-bold text-yellow-500 uppercase tracking-widest mb-4 flex items-center">
+                                        <i class="fa-solid fa-list-check mr-2"></i> Tick the students who take this
+                                        subject
+                                    </label>
+
+                                    <div class="mb-5 border border-yellow-500/30 bg-black/40 hover:bg-yellow-500/10 rounded-xl p-4 cursor-pointer transition-all shadow-[0_0_15px_rgba(234,179,8,0.05)] hover:shadow-[0_0_20px_rgba(234,179,8,0.1)] flex items-center justify-center gap-2 group"
+                                        onclick="document.getElementById('enrollment-list-file').click()">
+                                        <i
+                                            class="fa-solid fa-camera text-yellow-500 group-hover:scale-110 transition-transform"></i>
+                                        <span class="text-[13px] font-bold text-yellow-500">Scan Handwritten List
+                                            Instead</span>
+                                        <input type="file" id="enrollment-list-file" accept="image/*, .pdf"
+                                            class="hidden"
+                                            onchange="document.getElementById('enrollment-file-label').innerText = this.files[0] ? this.files[0].name : '';">
+                                    </div>
+                                    <p id="enrollment-file-label"
+                                        class="text-xs text-center text-yellow-400/80 mb-3 font-medium min-h-[16px]">
+                                    </p>
+
+                                    <div id="selective-students-list"
+                                        class="space-y-1 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                        <div class="p-4 text-center text-sm text-yellow-500/60 font-medium">Select a
+                                            class
+                                            and subject first to view students.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Smart Mode Toggle -->
+                            <div class="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 mb-6">
+                                <div class="flex items-center justify-between w-full cursor-pointer group"
+                                    id="btn-toggle-smart-mode">
+                                    <div>
+                                        <label
+                                            class="text-[11px] font-bold text-indigo-300 uppercase tracking-widest pl-1 block cursor-pointer flex items-center gap-2 group-hover:text-indigo-200 transition-colors">
+                                            <i class="fa-solid fa-wand-magic-sparkles"></i> AI Smart Mode
+                                        </label>
+                                        <p
+                                            class="text-[10px] text-indigo-200/50 pl-1 mt-0.5 max-w-[200px] leading-tight">
+                                            Give the AI custom instructions.</p>
+                                    </div>
+                                    <div class="w-10 h-5 bg-black/50 rounded-full relative shadow-inner border border-white/10 transition-colors"
+                                        id="smart-mode-switch-bg">
+                                        <div class="w-3 h-3 bg-muted-foreground rounded-full absolute top-1 left-1 transition-all"
+                                            id="smart-mode-switch-knob"></div>
+                                    </div>
+                                </div>
+                                <div id="smart-instruction-wrapper"
+                                    class="hidden mt-3 animation-fade-in relative w-full">
+                                    <textarea id="smart-instruction-input" rows="2"
+                                        class="w-full p-3 bg-black/40 border border-indigo-500/30 rounded-lg text-white text-xs outline-none placeholder:text-muted-foreground/50 focus:border-indigo-400 focus:bg-black/60 transition-all font-bold tracking-wide resize-none"
+                                        placeholder="e.g., 'The final score is circled in red ink at the top of the page'"></textarea>
+                                </div>
+                            </div>
+
+                            <!-- How to add scores -->
+                            <div class="pt-6 border-t border-white/5">
+                                <h3 class="text-lg font-heading font-bold text-white mb-4 tracking-tight text-center">
+                                    How
+                                    would you like to add scores?</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <button id="btn-start-camera" type="button"
+                                        class="entry-card holographic btn-3d magnetic bg-black/40 hover:bg-primary/10 border border-white/10 hover:border-primary/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-glow relative overflow-hidden h-full">
+                                        <div
+                                            class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-300">
+                                            <i class="fa-solid fa-camera text-primary text-xl"></i>
+                                        </div>
+                                        <span class="font-bold text-[15px] tracking-wide">I Have the Scripts</span>
+                                        <span class="text-[11px] text-muted-foreground font-medium">Scan test papers one
+                                            by
+                                            line.<br>The AI reads name & score.</span>
+                                    </button>
+
+                                    <button id="btn-upload-scoresheet" type="button"
+                                        class="entry-card holographic btn-3d bg-black/40 hover:bg-indigo-500/10 border border-white/10 hover:border-indigo-500/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] relative overflow-hidden h-full">
+                                        <div
+                                            class="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-300">
+                                            <i class="fa-solid fa-file-invoice text-indigo-400 text-xl"></i>
+                                        </div>
+                                        <span class="font-bold text-[15px] tracking-wide">I Have a Score List</span>
+                                        <span class="text-[11px] text-muted-foreground font-medium">Upload a photo of
+                                            your<br>recorded grades.</span>
                                     </button>
                                 </div>
                             </div>
 
-                            <!-- Subject Select -->
-                            <div class="space-y-2 focus-within:z-20 relative">
-                                <label
-                                    class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Subject
-                                    Name</label>
-                                <div class="flex gap-2 relative">
-                                    <div
-                                        class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-1 relative rounded-xl">
-                                        <select id="subject-name"
-                                            class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-bold">
-                                            <option value="" disabled selected class="bg-card">-- Select a Subject --
-                                            </option>
-                                            <option value="Mathematics" class="bg-card">Mathematics</option>
-                                            <option value="English" class="bg-card">English</option>
-                                            <option value="Basic Science" class="bg-card">Basic Science</option>
-                                            <option value="Biology" class="bg-card">Biology</option>
-                                            <option value="Chemistry" class="bg-card">Chemistry</option>
-                                            <option value="Physics" class="bg-card">Physics</option>
-                                            <option value="custom" class="bg-card">-- Custom Subject --</option>
-                                        </select>
-                                        <i
-                                            class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
-                                        <div class="input-focus-anim rounded-xl"></div>
-                                    </div>
-                                </div>
-                                <div class="input-wrapper border border-white/10 bg-black/40 mt-2 hidden rounded-xl"
-                                    id="custom-subject-wrapper">
-                                    <input type="text" id="custom-subject"
-                                        class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-bold tracking-wide"
-                                        placeholder="e.g., History">
-                                    <div class="input-focus-anim rounded-xl"></div>
-                                </div>
-                            </div>
                         </div>
-
-                        <!-- Assessment Type -->
-                        <div id="assessment-type-container"
-                            class="space-y-2 focus-within:z-20 relative mb-5 pt-4 border-t border-white/5 border-dashed">
-                            <label
-                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Assessment
-                                Type</label>
-                            <div class="flex gap-2 relative">
-                                <div
-                                    class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-[2] relative rounded-xl">
-                                    <select id="assessment-type"
-                                        class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-bold tracking-wide">
-                                        <option value="" disabled selected class="bg-card">-- Select Assessment Type --
-                                        </option>
-                                        <option value="1st CA" class="bg-card">1st CA</option>
-                                        <option value="2nd CA" class="bg-card">2nd CA</option>
-                                        <option value="Exam" class="bg-card">Exam</option>
-                                        <option value="Open Day" class="bg-card">Open Day</option>
-                                        <option value="Assignment" class="bg-card">Assignment</option>
-                                        <option value="custom" class="bg-card">-- Custom --</option>
-                                    </select>
-                                    <i
-                                        class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
-                                    <div class="input-focus-anim rounded-xl"></div>
-                                </div>
-                            </div>
-                            <p id="assessment-hint" class="text-[10px] text-primary/70 pl-1 hidden"><i
-                                    class="fa-solid fa-wand-magic-sparkles mr-1"></i><span></span></p>
-                            <div class="input-wrapper border border-white/10 bg-black/40 mt-2 hidden rounded-xl"
-                                id="custom-assessment-wrapper">
-                                <input type="text" id="custom-assessment"
-                                    class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-bold tracking-wide"
-                                    placeholder="e.g., Final Project">
-                                <div class="input-focus-anim rounded-xl"></div>
-                            </div>
-                        </div>
-
-                        <!-- Enrollment: Who takes this subject? -->
-                        <div id="enrollment-section" class="pt-4 border-t border-white/5 border-dashed mb-5 hidden">
-                            <label
-                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 mb-3">Who
-                                takes this subject?</label>
-                            <div class="flex rounded-xl overflow-hidden border border-white/10 bg-black/30">
-                                <button type="button" id="btn-enroll-general"
-                                    class="flex-1 py-3 px-4 text-xs font-bold transition-all text-white bg-primary/20 border-r border-white/10 flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                                    <i class="fa-solid fa-users text-primary"></i> Everyone in Class
-                                </button>
-                                <button type="button" id="btn-enroll-selective"
-                                    class="flex-1 py-3 px-4 text-xs font-bold transition-all text-muted-foreground hover:text-white flex items-center justify-center gap-2">
-                                    <i class="fa-solid fa-user-check text-yellow-400/50"></i> Only Some Students
-                                </button>
-                            </div>
-                            <p id="enrollment-desc" class="text-[10px] text-muted-foreground/70 pl-1 mt-2">All students
-                                take this subject</p>
-
-                            <!-- Selective students inline container -->
-                            <div id="selective-inline-container"
-                                class="hidden mt-4 border border-yellow-500/30 rounded-xl p-4 md:p-6 bg-yellow-500/5 shadow-inner">
-                                <label
-                                    class="block text-[11px] font-bold text-yellow-500 uppercase tracking-widest mb-4 flex items-center">
-                                    <i class="fa-solid fa-list-check mr-2"></i> Tick the students who take this subject
-                                </label>
-
-                                <div class="mb-5 border border-yellow-500/30 bg-black/40 hover:bg-yellow-500/10 rounded-xl p-4 cursor-pointer transition-all shadow-[0_0_15px_rgba(234,179,8,0.05)] hover:shadow-[0_0_20px_rgba(234,179,8,0.1)] flex items-center justify-center gap-2 group"
-                                    onclick="document.getElementById('enrollment-list-file').click()">
-                                    <i
-                                        class="fa-solid fa-camera text-yellow-500 group-hover:scale-110 transition-transform"></i>
-                                    <span class="text-[13px] font-bold text-yellow-500">Scan Handwritten List
-                                        Instead</span>
-                                    <input type="file" id="enrollment-list-file" accept="image/*, .pdf" class="hidden"
-                                        onchange="document.getElementById('enrollment-file-label').innerText = this.files[0] ? this.files[0].name : '';">
-                                </div>
-                                <p id="enrollment-file-label"
-                                    class="text-xs text-center text-yellow-400/80 mb-3 font-medium min-h-[16px]"></p>
-
-                                <div id="selective-students-list"
-                                    class="space-y-1 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                                    <div class="p-4 text-center text-sm text-yellow-500/60 font-medium">Select a class
-                                        and subject first to view students.</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Smart Mode Toggle -->
-                        <div class="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 mb-6">
-                            <div class="flex items-center justify-between w-full cursor-pointer group"
-                                id="btn-toggle-smart-mode">
-                                <div>
-                                    <label
-                                        class="text-[11px] font-bold text-indigo-300 uppercase tracking-widest pl-1 block cursor-pointer flex items-center gap-2 group-hover:text-indigo-200 transition-colors">
-                                        <i class="fa-solid fa-wand-magic-sparkles"></i> AI Smart Mode
-                                    </label>
-                                    <p class="text-[10px] text-indigo-200/50 pl-1 mt-0.5 max-w-[200px] leading-tight">
-                                        Give the AI custom instructions.</p>
-                                </div>
-                                <div class="w-10 h-5 bg-black/50 rounded-full relative shadow-inner border border-white/10 transition-colors"
-                                    id="smart-mode-switch-bg">
-                                    <div class="w-3 h-3 bg-muted-foreground rounded-full absolute top-1 left-1 transition-all"
-                                        id="smart-mode-switch-knob"></div>
-                                </div>
-                            </div>
-                            <div id="smart-instruction-wrapper" class="hidden mt-3 animation-fade-in relative w-full">
-                                <textarea id="smart-instruction-input" rows="2"
-                                    class="w-full p-3 bg-black/40 border border-indigo-500/30 rounded-lg text-white text-xs outline-none placeholder:text-muted-foreground/50 focus:border-indigo-400 focus:bg-black/60 transition-all font-bold tracking-wide resize-none"
-                                    placeholder="e.g., 'The final score is circled in red ink at the top of the page'"></textarea>
-                            </div>
-                        </div>
-
-                        <!-- How to add scores -->
-                        <div class="pt-6 border-t border-white/5">
-                            <h3 class="text-lg font-heading font-bold text-white mb-4 tracking-tight text-center">How
-                                would you like to add scores?</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <button id="btn-start-camera" type="button"
-                                    class="entry-card holographic btn-3d magnetic bg-black/40 hover:bg-primary/10 border border-white/10 hover:border-primary/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-glow relative overflow-hidden h-full">
-                                    <div
-                                        class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-300">
-                                        <i class="fa-solid fa-camera text-primary text-xl"></i>
-                                    </div>
-                                    <span class="font-bold text-[15px] tracking-wide">I Have the Scripts</span>
-                                    <span class="text-[11px] text-muted-foreground font-medium">Scan test papers one by
-                                        line.<br>The AI reads name & score.</span>
-                                </button>
-
-                                <button id="btn-upload-scoresheet" type="button"
-                                    class="entry-card holographic btn-3d bg-black/40 hover:bg-indigo-500/10 border border-white/10 hover:border-indigo-500/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] relative overflow-hidden h-full">
-                                    <div
-                                        class="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-300">
-                                        <i class="fa-solid fa-file-invoice text-indigo-400 text-xl"></i>
-                                    </div>
-                                    <span class="font-bold text-[15px] tracking-wide">I Have a Score List</span>
-                                    <span class="text-[11px] text-muted-foreground font-medium">Upload a photo of
-                                        your<br>recorded grades.</span>
-                                </button>
-                            </div>
-                        </div>
-
                     </div>
-                </div>
 
             </section>
 
@@ -1018,6 +1288,30 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Help Tip: Missing a student? -->
+        <div id="missing-score-tip"
+            class="hidden mb-6 relative z-10 bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 flex items-start gap-3 animate-fade-in-up">
+            <i class="fa-solid fa-lightbulb text-amber-400 mt-0.5 text-lg"></i>
+            <div class="flex-1">
+                <h4 class="text-amber-400 font-bold text-xs tracking-wide uppercase mb-1">Missing a student's score?
+                </h4>
+                <p class="text-amber-200/70 text-[11px] font-medium leading-relaxed">Click <strong
+                        class="text-amber-300">"+ Add Student"</strong> below to type it in manually, or go back and
+                    re-scan just that student's paper — it will be matched and merged automatically.</p>
+            </div>
+            <button onclick="this.parentElement.classList.add('hidden')"
+                class="text-amber-500/40 hover:text-amber-400 transition-colors p-1 shrink-0"><i
+                    class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+
+        <!-- Add Student Manually Button -->
+        <button id="btn-add-manual-row" type="button" onclick="addManualRow()"
+            class="mb-6 w-full py-3 rounded-xl border-2 border-dashed border-white/10 hover:border-primary/40 text-muted-foreground hover:text-white bg-transparent hover:bg-primary/5 transition-all flex items-center justify-center gap-2 text-sm font-bold tracking-wide group relative z-10">
+            <i class="fa-solid fa-plus text-primary group-hover:scale-110 transition-transform"></i>
+            <span>Add Student Manually</span>
+        </button>
+
 
         <button id="btn-export"
             class="magnetic holographic shadow-glow w-full bg-primary hover:bg-primary/90 text-white font-extrabold text-sm uppercase tracking-widest py-5 px-6 rounded-xl transition-all active:scale-95 flex justify-center items-center group relative z-10 border border-t-white/30 border-primary shadow-[0_4px_14px_0_rgba(var(--brand-rgb),0.39)]">
@@ -1231,7 +1525,7 @@
                     <div class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors">
                         <input type="text" id="paste-target-class"
                             class="w-full p-4 bg-transparent text-white text-sm outline-none placeholder:text-muted-foreground/50 relative z-10 font-medium tracking-wide"
-                            placeholder="e.g., JSS 1, SS 2A" required>
+                            placeholder="e.g., JSS 1, SS 2A" autocomplete="off" required>
                         <div class="input-focus-anim"></div>
                     </div>
                 </div>
@@ -1706,7 +2000,7 @@
             compressImage(rawBase64).then(compressedBase64 => {
                 imagesBatch.push({ id: imageId, base64: compressedBase64 });
                 batchCountEl.innerText = imagesBatch.length;
-                btnProcess.disabled = false;
+                updateActionBar();
             });
 
             const thumbDiv = document.createElement('div');
@@ -1725,9 +2019,7 @@
                 imagesBatch = imagesBatch.filter(item => item.id !== imageId);
                 batchCountEl.innerText = imagesBatch.length;
                 thumbDiv.remove();
-                if (imagesBatch.length === 0) {
-                    btnProcess.disabled = true;
-                }
+                updateActionBar();
             };
 
             thumbDiv.appendChild(img);
@@ -2192,6 +2484,38 @@
                     tr.classList.add('visible');
                 });
             });
+        }
+
+        // ═══════════════════════════════════════════════
+        //  MANUAL ROW ADDITION (Phase 2: Omitted Score Fix)
+        // ═══════════════════════════════════════════════
+        function addManualRow() {
+            const targetClass = document.getElementById('target-class');
+            const classVal = targetClass ? targetClass.value : '';
+            const newIdx = extractedData.length;
+            const newItem = {
+                name: '',
+                class: classVal,
+                score: '',
+                confidence: 'Manual'
+            };
+            extractedData.push(newItem);
+            renderSingleRow(newItem, newIdx);
+
+            // Focus the new name input after render
+            requestAnimationFrame(() => {
+                const newInput = document.querySelector(`input[data-index="${newIdx}"][data-field="name"]`);
+                if (newInput) {
+                    newInput.focus();
+                    newInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+
+            // Show tip on first use
+            const tip = document.getElementById('missing-score-tip');
+            if (tip) tip.classList.remove('hidden');
+
+            showToast('New row added. Type the student name and score.', 'info', 3000);
         }
 
         // Analytics Calculation
@@ -3180,6 +3504,415 @@
 
             nextBlock.classList.remove('hidden');
         }
+
+
+        // ═══════════════════════════════════════════════════════════════
+        //  PHASE 3: 3D PREMIUM ANIMATION ENGINE
+        // ═══════════════════════════════════════════════════════════════
+
+        // ── 3.1 THREE.JS FLOATING BACKGROUND ──────────────────────────
+        (function initThreeBackground() {
+            const canvas = document.getElementById('three-bg');
+            if (!canvas || typeof THREE === 'undefined') {
+                // Retry after Three.js loads (deferred)
+                if (!canvas) return;
+                window.addEventListener('load', initThreeBackground);
+                return;
+            }
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 30;
+
+            const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            renderer.setClearColor(0x000000, 0);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0x334466, 0.6);
+            scene.add(ambient);
+            const pointLight = new THREE.PointLight(0x2196F3, 1.2, 100);
+            pointLight.position.set(10, 15, 20);
+            scene.add(pointLight);
+            const pointLight2 = new THREE.PointLight(0x10b981, 0.6, 80);
+            pointLight2.position.set(-15, -10, 15);
+            scene.add(pointLight2);
+
+            // School-themed 3D objects
+            const objects = [];
+            const brandColor = 0x2196F3;
+            const accentColors = [0x10b981, 0x8b5cf6, 0xf59e0b, 0xef4444, 0x06b6d4];
+
+            const geometries = [
+                new THREE.BoxGeometry(1, 1.4, 0.15),     // Book
+                new THREE.ConeGeometry(0.15, 2, 8),       // Pencil
+                new THREE.OctahedronGeometry(0.6),         // Star/gem
+                new THREE.TorusGeometry(0.5, 0.15, 8, 16), // Ring
+                new THREE.TetrahedronGeometry(0.7),         // Math symbol
+                new THREE.DodecahedronGeometry(0.5),        // Complex shape
+                new THREE.BoxGeometry(0.8, 0.8, 0.8),      // Cube (dice)
+                new THREE.SphereGeometry(0.4, 8, 8),        // Ball
+            ];
+
+            const NUM_OBJECTS = 18;
+            for (let i = 0; i < NUM_OBJECTS; i++) {
+                const geo = geometries[i % geometries.length];
+                const color = i % 3 === 0 ? brandColor : accentColors[i % accentColors.length];
+                const mat = new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: color,
+                    emissiveIntensity: 0.15,
+                    transparent: true,
+                    opacity: 0.07 + Math.random() * 0.07,
+                    shininess: 80,
+                    wireframe: Math.random() > 0.6
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(
+                    (Math.random() - 0.5) * 50,
+                    (Math.random() - 0.5) * 35,
+                    (Math.random() - 0.5) * 20 - 5
+                );
+                mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                mesh.userData = {
+                    rotSpeed: { x: (Math.random() - 0.5) * 0.008, y: (Math.random() - 0.5) * 0.008, z: (Math.random() - 0.5) * 0.005 },
+                    floatSpeed: 0.3 + Math.random() * 0.5,
+                    floatAmp: 0.5 + Math.random() * 1.5,
+                    baseY: mesh.position.y,
+                    phase: Math.random() * Math.PI * 2
+                };
+                scene.add(mesh);
+                objects.push(mesh);
+            }
+
+            let animId;
+            let isVisible = true;
+
+            function animate() {
+                if (!isVisible) return;
+                animId = requestAnimationFrame(animate);
+                const t = Date.now() * 0.001;
+
+                objects.forEach(obj => {
+                    obj.rotation.x += obj.userData.rotSpeed.x;
+                    obj.rotation.y += obj.userData.rotSpeed.y;
+                    obj.rotation.z += obj.userData.rotSpeed.z;
+                    obj.position.y = obj.userData.baseY + Math.sin(t * obj.userData.floatSpeed + obj.userData.phase) * obj.userData.floatAmp;
+                });
+
+                renderer.render(scene, camera);
+            }
+
+            animate();
+
+            // Pause when tab hidden
+            document.addEventListener('visibilitychange', () => {
+                isVisible = !document.hidden;
+                if (isVisible) animate();
+            });
+
+            // Resize handler
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        })();
+
+        // Retry Three.js init after load
+        window.addEventListener('load', () => {
+            if (typeof THREE !== 'undefined' && !document.getElementById('three-bg').__threeInit) {
+                document.getElementById('three-bg').__threeInit = true;
+                // Already initialized in IIFE above
+            }
+        });
+
+        // ── 3.2 CSS 3D CARD TILT ──────────────────────────────────────
+        function initCardTilt() {
+            const cards = document.querySelectorAll('.tilt-card');
+            cards.forEach(card => {
+                const inner = card.querySelector('.tilt-card-inner') || card;
+                let rafId = null;
+
+                card.addEventListener('mousemove', (e) => {
+                    if (window.innerWidth < 768) return;
+                    if (rafId) return; // Throttle to rAF
+                    rafId = requestAnimationFrame(() => {
+                        const rect = card.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const y = e.clientY - rect.top;
+                        const cx = rect.width / 2;
+                        const cy = rect.height / 2;
+                        const rotateX = ((y - cy) / cy) * -8;
+                        const rotateY = ((x - cx) / cx) * 8;
+
+                        inner.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+
+                        // Move glow
+                        const glowX = (x / rect.width) * 100;
+                        const glowY = (y / rect.height) * 100;
+                        inner.style.setProperty('--glow-x', glowX + '%');
+                        inner.style.setProperty('--glow-y', glowY + '%');
+
+                        rafId = null;
+                    });
+                });
+
+                card.addEventListener('mouseleave', () => {
+                    inner.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
+                });
+            });
+        }
+
+        // ── 3.3 ANIMATED STAT COUNTER ─────────────────────────────────
+        function animateCounter(element, endValue, duration = 1500) {
+            const startTime = performance.now();
+            const startValue = 0;
+
+            function easeOutExpo(t) {
+                return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+            }
+
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easedProgress = easeOutExpo(progress);
+                const current = startValue + (endValue - startValue) * easedProgress;
+
+                if (Number.isInteger(endValue)) {
+                    element.textContent = Math.round(current);
+                } else {
+                    element.textContent = current.toFixed(1);
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                } else {
+                    element.classList.add('stat-counted');
+                    setTimeout(() => element.classList.remove('stat-counted'), 400);
+                }
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        // Override the original calculateAnalytics to add counter animation
+        const _origCalculateAnalytics = typeof calculateAnalytics === 'function' ? calculateAnalytics : null;
+
+        function calculateAnalyticsAnimated(data) {
+            let validScores = [];
+            let high = { score: -1, name: '' };
+            let low = { score: 999999, name: '' };
+
+            data.forEach(item => {
+                const s = parseFloat(item.score);
+                if (!isNaN(s)) {
+                    validScores.push(s);
+                    if (s > high.score) { high.score = s; high.name = item.name || ''; }
+                    if (s < low.score) { low.score = s; low.name = item.name || ''; }
+                }
+            });
+
+            if (validScores.length > 0) {
+                const sum = validScores.reduce((a, b) => a + b, 0);
+                const avg = parseFloat((sum / validScores.length).toFixed(1));
+
+                // Animate counters
+                animateCounter(statAvg, avg);
+                animateCounter(statHigh, high.score);
+                animateCounter(statLow, low.score);
+
+                statHighName.innerText = high.name;
+                statLowName.innerText = low.name;
+
+                // Confetti
+                const rawHasPerfect = data.some(item => {
+                    if (!item.score) return false;
+                    const str = String(item.score).trim();
+                    return str === '100' || str.startsWith('100/') || str === '10/10' || str === '20/20';
+                });
+
+                if (rawHasPerfect && typeof confetti === 'function') {
+                    const duration = 2500;
+                    const end = Date.now() + duration;
+                    (function frame() {
+                        confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#3b82f6', '#10b981', '#fbbf24'] });
+                        confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#3b82f6', '#10b981', '#fbbf24'] });
+                        if (Date.now() < end) requestAnimationFrame(frame);
+                    }());
+                }
+            } else {
+                statAvg.innerText = '--';
+                statHigh.innerText = '--';
+                statHighName.innerText = '--';
+                statLow.innerText = '--';
+                statLowName.innerText = '--';
+            }
+        }
+
+        // Monkey-patch the calculateAnalytics calls
+        window.calculateAnalytics = calculateAnalyticsAnimated;
+
+        // ── 3.8 PARTICLE SPARKLE ENGINE ───────────────────────────────
+        const particleCanvas = document.getElementById('particle-canvas');
+        const pCtx = particleCanvas ? particleCanvas.getContext('2d') : null;
+        let particles = [];
+        let particleAnimId = null;
+
+        function resizeParticleCanvas() {
+            if (!particleCanvas) return;
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        }
+        resizeParticleCanvas();
+        window.addEventListener('resize', resizeParticleCanvas);
+
+        function spawnParticles(x, y, count = 15, color = '33, 150, 243') {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+                const speed = 2 + Math.random() * 4;
+                particles.push({
+                    x, y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1,
+                    life: 1,
+                    decay: 0.015 + Math.random() * 0.02,
+                    size: 2 + Math.random() * 3,
+                    color: color
+                });
+            }
+            if (!particleAnimId) animateParticles();
+        }
+
+        function animateParticles() {
+            if (!pCtx || particles.length === 0) {
+                particleAnimId = null;
+                if (pCtx) pCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+                return;
+            }
+            particleAnimId = requestAnimationFrame(animateParticles);
+            pCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.08; // gravity
+                p.life -= p.decay;
+                if (p.life <= 0) return false;
+
+                pCtx.beginPath();
+                pCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                pCtx.fillStyle = `rgba(${p.color}, ${p.life})`;
+                pCtx.shadowBlur = 8;
+                pCtx.shadowColor = `rgba(${p.color}, ${p.life * 0.6})`;
+                pCtx.fill();
+                return true;
+            });
+
+            if (particles.length === 0) {
+                pCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+                particleAnimId = null;
+            }
+        }
+
+        // Attach sparkle to primary buttons
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('#btn-export, #btn-process, #btn-download-sheet, #btn-capture, #btn-submit-paste');
+            if (btn) {
+                const rect = btn.getBoundingClientRect();
+                const x = rect.left + rect.width / 2;
+                const y = rect.top + rect.height / 2;
+                const colors = ['33, 150, 243', '16, 185, 129', '139, 92, 246', '251, 191, 36'];
+                spawnParticles(x, y, 15, colors[Math.floor(Math.random() * colors.length)]);
+            }
+        });
+
+        // ── 3.9 STEP PROGRESS INDICATOR ───────────────────────────────
+        function updateStepIndicator(activeStep) {
+            const steps = ['start', 'capture', 'review', 'results'];
+            const activeIdx = steps.indexOf(activeStep);
+            if (activeIdx === -1) return;
+
+            document.querySelectorAll('.step-dot').forEach((dot, i) => {
+                dot.classList.remove('step-active', 'step-done');
+                if (i < activeIdx) dot.classList.add('step-done');
+                else if (i === activeIdx) dot.classList.add('step-active');
+            });
+
+            document.querySelectorAll('.step-line-fill').forEach((fill, i) => {
+                fill.style.width = i < activeIdx ? '100%' : '0%';
+            });
+        }
+
+        // Hook into section visibility to update step indicator
+        const _origStartCameraClick = btnStartCamera ? btnStartCamera.onclick : null;
+        const _setupObs = new MutationObserver(() => {
+            if (captureSection && !captureSection.classList.contains('hidden')) {
+                updateStepIndicator('capture');
+            }
+            if (reviewSection && !reviewSection.classList.contains('hidden')) {
+                updateStepIndicator('review');
+            }
+            if (analyticsSection && !analyticsSection.classList.contains('hidden')) {
+                updateStepIndicator('results');
+            }
+            if (startSection && !startSection.classList.contains('hidden') &&
+                captureSection && captureSection.classList.contains('hidden')) {
+                updateStepIndicator('start');
+            }
+        });
+
+        [captureSection, reviewSection, analyticsSection, startSection].forEach(el => {
+            if (el) _setupObs.observe(el, { attributes: true, attributeFilter: ['class'] });
+        });
+
+        // ── 3.7 3D MODAL ANIMATION ────────────────────────────────────
+        function open3DModal(modalEl) {
+            if (!modalEl) return;
+            modalEl.classList.remove('hidden');
+            modalEl.classList.add('flex', 'modal-3d-container');
+            const inner = modalEl.querySelector('div > div') || modalEl.firstElementChild;
+            if (inner) {
+                inner.classList.add('modal-3d-flip');
+                requestAnimationFrame(() => {
+                    modalEl.classList.remove('opacity-0');
+                    inner.classList.add('modal-active');
+                });
+            }
+        }
+
+        function close3DModal(modalEl) {
+            if (!modalEl) return;
+            const inner = modalEl.querySelector('.modal-3d-flip');
+            if (inner) {
+                inner.classList.remove('modal-active');
+                modalEl.classList.add('opacity-0');
+                setTimeout(() => {
+                    modalEl.classList.remove('flex', 'modal-3d-container');
+                    modalEl.classList.add('hidden');
+                    if (inner) inner.classList.remove('modal-3d-flip');
+                }, 400);
+            } else {
+                modalEl.classList.remove('flex');
+                modalEl.classList.add('hidden');
+            }
+        }
+
+        // Override the paste modal open to use 3D
+        const _origPasteOpen = document.getElementById('btn-open-paste-modal');
+        if (_origPasteOpen) {
+            const existingListeners = _origPasteOpen.onclick;
+            // We patch the showSetup open behavior for paste modal in the existing code
+        }
+
+        // ── INIT ALL 3D SYSTEMS ON LOAD ───────────────────────────────
+        window.addEventListener('load', () => {
+            initCardTilt();
+            updateStepIndicator('start');
+        });
 
     </script>
 </body>
