@@ -2809,11 +2809,6 @@
                 // By default, start with an empty class name so the user can type a new one
                 pasteTargetClass.value = '';
 
-                // Only pre-fill if the user actually clicked a valid class name in the dropdown (not the placeholder)
-                if (targetClassSelect && targetClassSelect.value && targetClassSelect.value !== '') {
-                    pasteTargetClass.value = targetClassSelect.value;
-                }
-
                 pasteModal.classList.remove('hidden');
                 pasteModal.classList.add('flex');
 
