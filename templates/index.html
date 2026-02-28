@@ -128,10 +128,17 @@
 
         /* Animation Base */
         .reveal {
-            opacity: 0;
-            transform: translateY(30px) scale(0.98);
+            opacity: 1;
+            /* Fallback to visible if observer fails */
+            transform: translateY(0) scale(1);
             transition: all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             will-change: opacity, transform;
+        }
+
+        /* We'll use JS to add a class to hide them initially if JS loads */
+        .reveal-initial {
+            opacity: 0;
+            transform: translateY(30px) scale(0.98);
         }
 
         .reveal.visible {
@@ -182,6 +189,36 @@
 
         .holographic:hover {
             background-position: -100% 0;
+        }
+
+        /* 3D Button Effects */
+        .btn-3d {
+            transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+            position: relative;
+            transform-style: preserve-3d;
+        }
+
+        .btn-3d:active {
+            transform: translateY(4px) scale(0.98);
+        }
+
+        /* Float Animation */
+        @keyframes float {
+            0% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+
+            100% {
+                transform: translateY(0px);
+            }
+        }
+
+        .floating {
+            animation: float 6s ease-in-out infinite;
         }
 
         /* Mobile Touch Ripples */
@@ -463,22 +500,23 @@
 
                     <!-- Two Entry Cards -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                        <!-- Option 2: Upload Excel -->
                         <button id="btn-entry-excel" type="button"
-                            class="entry-card bg-black/30 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner relative overflow-hidden">
+                            class="entry-card holographic btn-3d magnetic bg-black/40 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] relative overflow-hidden h-full reveal reveal-delay-3">
                             <div
-                                class="w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform duration-300 border border-emerald-500/20">
+                                class="w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform duration-300 border border-emerald-500/20 floating">
                                 <i class="fa-solid fa-file-excel text-emerald-400 text-2xl"></i>
                             </div>
-                            <span class="font-bold text-[15px] tracking-wide">I Have My Excel</span>
-                            <span class="text-[11px] text-muted-foreground font-medium leading-tight">Continue from
-                                where you left off.<br>Upload your previous score sheet.</span>
+                            <span class="font-bold text-[15px] tracking-wide text-emerald-100">I Have My Excel</span>
+                            <span class="text-[11px] text-emerald-200/50 font-medium leading-tight">Pick up
+                                exactly<br>where you left off.</span>
                         </button>
                         <input type="file" id="entry-excel-upload" accept=".xlsx,.xls,.csv" class="hidden">
 
                         <button id="btn-entry-fresh" type="button" onclick="window.showSetup && window.showSetup(null)"
-                            class="entry-card bg-black/30 hover:bg-primary/10 border border-white/10 hover:border-primary/30 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner relative overflow-hidden">
+                            class="entry-card holographic btn-3d magnetic bg-black/30 hover:bg-primary/10 border border-white/10 hover:border-primary/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-glow relative overflow-hidden h-full reveal reveal-delay-2">
                             <div
-                                class="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform duration-300 border border-primary/20">
+                                class="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform duration-300 border border-primary/20 floating">
                                 <i class="fa-solid fa-wand-magic-sparkles text-primary text-2xl"></i>
                             </div>
                             <span class="font-bold text-[15px] tracking-wide">Start Fresh</span>
@@ -535,7 +573,7 @@
                                     <button type="button" id="btn-open-paste-modal"
                                         class="shrink-0 bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30 font-bold px-4 py-4 rounded-xl transition-all shadow-glow text-sm flex items-center gap-2"
                                         title="Add New Class">
-                                        <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Add</span>
+                                        <i class="fa-solid fa-plus"></i> <span>Add Class</span>
                                     </button>
                                 </div>
                             </div>
@@ -612,7 +650,7 @@
                         </div>
 
                         <!-- Enrollment: Who takes this subject? -->
-                        <div id="enrollment-section" class="pt-4 border-t border-white/5 border-dashed mb-5">
+                        <div id="enrollment-section" class="pt-4 border-t border-white/5 border-dashed mb-5 hidden">
                             <label
                                 class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 mb-3">Who
                                 takes this subject?</label>
@@ -628,6 +666,33 @@
                             </div>
                             <p id="enrollment-desc" class="text-[10px] text-muted-foreground/70 pl-1 mt-2">All students
                                 take this subject</p>
+
+                            <!-- Selective students inline container -->
+                            <div id="selective-inline-container"
+                                class="hidden mt-4 border border-yellow-500/30 rounded-xl p-4 md:p-6 bg-yellow-500/5 shadow-inner">
+                                <label
+                                    class="block text-[11px] font-bold text-yellow-500 uppercase tracking-widest mb-4 flex items-center">
+                                    <i class="fa-solid fa-list-check mr-2"></i> Tick the students who take this subject
+                                </label>
+
+                                <div class="mb-5 border border-yellow-500/30 bg-black/40 hover:bg-yellow-500/10 rounded-xl p-4 cursor-pointer transition-all shadow-[0_0_15px_rgba(234,179,8,0.05)] hover:shadow-[0_0_20px_rgba(234,179,8,0.1)] flex items-center justify-center gap-2 group"
+                                    onclick="document.getElementById('enrollment-list-file').click()">
+                                    <i
+                                        class="fa-solid fa-camera text-yellow-500 group-hover:scale-110 transition-transform"></i>
+                                    <span class="text-[13px] font-bold text-yellow-500">Scan Handwritten List
+                                        Instead</span>
+                                    <input type="file" id="enrollment-list-file" accept="image/*, .pdf" class="hidden"
+                                        onchange="document.getElementById('enrollment-file-label').innerText = this.files[0] ? this.files[0].name : '';">
+                                </div>
+                                <p id="enrollment-file-label"
+                                    class="text-xs text-center text-yellow-400/80 mb-3 font-medium min-h-[16px]"></p>
+
+                                <div id="selective-students-list"
+                                    class="space-y-1 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                    <div class="p-4 text-center text-sm text-yellow-500/60 font-medium">Select a class
+                                        and subject first to view students.</div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Smart Mode Toggle -->
@@ -651,7 +716,7 @@
                             <div id="smart-instruction-wrapper" class="hidden mt-3 animation-fade-in relative w-full">
                                 <textarea id="smart-instruction-input" rows="2"
                                     class="w-full p-3 bg-black/40 border border-indigo-500/30 rounded-lg text-white text-xs outline-none placeholder:text-muted-foreground/50 focus:border-indigo-400 focus:bg-black/60 transition-all font-bold tracking-wide resize-none"
-                                    placeholder="e.g., 'Scores are written in red at the top right corner'"></textarea>
+                                    placeholder="e.g., 'The final score is circled in red ink at the top of the page'"></textarea>
                             </div>
                         </div>
 
@@ -661,18 +726,18 @@
                                 would you like to add scores?</h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <button id="btn-start-camera" type="button"
-                                    class="entry-card bg-black/40 hover:bg-primary/20 border border-white/10 hover:border-primary/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-glow relative overflow-hidden h-full">
+                                    class="entry-card holographic btn-3d magnetic bg-black/40 hover:bg-primary/10 border border-white/10 hover:border-primary/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-glow relative overflow-hidden h-full">
                                     <div
                                         class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-300">
                                         <i class="fa-solid fa-camera text-primary text-xl"></i>
                                     </div>
                                     <span class="font-bold text-[15px] tracking-wide">I Have the Scripts</span>
                                     <span class="text-[11px] text-muted-foreground font-medium">Scan test papers one by
-                                        one.<br>The AI reads name & score.</span>
+                                        line.<br>The AI reads name & score.</span>
                                 </button>
 
                                 <button id="btn-upload-scoresheet" type="button"
-                                    class="entry-card bg-black/40 hover:bg-indigo-500/20 border border-white/10 hover:border-indigo-500/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] relative overflow-hidden h-full">
+                                    class="entry-card holographic btn-3d bg-black/40 hover:bg-indigo-500/10 border border-white/10 hover:border-indigo-500/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] relative overflow-hidden h-full">
                                     <div
                                         class="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-300">
                                         <i class="fa-solid fa-file-invoice text-indigo-400 text-xl"></i>
@@ -786,32 +851,32 @@
                 <div id="thumbnails-container"
                     class="flex overflow-x-auto space-x-3 py-2 mb-6 min-h-[70px] relative z-10 scrollbar-hide"></div>
 
+                <!-- Action Area / Action Zone Divider -->
+                <div class="relative flex justify-center -my-3 z-20 reveal reveal-delay-2">
+                    <button id="btn-process" disabled
+                        class="magnetic holographic shadow-glow-lg bg-card border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:bg-card disabled:holographic-none text-white font-extrabold text-sm uppercase px-10 py-5 rounded-full transition-all active:scale-95 flex items-center justify-center tracking-widest group">
+                        <span
+                            class="absolute inset-0 rounded-full border border-primary/30 group-hover:border-primary/60 transition-colors"></span>
+                        <i
+                            class="fa-solid fa-wand-magic-sparkles mr-2 text-primary group-hover:scale-110 transition-transform"></i>
+                        Grade Scanned Scripts
+                    </button>
+                </div>
+
+                <div id="processing-indicator"
+                    class="hidden text-center mt-8 mb-4 text-primary font-medium flex flex-col items-center justify-center gap-3">
+                    <div class="relative flex items-center justify-center p-2">
+                        <div
+                            class="absolute inset-0 border-2 border-primary/20 border-t-primary rounded-full animate-spin">
+                        </div>
+                        <i class="fa-solid fa-microchip text-primary"></i>
+                    </div>
+                    <span
+                        class="text-xs font-bold tracking-widest uppercase border border-primary/20 bg-primary/10 px-5 py-2 rounded-full shadow-glow">AI
+                        is Grading Papers...</span>
+                </div>
 
             </section>
-
-            <!-- Action Area / Action Zone Divider -->
-            <div class="relative flex justify-center -my-6 z-20 reveal reveal-delay-2">
-                <button id="btn-process" disabled
-                    class="magnetic holographic shadow-glow-lg bg-card border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:bg-card disabled:holographic-none text-white font-extrabold text-sm uppercase px-10 py-5 rounded-full transition-all active:scale-95 flex items-center justify-center tracking-widest group">
-                    <span
-                        class="absolute inset-0 rounded-full border border-primary/30 group-hover:border-primary/60 transition-colors"></span>
-                    <i
-                        class="fa-solid fa-wand-magic-sparkles mr-2 text-primary group-hover:scale-110 transition-transform"></i>
-                    Grade Scanned Scripts
-                </button>
-            </div>
-
-            <div id="processing-indicator"
-                class="hidden text-center mt-12 mb-4 text-primary font-medium flex flex-col items-center justify-center gap-3">
-                <div class="relative flex items-center justify-center p-2">
-                    <div class="absolute inset-0 border-2 border-primary/20 border-t-primary rounded-full animate-spin">
-                    </div>
-                    <i class="fa-solid fa-microchip text-primary"></i>
-                </div>
-                <span
-                    class="text-xs font-bold tracking-widest uppercase border border-primary/20 bg-primary/10 px-5 py-2 rounded-full shadow-glow">AI
-                    is Grading Papers...</span>
-            </div>
 
             <!-- Step 2: Review Area -->
             <section id="review-section"
@@ -989,56 +1054,6 @@
         </div>
     </div>
 
-    <!-- Modal: Selective Enrollment -->
-    <div id="selective-enrollment-modal"
-        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm items-center justify-center p-4 transition-all duration-300 opacity-0">
-        <div
-            class="bg-card w-full max-w-md rounded-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
-            <div
-                class="px-6 py-4 border-b border-primary/20 flex justify-between items-center bg-black/40 relative overflow-hidden shrink-0">
-                <div class="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent pointer-events-none"></div>
-                <h3 class="text-lg font-heading font-bold text-white tracking-tight flex items-center relative z-10"><i
-                        class="fa-solid fa-users-viewfinder text-primary mr-3 text-xl drop-shadow-glow"></i> Selective
-                    Subject</h3>
-                <button id="btn-close-selective-modal"
-                    class="text-muted-foreground hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5 relative z-10"><i
-                        class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-
-            <div class="p-6 md:p-8 overflow-y-auto flex-1">
-                <div class="space-y-1.5 focus-within:z-20 relative border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors rounded-xl p-6 border-dashed cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.05)] group flex flex-col items-center justify-center mb-6"
-                    onclick="document.getElementById('enrollment-list-file').click()">
-                    <i
-                        class="fa-solid fa-wand-magic-sparkles text-3xl text-primary/80 mb-2 group-hover:scale-110 transition-transform"></i>
-                    <p class="text-[11px] font-bold text-white uppercase tracking-widest relative z-10">Model
-                        Auto-Extract Handwritten List</p>
-                    <p class="text-xs text-muted-foreground mt-1 text-center max-w-[80%] relative z-10"
-                        id="enrollment-file-label">Snap a photo of the handwritten list.</p>
-                    <input type="file" id="enrollment-list-file" accept="image/*, .pdf" class="hidden"
-                        onchange="document.getElementById('enrollment-file-label').innerText = this.files[0] ? this.files[0].name : 'Snap a photo of the handwritten list.';">
-                </div>
-
-                <div class="space-y-1.5 focus-within:z-20 relative">
-                    <label
-                        class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 mb-2">Class
-                        Roster</label>
-                    <div class="bg-black/40 border border-white/10 rounded-xl max-h-48 overflow-y-auto p-2"
-                        id="selective-students-list">
-                        <div class="p-4 text-center text-sm text-muted-foreground">Select a class first to view
-                            students.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="p-6 border-t border-white/5 bg-black/20 shrink-0">
-                <button type="button" id="btn-save-selective"
-                    class="bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl w-full transition-all shadow-glow flex items-center justify-center gap-2 group text-sm tracking-widest uppercase"><i
-                        class="fa-solid fa-check group-hover:scale-110 transition-transform"></i> Save
-                    Configuration</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Modal: Upload Excel Score Sheet (Resume Grading) -->
     <div id="upload-xlsx-modal"
         class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm items-center justify-center p-4 transition-all duration-300 opacity-0 font-sans">
@@ -1050,7 +1065,7 @@
                 </div>
                 <h3 class="text-lg font-heading font-bold text-white tracking-tight flex items-center relative z-10"><i
                         class="fa-solid fa-file-excel text-emerald-400 mr-3 text-xl drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]"></i>
-                    Upload Excel Result</h3>
+                    Update Score List</h3>
                 <button id="btn-close-xlsx-modal"
                     class="text-muted-foreground hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5 relative z-10"><i
                         class="fa-solid fa-xmark text-lg"></i></button>
@@ -1077,8 +1092,9 @@
             <div class="p-6 border-t border-white/5 bg-black/20 shrink-0">
                 <button type="button" id="btn-submit-xlsx"
                     class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl w-full transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2 group text-sm tracking-widest uppercase"><i
-                        class="fa-solid fa-magnifying-glass-chart group-hover:scale-110 transition-transform"></i> Parse
-                    Scorelist</button>
+                        class="fa-solid fa-magnifying-glass-chart group-hover:scale-110 transition-transform"></i>
+                    Update
+                    Score List</button>
                 <div id="xlsx-msg"
                     class="text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-white">
                 </div>
@@ -1326,6 +1342,11 @@
                 showToast('Please select a Subject first.', 'warning');
                 return;
             }
+            const assessmentSelect = document.getElementById('assessment-type');
+            if (!assessmentSelect || !assessmentSelect.value || assessmentSelect.value === '') {
+                showToast('Please select an Assessment Type first.', 'warning');
+                return;
+            }
 
             // Apply a loading state
             btnStartCamera.disabled = true;
@@ -1480,7 +1501,29 @@
                 }
             } catch (err) {
                 console.error("Error accessing camera:", err);
-                loadingIndicator.innerHTML = `Error: Cannot access camera. <br/><span class="text-xs opacity-70 mt-2 block font-normal">Ensure permissions are granted.</span>`;
+                loadingIndicator.classList.add('hidden');
+
+                // Show a visible error message on the screen instead of just text
+                const vc = document.getElementById('video-container');
+                vc.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full p-8 text-center bg-black/80 rounded-2xl border border-destructive/30 backdrop-blur-sm m-4">
+                        <div class="w-20 h-20 rounded-full bg-destructive/20 flex items-center justify-center mb-4 border border-destructive/40 shadow-[0_0_30px_rgba(239,68,68,0.3)]">
+                            <i class="fa-solid fa-camera-slash text-destructive text-3xl"></i>
+                        </div>
+                        <h3 class="text-white text-xl font-bold mb-2 tracking-wide">Camera Access Failed</h3>
+                        <p class="text-sm text-destructive/90 mb-6 font-medium max-w-sm">We couldn't access your camera. Please check your browser permissions or ensure a camera is connected.</p>
+                        
+                        <div class="bg-black/50 rounded-lg p-3 w-full border border-white/5 mb-6 text-left">
+                            <p class="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Technical Details</p>
+                            <p class="text-xs text-white/70 font-mono">${err.name || 'Error'}: ${err.message}</p>
+                        </div>
+                        
+                        <button onclick="location.reload()" class="magnetic w-full py-3.5 bg-destructive/20 text-destructive border border-destructive/30 rounded-xl hover:bg-destructive/30 transition-all font-bold tracking-widest text-sm uppercase shadow-inner">
+                            <i class="fa-solid fa-rotate-right mr-2 group-hover:rotate-180 transition-transform duration-500"></i>Reload Page
+                        </button>
+                    </div>
+                `;
+                showToast("Camera access denied or unavailable.", "error", 6000);
             }
         }
 
@@ -1513,6 +1556,29 @@
         });
 
         // Capture Image
+        function compressImage(base64Str, maxWidth = 1200, quality = 0.85) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.src = base64Str;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxWidth) {
+                        height = Math.floor(height * (maxWidth / width));
+                        width = maxWidth;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+            });
+        }
+
         function captureFrame() {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const rawBase64 = canvas.toDataURL('image/jpeg', 0.9); // Capture at high quality first
@@ -1770,8 +1836,10 @@
         btnProcess.addEventListener('click', async () => {
             if (imagesBatch.length === 0) return;
 
+            const originalHtml = btnProcess.innerHTML;
             btnProcess.disabled = true;
             btnCapture.disabled = true;
+            btnProcess.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Grading Scanned Scripts...`;
             processingIndicator.classList.remove('hidden');
 
             try {
@@ -1903,8 +1971,10 @@
             } catch (err) {
                 console.error("Processing error:", err);
                 showToast(`Error processing images: ${err.message}`, 'error');
+                btnProcess.innerHTML = originalHtml;
                 btnProcess.disabled = false;
                 btnCapture.disabled = false;
+                processingIndicator.classList.add('hidden');
                 reviewSection.classList.add('hidden');
                 captureSection.classList.remove('hidden');
             } finally {
@@ -2144,10 +2214,18 @@
         // 21st.dev Premium Animations
 
         function triggerRevealObserver() {
+            // Initially hide elements so they can be revealed
+            document.querySelectorAll('.reveal').forEach(el => {
+                if (!el.classList.contains('visible')) {
+                    el.classList.add('reveal-initial');
+                }
+            });
+
             const observerOptions = { root: null, rootMargin: '0px', threshold: 0.1 };
             const observer = new IntersectionObserver((entries, observer) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
+                        entry.target.classList.remove('reveal-initial');
                         entry.target.classList.add('visible');
                     }
                 });
@@ -2155,7 +2233,10 @@
 
             document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
             setTimeout(() => {
-                document.querySelectorAll('.reveal:not(.hidden)').forEach(el => el.classList.add('visible'));
+                document.querySelectorAll('.reveal:not(.hidden)').forEach(el => {
+                    el.classList.remove('reveal-initial');
+                    el.classList.add('visible');
+                });
             }, 100);
         }
 
@@ -2260,6 +2341,12 @@
                 setTimeout(() => {
                     pasteModal.classList.remove('opacity-0');
                     pasteModal.querySelector('div').classList.remove('scale-95');
+                    pasteModal.querySelector('div').classList.add('scale-100');
+
+                    // Show helpful instruction
+                    setTimeout(() => {
+                        showToast('Tip: For 100% handwriting accuracy, please provide the COMPLETE comprehensive student list for this class.', 'info', 6000);
+                    }, 500);
                 }, 10);
 
                 pasteRawText.focus();
@@ -2268,6 +2355,7 @@
             const closePasteModal = () => {
                 pasteModal.classList.add('opacity-0');
                 pasteModal.querySelector('div').classList.add('scale-95');
+                pasteModal.querySelector('div').classList.remove('scale-100');
                 setTimeout(() => {
                     pasteModal.classList.add('hidden');
                     pasteModal.classList.remove('flex');
@@ -2284,12 +2372,28 @@
                 const rawText = pasteRawText.value.trim();
 
                 if (!targetClass) {
-                    alert('Please enter a Target Class.');
+                    showToast('Please enter a Target Class.', 'warning');
                     pasteTargetClass.focus();
                     return;
                 }
+
+                // Smart validation: Enforce section letters, e.g., "SS1" is bad, "SS1 A" is good.
+                // It should have at least one letter and one number, and more than 3 characters usually,
+                // or just explicitly check if it ends with a number.
+                const hasLetters = /[a-zA-Z]/.test(targetClass);
+                const hasNumbers = /[0-9]/.test(targetClass);
+
+                if (hasLetters && hasNumbers) {
+                    // If it ends with a number, usually it's missing a section, e.g., "SS 1"
+                    if (/\d$/.test(targetClass)) {
+                        showToast('Please specify the class section (e.g. use "SS1 A" or "JSS3 B" instead of just "SS1")', 'warning', 6000);
+                        pasteTargetClass.focus();
+                        return;
+                    }
+                }
+
                 if (!rawText) {
-                    alert('Please paste the list of student names.');
+                    showToast('Please paste the complete list of student names.', 'warning');
                     pasteRawText.focus();
                     return;
                 }
@@ -2403,6 +2507,14 @@
                 } else {
                     customAssessmentWrapper.classList.add('hidden');
                 }
+
+                // Show enrollment section once assessment is selected
+                if (e.target.value) {
+                    const enrollmentSection = document.getElementById('enrollment-section');
+                    if (enrollmentSection) {
+                        enrollmentSection.classList.remove('hidden');
+                    }
+                }
             });
         }
 
@@ -2440,17 +2552,23 @@
 
         if (btnEnrollGeneral && btnEnrollSelective) {
             btnEnrollGeneral.addEventListener('click', () => {
-                btnEnrollGeneral.className = "relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-white bg-primary/20 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
-                btnEnrollSelective.className = "relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-muted-foreground hover:text-white";
+                btnEnrollGeneral.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 border-r border-white/10 text-white bg-primary/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]";
+                btnEnrollSelective.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 text-muted-foreground hover:text-white";
                 document.getElementById('enrollment-desc').textContent = "All students take this subject";
+
+                const inlineContainer = document.getElementById('selective-inline-container');
+                if (inlineContainer) {
+                    inlineContainer.classList.add('hidden');
+                }
             });
             btnEnrollSelective.addEventListener('click', () => {
-                btnEnrollSelective.className = "relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-white bg-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.3)] text-yellow-400";
-                btnEnrollGeneral.className = "relative z-10 px-4 py-1.5 text-xs font-bold rounded-md transition-all text-muted-foreground hover:text-white";
+                btnEnrollSelective.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 text-yellow-500 bg-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.2)]";
+                btnEnrollGeneral.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 border-r border-white/10 text-muted-foreground hover:text-white";
                 document.getElementById('enrollment-desc').textContent = "Only selected students take this";
-                if (selectiveModal) {
-                    selectiveModal.classList.remove('hidden');
-                    selectiveModal.classList.add('flex');
+
+                const inlineContainer = document.getElementById('selective-inline-container');
+                if (inlineContainer) {
+                    inlineContainer.classList.remove('hidden');
                     loadSelectiveStudents();
                 }
             });
@@ -2514,8 +2632,8 @@
                 students.forEach(student => {
                     const isChecked = enrolledIds.includes(student.id) ? 'checked' : '';
                     html += `
-                        <label class="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg cursor-pointer transition-colors border-b border-white/5 last:border-0">
-                            <input type="checkbox" class="selective-student-checkbox h-5 w-5 rounded border-white/20 bg-black/40 text-primary focus:ring-primary focus:ring-offset-background" value="${student.id}" data-name="${student.name}" ${isChecked}>
+                        <label class="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg cursor-pointer transition-colors border-b border-white/5 last:border-0 border-yellow-500/10">
+                            <input type="checkbox" class="selective-student-checkbox h-5 w-5 rounded border-yellow-500/30 bg-black/40 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-background" value="${student.id}" data-name="${student.name}" ${isChecked} onchange="saveSelectiveEnrollment(this)">
                             <span class="text-sm font-medium text-white">${student.name}</span>
                         </label>
                      `;
@@ -2528,53 +2646,34 @@
             }
         }
 
-        const btnSaveSelective = document.getElementById('btn-save-selective');
-        if (btnSaveSelective) {
-            btnSaveSelective.addEventListener('click', async () => {
-                const listContainer = document.getElementById('selective-students-list');
-                const classId = listContainer.dataset.classId;
-                const sn = document.getElementById('subject-name').value === 'custom'
-                    ? document.getElementById('custom-subject').value.trim()
-                    : document.getElementById('subject-name').value;
+        async function saveSelectiveEnrollment(checkboxElement) {
+            const listContainer = document.getElementById('selective-students-list');
+            const classId = listContainer.dataset.classId;
+            const sn = document.getElementById('subject-name').value === 'custom'
+                ? document.getElementById('custom-subject').value.trim()
+                : document.getElementById('subject-name').value;
 
-                if (!classId || !sn) {
-                    showToast('Invalid class or subject configuration.', 'error');
-                    return;
+            if (!classId || !sn) return;
+
+            const checkboxes = document.querySelectorAll('.selective-student-checkbox:checked');
+            const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+            try {
+                const res = await fetch('/api/enrollments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        class_id: parseInt(classId),
+                        subject_name: sn,
+                        student_ids: selectedIds
+                    })
+                });
+                if (!res.ok) {
+                    showToast('Failed to auto-save enrollment', 'error');
                 }
-
-                const checkboxes = listContainer.querySelectorAll('.selective-student-checkbox');
-                const studentIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => parseInt(cb.value));
-
-                const origHtml = btnSaveSelective.innerHTML;
-                btnSaveSelective.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...';
-
-                try {
-                    const res = await fetch('/api/enrollments', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            class_id: classId,
-                            subject_name: sn,
-                            student_ids: studentIds
-                        })
-                    });
-
-                    if (!res.ok) throw new Error("Failed to save enrollments");
-
-                    btnSaveSelective.innerHTML = '<i class="fa-solid fa-check"></i> Saved successfully!';
-                    setTimeout(() => {
-                        const selectiveModal = document.getElementById('selective-enrollment-modal');
-                        if (selectiveModal) {
-                            selectiveModal.classList.remove('flex');
-                            selectiveModal.classList.add('hidden');
-                        }
-                        btnSaveSelective.innerHTML = origHtml;
-                    }, 1000);
-                } catch (err) {
-                    showToast(err.message, 'error');
-                    btnSaveSelective.innerHTML = origHtml;
-                }
-            });
+            } catch (err) {
+                console.error("Save selective error:", err);
+            }
         }
 
         const enrollmentListFile = document.getElementById('enrollment-list-file');
@@ -2670,125 +2769,194 @@
                     return;
                 }
 
-                // ... (existing logic truncated for brevity but preserved) ...
-                // Note: I'm keeping the core logic but ensuring whats-next-block shows up
-            });
-        }
+                const file = scoresheetFile.files[0];
+                const targetClass = document.getElementById('target-class').value;
 
-        // --- EXCEL UPLOAD LOGIC ---
-        const btnSubmitXlsx = document.getElementById('btn-submit-xlsx');
-        const xlsxFile = document.getElementById('xlsx-file');
-        const xlsxMsg = document.getElementById('xlsx-msg');
-        const btnCloseXlsxModal = document.getElementById('btn-close-xlsx-modal');
-
-        if (btnCloseXlsxModal) {
-            btnCloseXlsxModal.addEventListener('click', () => {
-                const xModal = document.getElementById('upload-xlsx-modal');
-                if (xModal) {
-                    xModal.classList.add('hidden');
-                    xModal.classList.remove('flex');
-                }
-            });
-        }
-
-        if (btnSubmitXlsx) {
-            btnSubmitXlsx.addEventListener('click', async () => {
-                if (!xlsxFile.files || xlsxFile.files.length === 0) {
-                    xlsxMsg.textContent = "Please select an Excel or CSV file.";
-                    xlsxMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-yellow-500";
+                if (!targetClass) {
+                    showToast("Please select a target class before uploading.", "warning");
                     return;
                 }
 
-                btnSubmitXlsx.disabled = true;
-                const originalHtml = btnSubmitXlsx.innerHTML;
-                btnSubmitXlsx.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Parsing...`;
-                xlsxMsg.textContent = "Analyzing your scorelist...";
-                xlsxMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-emerald-300";
-
-                const formData = new FormData();
-                formData.append('file', xlsxFile.files[0]);
+                // UI Loading State
+                const originalHtml = btnSubmitScoresheet.innerHTML;
+                btnSubmitScoresheet.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Processing Image...`;
+                btnSubmitScoresheet.disabled = true;
 
                 try {
+                    const base64Data = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+                        reader.onerror = (e) => reject(e);
+                        reader.readAsDataURL(file);
+                    });
+
+                    const response = await fetch('/upload-scoresheet', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            image: base64Data,
+                            targetClass: targetClass
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.error || "Upload failed");
+                    }
+
+                    // Success
+                    showToast(`Successfully extracted ${result.records ? result.records.length : 0} student records.`, "success");
+
+                    // Add records to extractedData state for review
+                    result.records.forEach(r => {
+                        // Formatting the data to match the expected structure
+                        if (r.scores) {
+                            // If multiple assessments were found, we might want to just grab the first one for the standard flow,
+                            // or ideally map them if the UI supports it. Let's map the first score found to the default.
+                            const subjectKeys = Object.keys(r.scores);
+                            let primaryScore = "";
+                            if (subjectKeys.length > 0) {
+                                primaryScore = r.scores[subjectKeys[0]];
+                            }
+                            extractedData.push({
+                                name: r.name || "Name not recognized",
+                                class: targetClass,
+                                score: primaryScore || "0",
+                                confidence: r.confidence || "High",
+                                // keep raw scores attached for advanced saving
+                                _rawScores: r.scores
+                            });
+                        } else {
+                            extractedData.push({
+                                name: r.name || "Name not recognized",
+                                class: targetClass,
+                                score: r.score || "0",
+                                confidence: r.confidence || "High"
+                            });
+                        }
+                    });
+
+                    // Update UI analytics
+                    if (typeof updateAnalytics === 'function') {
+                        updateAnalytics();
+                    }
+
+                    // Close modal
+                    const uModal = document.getElementById('upload-scoresheet-modal');
+                    if (uModal) {
+                        uModal.classList.remove('flex');
+                        uModal.classList.add('hidden');
+                    }
+
+                    // Show Review UI
+                    document.getElementById('landing-section').classList.add('hidden');
+                    document.getElementById('capture-section').classList.remove('hidden');
+                    openReviewModal(extractedData.length - 1); // Open the last item to review
+
+                } catch (err) {
+                    console.error("Upload scoresheet error:", err);
+                    showToast(err.message || "Failed to process score list.", "error");
+                } finally {
+                    btnSubmitScoresheet.innerHTML = originalHtml;
+                    btnSubmitScoresheet.disabled = false;
+                }
+            });
+        }
+
+        const btnSubmitXlsx = document.getElementById('btn-submit-xlsx');
+        if (btnSubmitXlsx) {
+            btnSubmitXlsx.addEventListener('click', async () => {
+                const xlsxFile = document.getElementById('xlsx-file');
+                if (!xlsxFile || !xlsxFile.files || xlsxFile.files.length === 0) {
+                    showToast("Please select an Excel or CSV file first.", "warning");
+                    return;
+                }
+
+                // UI Loading State
+                const originalHtml = btnSubmitXlsx.innerHTML;
+                btnSubmitXlsx.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Parsing...`;
+                btnSubmitXlsx.disabled = true;
+
+                try {
+                    const formData = new FormData();
+                    formData.append('file', xlsxFile.files[0]);
+
                     const response = await fetch('/api/upload-excel-scorelist', {
                         method: 'POST',
                         body: formData
                     });
 
                     const result = await response.json();
-                    if (!response.ok) throw new Error(result.error || "Failed to parse file");
 
-                    xlsxMsg.textContent = `Success! Read ${result.records.length} records.`;
-                    xlsxMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-emerald-400";
+                    if (!response.ok) {
+                        throw new Error(result.error || "Excel upload failed");
+                    }
 
-                    setTimeout(() => {
-                        const xModal = document.getElementById('upload-xlsx-modal');
-                        xModal.classList.add('hidden');
-                        xModal.classList.remove('flex');
+                    // Success
+                    showToast(`Successfully extracted ${result.records ? result.records.length : 0} student records.`, "success");
 
-                        // Switch to review section
-                        document.getElementById('start-section').classList.add('hidden');
-                        document.getElementById('capture-section').classList.add('hidden');
-                        document.getElementById('review-section').classList.remove('hidden');
-                        setTimeout(() => document.getElementById('review-section').classList.add('visible'), 50);
-
-                        tbody.innerHTML = '';
-                        extractedData = [];
-
-                        // Smart Context Detection
-                        if (result.detected_subject) {
-                            const sj = document.getElementById('subject-name');
-                            const csj = document.getElementById('custom-subject');
-                            const csjw = document.getElementById('custom-subject-wrapper');
-                            if (sj && csj && csjw) {
-                                sj.value = 'custom';
-                                csjw.classList.remove('hidden');
-                                csj.value = result.detected_subject;
+                    // Set target class drop-down if detected
+                    if (result.detected_class) {
+                        const tcDropdown = document.getElementById('target-class');
+                        if (tcDropdown) {
+                            // try to select it if it exists
+                            let optionExists = Array.from(tcDropdown.options).some(opt => opt.value === result.detected_class);
+                            if (optionExists) {
+                                tcDropdown.value = result.detected_class;
+                            } else {
+                                // Add and select it temporarily
+                                const newOpt = new Option(result.detected_class, result.detected_class);
+                                tcDropdown.add(newOpt);
+                                tcDropdown.value = result.detected_class;
                             }
                         }
-                        if (result.detected_class && targetClassSelect) {
-                            let found = false;
-                            for (let opt of targetClassSelect.options) {
-                                if (opt.value.toLowerCase() === result.detected_class.toLowerCase()) {
-                                    targetClassSelect.value = opt.value;
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (!found) {
-                                const newOpt = new Option(result.detected_class, result.detected_class, true, true);
-                                targetClassSelect.add(newOpt);
-                            }
+                    }
+
+                    // Map result to the review table exactly like the camera scans do
+                    result.records.forEach(r => {
+                        let primaryScore = "0";
+                        if (r.scores) {
+                            const subjectKeys = Object.keys(r.scores);
+                            if (subjectKeys.length > 0) primaryScore = r.scores[subjectKeys[0]];
                         }
 
-                        // Populate records
-                        result.records.forEach((rec, idx) => {
-                            const firstScore = rec.scores ? (Object.values(rec.scores)[0] || '') : '';
-                            const item = {
-                                name: rec.name,
-                                class: rec.class || '',
-                                score: firstScore,
-                                confidence: 'high'
-                            };
-                            extractedData.push(item);
-                            renderSingleRow(item, idx);
+                        extractedData.push({
+                            name: r.name || "Name not recognized",
+                            class: r.class || result.detected_class || "Unknown",
+                            score: primaryScore || "0",
+                            confidence: "Verified", // Came from typed excel so it's 100%
+                            _rawScores: r.scores
                         });
+                    });
 
-                        // Show "What's Next" block immediately for Excel uploads
-                        const nextBlock = document.getElementById('whats-next-block');
-                        if (nextBlock) nextBlock.classList.remove('hidden');
+                    // Update UI analytics
+                    if (typeof updateAnalytics === 'function') {
+                        updateAnalytics();
+                    }
 
-                    }, 800);
+                    // Close modal
+                    const xModal = document.getElementById('upload-xlsx-modal');
+                    if (xModal) {
+                        xModal.classList.remove('flex');
+                        xModal.classList.add('opacity-0');
+                        setTimeout(() => xModal.classList.add('hidden'), 300);
+                    }
+
+                    // Show Review UI
+                    document.getElementById('landing-section').classList.add('hidden');
+                    document.getElementById('capture-section').classList.remove('hidden');
+                    openReviewModal(extractedData.length - 1 || 0);
 
                 } catch (err) {
-                    xlsxMsg.textContent = `Error: ${err.message}`;
-                    xlsxMsg.className = "text-xs text-center font-bold mt-4 tracking-wide w-full max-w-full truncate px-2 text-destructive";
+                    console.error("Excel upload error:", err);
+                    showToast(err.message || "Failed to parse Excel list.", "error");
                 } finally {
-                    btnSubmitXlsx.disabled = false;
                     btnSubmitXlsx.innerHTML = originalHtml;
+                    btnSubmitXlsx.disabled = false;
                 }
             });
         }
-
 
         function initScrollProgress() {
             const progressBar = document.getElementById('scroll-progress');
@@ -2859,68 +3027,6 @@
             nextBlock.classList.remove('hidden');
         }
 
-        function handleStartExcelUpload(input) {
-            if (!input.files || input.files.length === 0) return;
-            const file = input.files[0];
-
-            // Re-use logic from btnSubmitXlsx
-            const btnStart = document.querySelector('button[onclick="document.getElementById(\\'start - excel - upload\\').click()"]');
-            if (btnStart) {
-                btnStart.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Loading roster...`;
-                btnStart.disabled = true;
-            }
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            fetch('/api/upload-excel-scorelist', {
-                method: 'POST',
-                body: formData
-            }).then(response => response.json().then(data => ({ status: response.status, body: data })))
-                .then(result => {
-                    if (result.status !== 200) throw new Error(result.body.error || "Failed to parse file");
-
-                    // Hide start, show review
-                    document.getElementById('start-section').classList.add('hidden');
-                    document.getElementById('capture-section').classList.add('hidden');
-                    document.getElementById('review-section').classList.remove('hidden');
-                    setTimeout(() => document.getElementById('review-section').classList.add('visible'), 50);
-
-                    const tbody = document.getElementById('results-tbody');
-                    tbody.innerHTML = '';
-                    extractedData = [];
-
-                    // Smart context routing (simulate)
-                    result.body.records.forEach((rec, idx) => {
-                        const firstScore = rec.scores ? (Object.values(rec.scores)[0] || '') : '';
-                        const item = {
-                            name: rec.name,
-                            class: rec.class || '',
-                            score: firstScore,
-                            confidence: 'high'
-                        };
-                        extractedData.push(item);
-                        renderSingleRow(item, idx);
-                    });
-
-                    showWhatsNext('excel_upload');
-
-                    // Clear input
-                    input.value = '';
-
-                    if (btnStart) {
-                        btnStart.innerHTML = `< i class="fa-solid fa-file-excel" ></i > Yes, I have my previous score sheet`;
-                        btnStart.disabled = false;
-                    }
-                }).catch(err => {
-                    showToast(`Error: ${err.message}`, 'error');
-                    input.value = '';
-                    if (btnStart) {
-                        btnStart.innerHTML = `< i class="fa-solid fa-file-excel" ></i > Yes, I have my previous score sheet`;
-                        btnStart.disabled = false;
-                    }
-                });
-        }
     </script>
 </body>
 
