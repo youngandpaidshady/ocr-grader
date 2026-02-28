@@ -746,11 +746,73 @@ def export_excel():
         if not sheets_dict:
              # Create an empty template if absolutely no data exists
              sheets_dict['General'] = pd.DataFrame(columns=["Name", "Class", "Total Score", "Position"])
-             
-        # Generate the Excel file
+        # Generate the Excel file with openpyxl for Nigerian Scoresheet formatting
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.utils.dataframe import dataframe_to_rows
+        from openpyxl.utils import get_column_letter
+
         with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
             for s_name, df_sheet in sheets_dict.items():
-                df_sheet.to_excel(writer, sheet_name=s_name, index=False)
+                
+                # Check if this is a general list or a specific subject
+                is_general = s_name == 'General'
+                
+                # If specific, try to parse Class and Subject out of the sheet name
+                class_str = "All"
+                subj_str = "Various"
+                if " - " in s_name:
+                    parts = s_name.split(" - ", 1)
+                    class_str = parts[0]
+                    subj_str = parts[1]
+                
+                # We won't use pandas to_excel directly for the formatting, we write rows manually
+                df_sheet.to_excel(writer, sheet_name=s_name, index=False, startrow=4)
+                
+                worksheet = writer.sheets[s_name]
+                
+                # Row 1: Main Title
+                worksheet.merge_cells('A1:G1')
+                title_cell = worksheet['A1']
+                title_cell.value = "QSI SMART GRADER SCORESHEET"
+                title_cell.font = Font(bold=True, size=16)
+                title_cell.alignment = Alignment(horizontal='center', vertical='center')
+                
+                # Row 2: Class
+                worksheet.merge_cells('A2:E2')
+                class_cell = worksheet['A2']
+                class_cell.value = f"CLASS: {class_str}"
+                class_cell.font = Font(bold=True, size=12)
+                
+                # Row 3: Subject
+                worksheet.merge_cells('A3:E3')
+                subj_cell = worksheet['A3']
+                subj_cell.value = f"SUBJECT: {subj_str}"
+                subj_cell.font = Font(bold=True, size=12)
+                
+                # Style the Data Headers (Row 5)
+                header_font = Font(bold=True)
+                header_fill = PatternFill(start_color="EAEAEA", end_color="EAEAEA", fill_type="solid")
+                for col_idx in range(1, len(df_sheet.columns) + 1):
+                    cell = worksheet.cell(row=5, column=col_idx)
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = Alignment(horizontal='center')
+                    
+                    # Auto-adjust column width
+                    col_letter = get_column_letter(col_idx)
+                    column_header = df_sheet.columns[col_idx - 1]
+                    # Give 'Name' column more space
+                    if column_header == 'Name':
+                        worksheet.column_dimensions[col_letter].width = 30
+                    elif column_header == 'Class':
+                        worksheet.column_dimensions[col_letter].width = 15
+                    else:
+                        worksheet.column_dimensions[col_letter].width = 12
+                        
+                # Center align all data cells for numbers/scores
+                for row in worksheet.iter_rows(min_row=6, max_row=worksheet.max_row, min_col=3, max_col=worksheet.max_column):
+                    for cell in row:
+                        cell.alignment = Alignment(horizontal='center')
                 
         return jsonify({"message": "Successfully mapped grades to Database and generated Active Sheet."}), 200
 
