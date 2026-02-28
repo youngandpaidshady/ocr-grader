@@ -709,6 +709,25 @@ def export_excel():
                     
                 df = pd.DataFrame(data_rows)
                 
+                # Enforce a strictly curated column order for better readability
+                pref_order = ['Name', 'Class', '1st CA', '2nd CA', 'Assignment', 'Open Day', 'Exam']
+                existing_cols = list(df.columns)
+                custom_cols = [c for c in existing_cols if c not in pref_order and c not in ['Total Score', 'Position', 'Rank']]
+                
+                final_cols = []
+                # 1. Preferred known columns in exact order
+                for c in pref_order:
+                    if c in existing_cols:
+                        final_cols.append(c)
+                # 2. Any dynamically added custom assessment types
+                final_cols.extend(custom_cols)
+                # 3. Always pin Total Score to the end
+                if 'Total Score' in existing_cols: 
+                    final_cols.append('Total Score')
+                
+                # Apply the reordering
+                df = df[final_cols]
+                
                 # Ranking
                 df['Rank'] = df['Total Score'].rank(method='min', ascending=False)
                 
