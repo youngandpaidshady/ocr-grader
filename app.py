@@ -746,12 +746,16 @@ def download_sheet():
     """Returns the compiled Excel file to the user."""
     if os.path.exists(WORKING_EXCEL_PATH):
         try:
-            return send_file(
+            response = make_response(send_file(
                 WORKING_EXCEL_PATH, 
                 as_attachment=True, 
                 download_name="OCR_Graded_Results.xlsx",
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            ))
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            return response
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     else:
