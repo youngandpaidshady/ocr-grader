@@ -1,0 +1,5 @@
+  File "app.py", line 324
+    known_names_text = f"\n\nCRITICAL INSTRUCTION: You are grading papers for class '{c.name}'. Here is the authoritative list of known student names in this class: {roster_names}. If the handwritten name on the paper resembles any of these, you MUST output the exact spelling from this list. Do not invent new names."
+                                                                                                                                                                                                                                                                                                                             ^
+SyntaxError: invalid syntax
+

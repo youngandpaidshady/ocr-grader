@@ -16,10 +16,10 @@ load_dotenv()
 # Active working file path configured globally
 WORKING_EXCEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ActiveRoaster.xlsx")
 
-# Configure Gemini AI
+# Configure AI Model
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key or api_key == "your_gemini_api_key_here":
-    print("WARNING: GEMINI_API_KEY is not set correctly in .env file.")
+    print("WARNING: API key is not set correctly in .env file.")
 
 genai.configure(api_key=api_key)
 
@@ -72,7 +72,7 @@ with app.app_context():
         db.session.rollback()
         pass
 
-# The prompt instructions for Gemini
+# The prompt instructions for the AI model
 SYSTEM_PROMPT = """
 You are an expert OCR Assistant helping a teacher grade test scripts.
 I will provide you with images of handwritten test scripts. 
@@ -102,6 +102,68 @@ Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like ```
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/api/recent-sessions', methods=['GET'])
+def recent_sessions():
+    """Returns classes with student counts and existing assessment types for the landing page."""
+    try:
+        classes = ClassModel.query.order_by(ClassModel.name).all()
+        sessions = []
+        seen_names = set()
+        for c in classes:
+            normalized = c.name.lower().replace(" ", "")
+            if normalized in seen_names:
+                continue
+            seen_names.add(normalized)
+            
+            student_count = StudentModel.query.filter_by(class_id=c.id).count()
+            if student_count == 0:
+                continue
+                
+            # Find unique subjects and assessment types for this class
+            students = StudentModel.query.filter_by(class_id=c.id).all()
+            student_ids = [s.id for s in students]
+            scores = ScoreModel.query.filter(ScoreModel.student_id.in_(student_ids)).all()
+            
+            subjects = {}
+            for score in scores:
+                subj = score.subject_name or 'Uncategorized'
+                if subj not in subjects:
+                    subjects[subj] = set()
+                subjects[subj].add(score.assessment_type)
+            
+            if subjects:
+                for subj, assessments in subjects.items():
+                    sessions.append({
+                        "class_id": c.id,
+                        "class_name": c.name,
+                        "subject": subj,
+                        "student_count": student_count,
+                        "existing_assessments": sorted(list(assessments)),
+                        "suggested_next": suggest_next_assessment(sorted(list(assessments)))
+                    })
+            else:
+                sessions.append({
+                    "class_id": c.id,
+                    "class_name": c.name,
+                    "subject": None,
+                    "student_count": student_count,
+                    "existing_assessments": [],
+                    "suggested_next": "1st CA"
+                })
+        
+        return jsonify(sessions), 200
+    except Exception as e:
+        print("Error fetching recent sessions: {}".format(e))
+        return jsonify([]), 200
+
+def suggest_next_assessment(existing):
+    """Suggest the next logical assessment type based on what already exists."""
+    order = ["1st CA", "2nd CA", "Exam"]
+    for a in order:
+        if a not in existing:
+            return a
+    return "Score"
 
 @app.route('/api/classes', methods=['GET', 'POST'])
 def handle_classes():
@@ -360,7 +422,7 @@ Use the following JSON schema:
 Return ONLY the raw JSON object. DO NOT wrap it in markdown block quotes like ```json ... ```.
 """.format(roster_context)
 
-        # Process with Gemini
+        # Process with AI model
         model = genai.GenerativeModel('gemini-2.5-flash')
         contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
         
@@ -413,14 +475,14 @@ def upload_batch():
             except Exception as e:
                 print("Error checking known names: {}".format(e))
         
-        # Prepare contents for Gemini
+        # Prepare contents for AI model
         dynamic_prompt = SYSTEM_PROMPT + known_names_text
 
         if smart_instruction:
             dynamic_prompt += f"\n\n--- TEACHER'S CUSTOM SMART INSTRUCTION ---\n{smart_instruction}\n--- END OF CUSTOM INSTRUCTION ---\nYou MUST strictly obey the above manual instruction given by the teacher when processing these images and finalizing the output JSON."
         
         # Concurrent processing: split images into chunks and process in parallel
-        CHUNK_SIZE = 3  # Process 3 images per Gemini call for optimal speed/accuracy
+        CHUNK_SIZE = 3  # Process 3 images per model call for optimal speed/accuracy
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Attach global index to each image
@@ -432,7 +494,7 @@ def upload_batch():
             image_chunks.append(indexed_images[i:i + CHUNK_SIZE])
         
         def process_chunk(chunk_indexed_images):
-            """Process a chunk of images through Gemini."""
+            """Process a chunk of images through the AI model."""
             contents = [dynamic_prompt]
             for idx, img_b64 in chunk_indexed_images:
                 if 'base64,' in img_b64:
@@ -450,7 +512,7 @@ def upload_batch():
             try:
                 results = json.loads(response_text.strip())
             except Exception as e:
-                print("Error parsing JSON from Gemini: {}".format(e))
+                print("Error parsing JSON from model: {}".format(e))
                 results = []
                 
             # Map back the global index to the result
@@ -517,7 +579,7 @@ def export_excel():
             
         results = data['results']
         assessment_type = data.get('assessmentType', 'Score').strip()
-        subject_name = data.get('subjectType', 'Uncategorized').strip()
+        subject_name = data.get('subjectType', data.get('subjectName', 'Uncategorized')).strip()
         if not assessment_type:
             assessment_type = 'Score'
         if not subject_name:
@@ -610,7 +672,10 @@ def export_excel():
                 filtered_students = [s for s in all_students if s.id in valid_student_ids]
                 
                 for s in filtered_students:
-                    row = {'Name': s.name}
+                    row = {
+                        'Name': s.name,
+                        'Class': c.name # Explicitly add Class column to fix the "Class column is broken" issue
+                    }
                     scores = ScoreModel.query.filter_by(student_id=s.id, subject_name=subj).all()
                     
                     if not scores and enrollments:
@@ -685,6 +750,104 @@ def download_sheet():
             return jsonify({"error": str(e)}), 500
     else:
         return jsonify({"error": "No active sheet found. Start a batch first."}), 404
+
+@app.route('/api/upload-excel-scorelist', methods=['POST'])
+def upload_excel_scorelist():
+    """Smart parser for Excel scorelists to allow teachers to resume grading or bulk upload."""
+    try:
+        file = request.files.get('file')
+        if not file:
+            return jsonify({"error": "No file provided"}), 400
+            
+        if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+            return jsonify({"error": "Only Excel or CSV files are supported"}), 400
+
+        # Read Excel/CSV
+        if file.filename.lower().endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+
+        # --- Smart Detection Logic ---
+        
+        # 1. Detect Name Column
+        name_col = None
+        for col in df.columns:
+            if 'name' in str(col).lower():
+                name_col = col
+                break
+        if not name_col and not df.empty:
+            name_col = df.columns[0] # Fallback to first column
+        
+        if not name_col:
+            return jsonify({"error": "Could not identify a 'Name' column in the sheet."}), 400
+
+        # 2. Detect Class and Subject Columns
+        class_col = None
+        subj_col = None
+        for col in df.columns:
+            c_low = str(col).lower()
+            if 'class' in c_low: class_col = col
+            if 'subject' in c_low: subj_col = col
+
+        # 3. Detect Assessment types (any column that isn't name, class, subject, total, or pos)
+        exclude = [name_col, class_col, subj_col, 'Total Score', 'Position', 'Rank', 'Total']
+        assessment_types = [col for col in df.columns if col not in exclude and not str(col).startswith('Unnamed')]
+
+        # 4. Extract data
+        records = []
+        detected_class = str(df[class_col].iloc[0]) if class_col and not df.empty else None
+        detected_subject = str(df[subj_col].iloc[0]) if subj_col and not df.empty else None
+
+        for _, row in df.iterrows():
+            name = str(row[name_col]).strip().title()
+            if not name or name.lower() in ['nan', 'none']: 
+                continue
+            
+            scores = {}
+            for atype in assessment_types:
+                val = str(row[atype]).strip()
+                if val and val.lower() not in ['nan', 'none']:
+                    scores[atype] = val
+                    
+            r = {
+                "name": name,
+                "scores": scores,
+                "class": str(row[class_col]).strip() if class_col else detected_class,
+                "subject": str(row[subj_col]).strip() if subj_col else detected_subject
+            }
+            records.append(r)
+
+        # 5. Magic Catch DB Sync: Ensure known names exist for future camera scans
+        if detected_class:
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == detected_class.lower()).first()
+            if not c:
+                c = ClassModel(name=detected_class.title())
+                db.session.add(c)
+                db.session.commit()
+            
+            existing_student_names = [s.name.lower() for s in StudentModel.query.filter_by(class_id=c.id).all()]
+            for r in records:
+                s_name = r['name'].strip()
+                if s_name.lower() not in existing_student_names:
+                    new_student = StudentModel(name=s_name.title(), class_id=c.id)
+                    db.session.add(new_student)
+                    existing_student_names.append(s_name.lower())
+            
+            db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "assessment_types_found": assessment_types,
+            "records": records,
+            "detected_class": detected_class,
+            "detected_subject": detected_subject,
+            "filename": file.filename
+        }), 200
+
+    except Exception as e:
+        print("Excel scorelist upload error: {}".format(e))
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/extract-names', methods=['POST'])
 def extract_names():
