@@ -451,6 +451,52 @@
         class="fixed top-0 left-0 h-1 bg-gradient-to-r from-primary to-accent z-50 transition-all duration-100 origin-left shadow-glow border-b border-primary"
         style="width: 0%;"></div>
 
+    <!-- Fun Full-Screen Loading Overlay -->
+    <div id="grading-loading-overlay"
+        class="fixed inset-0 z-[100] bg-background/95 backdrop-blur-xl hidden flex-col items-center justify-center transition-all duration-500">
+        <div class="relative w-40 h-40 mb-8 flex items-center justify-center">
+            <!-- Outer spinning ring -->
+            <div
+                class="absolute inset-0 border-4 border-primary/20 border-t-primary rounded-full animate-[spin_2s_linear_infinite]">
+            </div>
+            <!-- Inner spinning ring -->
+            <div
+                class="absolute inset-4 border-4 border-emerald-500/20 border-b-emerald-500 rounded-full animate-[spin_1.5s_linear_infinite_reverse]">
+            </div>
+            <!-- Center pulsing icon -->
+            <div class="absolute inset-0 flex items-center justify-center text-5xl">
+                <i
+                    class="fa-solid fa-wand-magic-sparkles text-primary animate-pulse filter drop-shadow-[0_0_15px_rgba(33,150,243,0.8)]"></i>
+            </div>
+            <!-- Floating math symbols for fun -->
+            <i class="fa-solid fa-plus absolute top-0 left-0 text-emerald-400 text-sm animate-bounce"></i>
+            <i class="fa-solid fa-divide absolute bottom-2 right-4 text-purple-400 text-sm animate-pulse"></i>
+            <i class="fa-solid fa-minus absolute top-4 right-2 text-yellow-400 text-sm animate-bounce"
+                style="animation-delay: 0.2s;"></i>
+        </div>
+        <h3 class="text-3xl font-heading font-black text-white mb-3 tracking-tight animate-pulse-glow">AI is Grading
+            Papers...</h3>
+        <p class="text-muted-foreground font-medium text-center max-w-sm px-4">
+            Extracting handwriting, matching student names, and calculating final scores.
+        </p>
+        <div class="mt-8 w-64 h-2 bg-white/10 rounded-full overflow-hidden">
+            <div
+                class="h-full bg-gradient-to-r from-primary via-emerald-400 to-primary w-[200%] animate-[scan_2s_linear_infinite]">
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes scan {
+            0% {
+                transform: translateX(-50%);
+            }
+
+            100% {
+                transform: translateX(0%);
+            }
+        }
+    </style>
+
     <!-- Depth Layer 1: Atmosphere (Dot Matrix + Single Spotlight Glow) -->
     <div class="fixed inset-0 z-0 noise pointer-events-none"></div>
     <div class="fixed inset-0 z-0 dot-matrix pointer-events-none opacity-50"></div>
@@ -852,7 +898,7 @@
                     class="flex overflow-x-auto space-x-3 py-2 mb-6 min-h-[70px] relative z-10 scrollbar-hide"></div>
 
                 <!-- Action Area / Action Zone Divider -->
-                <div class="relative flex justify-center -my-3 z-20 reveal reveal-delay-2">
+                <div class="relative flex justify-center mt-6 mb-2 z-20 reveal reveal-delay-2">
                     <button id="btn-process" disabled
                         class="magnetic holographic shadow-glow-lg bg-card border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:bg-card disabled:holographic-none text-white font-extrabold text-sm uppercase px-10 py-5 rounded-full transition-all active:scale-95 flex items-center justify-center tracking-widest group">
                         <span
@@ -1836,11 +1882,23 @@
         btnProcess.addEventListener('click', async () => {
             if (imagesBatch.length === 0) return;
 
+            // Turn off camera and flashlight to indicate scanning is done
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
             const originalHtml = btnProcess.innerHTML;
             btnProcess.disabled = true;
             btnCapture.disabled = true;
             btnProcess.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Grading Scanned Scripts...`;
-            processingIndicator.classList.remove('hidden');
+
+            // Show new fun loading overlay
+            const loadingOverlay = document.getElementById('grading-loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.remove('hidden');
+                loadingOverlay.classList.add('flex');
+            }
 
             try {
                 const base64List = imagesBatch.map(item => item.base64);
@@ -1888,6 +1946,12 @@
                         errStr = errData.error || errStr;
                     } catch (e) { }
                     throw new Error(errStr);
+                }
+
+                // Hide overlay once connection is established and data stream starts
+                if (loadingOverlay) {
+                    loadingOverlay.classList.add('hidden');
+                    loadingOverlay.classList.remove('flex');
                 }
 
                 // Read SSE Stream
@@ -1974,11 +2038,14 @@
                 btnProcess.innerHTML = originalHtml;
                 btnProcess.disabled = false;
                 btnCapture.disabled = false;
-                processingIndicator.classList.add('hidden');
+                if (loadingOverlay) {
+                    loadingOverlay.classList.add('hidden');
+                    loadingOverlay.classList.remove('flex');
+                }
                 reviewSection.classList.add('hidden');
                 captureSection.classList.remove('hidden');
-            } finally {
-                processingIndicator.classList.add('hidden');
+                // Restart camera if it failed to process so they aren't stuck on a black screen
+                initCamera();
             }
         });
 
@@ -2329,8 +2396,11 @@
         // Enrollment logic handled at the bottom of the file where loadSelectiveStudents is defined.
         if (btnOpenPaste && pasteModal) {
             btnOpenPaste.addEventListener('click', () => {
-                // Pre-fill class if already set
-                if (targetClassSelect && targetClassSelect.value) {
+                // By default, start with an empty class name so the user can type a new one
+                pasteTargetClass.value = '';
+
+                // Only pre-fill if the user actually clicked a valid class name in the dropdown (not the placeholder)
+                if (targetClassSelect && targetClassSelect.value && targetClassSelect.value !== '') {
                     pasteTargetClass.value = targetClassSelect.value;
                 }
 
