@@ -101,7 +101,12 @@ Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like ```
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Attempt to bust cache so user sees the new loading overlay
+    response = make_response(render_template('index.html', v=int(time.time())))
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.route('/api/recent-sessions', methods=['GET'])
 def recent_sessions():
