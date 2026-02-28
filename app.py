@@ -78,9 +78,9 @@ SYSTEM_PROMPT = """
 You are an expert OCR Assistant helping a teacher grade test scripts.
 I will provide you with images of handwritten test scripts. 
 For EACH image, extract the following information:
-1. Student Name (usually found at the top, e.g., "Name: ...")
-2. Student Class (usually found near the name, e.g., "Class: ...")
-3. Score (This is typically handwritten in **red ink**, often as a fraction like "7/10" or just a number circled in red on the margin).
+1. Student Name (usually found at the top, e.g., "Name: ..."). Names may be long and written in ALL CAPS block letters (e.g., "ALARE OLUWAPELUMI OPEYEMI").
+2. Student Class (usually found near the name, e.g., "Class: ..."). Classes might contain superscript letters (like SS1^Q or cursive); normalize this to standard text (e.g., "SS1Q").
+3. Score (This is typically handwritten in **red ink**, often as a fraction like "8/10". Look carefully at the left margin—the score might be written VERY LARGE, spanning multiple lines, or circled. Always combine the numerator and denominator if you find them spread out.)
 4. Confidence (How confident you are that the extracted data is correct: "High", "Medium", or "Low". Use "Low" when handwriting is very messy or fields are partially obscured.)
 
 If an image is unreadable or you cannot find a specific field, return null for that field and set confidence to "Low".
