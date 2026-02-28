@@ -2067,11 +2067,17 @@
                 confidenceBadge = `<span class="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full ml-2"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> Med</span>`;
             }
 
-            tr.className = `reveal light-beam-card flex flex-col md:table-row bg-background md:bg-transparent rounded-xl md:rounded-none border ${borderClass} md:border-none md:border-b md:border-white/5 transition-colors group overflow-hidden md:hover:bg-white/[0.02] p-4 md:p-0 my-3 md:my-0 shadow-lg md:shadow-none translate-y-4 opacity-0 transition-all duration-500 hidden`;
-
             const nameStr = item.name || '';
             const classStr = item.class || '';
             const scoreStr = item.score || '';
+
+            // Explicitly highlight missing names
+            if (!nameStr || nameStr.trim() === '') {
+                borderClass = 'border-red-500 ring-2 ring-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)] bg-red-500/5';
+                confidenceBadge = `<span class="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-white bg-red-500 border border-red-600 px-2 py-0.5 rounded-full ml-2 shadow-glow animate-pulse"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> MISSING NAME</span>`;
+            }
+
+            tr.className = `reveal light-beam-card flex flex-col md:table-row bg-background md:bg-transparent rounded-xl md:rounded-none border ${borderClass} md:border-none md:border-b md:border-white/5 transition-colors group overflow-hidden md:hover:bg-white/[0.02] p-4 md:p-0 my-3 md:my-0 shadow-lg md:shadow-none translate-y-4 opacity-0 transition-all duration-500 hidden`;
 
             tr.innerHTML = `
             <td class="flex justify-between items-center md:table-cell px-2 md:px-5 py-2 md:py-4 border-b border-white/5 md:border-none text-muted-foreground/50 font-mono text-xs"><span class="md:hidden font-bold text-white/40 uppercase tracking-widest text-[10px]">ID</span> ${index + 1}${confidenceBadge}</td>
@@ -2184,6 +2190,12 @@
 
         // Export to Excel / Sheets
         btnExport.addEventListener('click', async () => {
+            const missingNames = extractedData.filter(item => !item.name || item.name.trim() === '');
+            if (missingNames.length > 0) {
+                const proceed = confirm(`Wait! You have ${missingNames.length} scanned score(s) missing a student name (highlighted in red). \n\nIf you export now, these scores will be ignored because we don't know whose they are.\n\nDo you want to continue exporting anyway?`);
+                if (!proceed) return;
+            }
+
             btnExport.disabled = true;
             btnExport.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> APPENDING...`;
             exportMsg.classList.add('hidden');
