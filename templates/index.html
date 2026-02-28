@@ -535,6 +535,26 @@
                         </p>
                     </div>
 
+                    <!-- Important Notice Banner (Dismissible) -->
+                    <div id="notice-banner"
+                        class="mb-8 border border-amber-500/30 bg-amber-500/10 rounded-xl p-4 flex items-start gap-3 shadow-inner relative transition-opacity duration-300">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-500 mt-1"></i>
+                        <div class="flex-1 pr-6">
+                            <h4 class="text-amber-500 font-bold text-sm tracking-wide mb-1">Important Notice</h4>
+                            <p class="text-amber-200/80 text-xs font-medium leading-relaxed">
+                                Always remember to click <strong class="text-amber-400">"Save Grades to Active
+                                    Roster"</strong> and then <strong class="text-amber-400">"Download Complete Excel
+                                    Sheet"</strong> when you are finished. Closing this page will lose any unsaved
+                                scans.
+                            </p>
+                        </div>
+                        <button
+                            onclick="document.getElementById('notice-banner').classList.add('opacity-0', 'pointer-events-none'); setTimeout(() => document.getElementById('notice-banner').classList.add('hidden'), 300)"
+                            class="absolute top-3 right-3 text-amber-500/50 hover:text-amber-500 transition-colors p-1">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+
                     <!-- Recent Sessions -->
                     <div id="recent-sessions-container" class="mb-6 hidden">
                         <label
@@ -545,8 +565,7 @@
                     </div>
 
                     <!-- Two Entry Cards -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
-                        <!-- Option 2: Upload Excel -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto mb-10">
                         <button id="btn-entry-excel" type="button"
                             class="entry-card holographic btn-3d magnetic bg-black/40 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] relative overflow-hidden h-full reveal reveal-delay-3">
                             <div
@@ -569,6 +588,37 @@
                             <span class="text-[11px] text-muted-foreground font-medium leading-tight">Brand new
                                 class.<br>Set up your students and begin.</span>
                         </button>
+                    </div>
+
+                    <!-- How It Works Guide -->
+                    <div
+                        class="mt-12 border border-white/10 bg-white/5 rounded-2xl p-4 md:p-6 shadow-inner relative z-10 transition-colors hover:border-white/20">
+                        <h3
+                            class="text-white font-bold text-sm tracking-wide mb-3 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-circle-question text-primary"></i> How It Works</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                            <div class="flex items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/5">
+                                <span class="text-2xl w-10 text-center drop-shadow-md">📋</span>
+                                <div>
+                                    <span class="font-bold text-white text-[13px] tracking-wide block">Step 1</span>
+                                    <span class="text-muted-foreground font-medium text-xs">Choose class/subject</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/5">
+                                <span class="text-2xl w-10 text-center drop-shadow-md">📸</span>
+                                <div>
+                                    <span class="font-bold text-white text-[13px] tracking-wide block">Step 2</span>
+                                    <span class="text-muted-foreground font-medium text-xs">Photograph papers</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/5">
+                                <span class="text-2xl w-10 text-center drop-shadow-md">✅</span>
+                                <div>
+                                    <span class="font-bold text-white text-[13px] tracking-wide block">Step 3</span>
+                                    <span class="text-muted-foreground font-medium text-xs">Review & download</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -808,13 +858,15 @@
                 </div>
 
                 <!-- Header (Compact) -->
-                <div class="flex justify-between items-center mb-4 relative z-10">
-                    <h2 class="text-xl font-heading font-bold text-white tracking-tight flex items-center">
+                <div class="flex flex-col mb-4 relative z-10">
+                    <h2 class="text-xl font-heading font-bold text-white tracking-tight flex items-center mb-1">
                         <span
                             class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mr-3 border border-primary/20 shadow-glow"><i
                                 class="fa-solid fa-camera text-primary text-sm"></i></span>
                         Capture Scripts
                     </h2>
+                    <p class="text-muted-foreground text-sm font-medium ml-11">Point your phone at each student's paper
+                        and press Capture.</p>
                 </div>
 
                 <!-- Video Feed with Overlays -->
@@ -863,195 +915,200 @@
                     <div class="absolute bottom-3 inset-x-3 flex justify-center z-20 pointer-events-none">
                         <!-- Auto-Capture Toggle -->
                         <div
-                            class="pointer-events-auto flex items-center gap-3 bg-black/70 backdrop-blur-xl px-4 py-2.5 rounded-full border border-white/10 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.8)]">
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="auto-capture-toggle" class="sr-only peer">
-                                <div
-                                    class="w-9 h-5 bg-muted-foreground/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner">
-                                </div>
-                            </label>
-                            <div class="flex flex-col">
+                            class="pointer-events-auto flex flex-col items-center gap-1 bg-black/80 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/10 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.8)] max-w-[280px]">
+                            <div class="flex items-center gap-3 w-full justify-center mb-1">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="auto-capture-toggle" class="sr-only peer">
+                                    <div
+                                        class="w-9 h-5 bg-muted-foreground/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary shadow-inner">
+                                    </div>
+                                </label>
                                 <span
-                                    class="text-[10px] font-bold text-white tracking-widest uppercase leading-tight drop-shadow-md">AI
+                                    class="text-[11px] font-bold text-white tracking-widest uppercase leading-tight drop-shadow-md">AI
                                     Auto-Capture</span>
+                                <div id="auto-capture-status"
+                                    class="w-2.5 h-2.5 rounded-full bg-muted-foreground/30 transition-colors shadow-glow">
+                                </div>
                             </div>
-                            <div id="auto-capture-status"
-                                class="ml-1 w-2.5 h-2.5 rounded-full bg-muted-foreground/30 transition-colors shadow-glow">
-                            </div>
+                            <span class="text-[9px] text-muted-foreground/80 font-medium text-center leading-tight">When
+                                turned on, the camera will snap automatically when it sees a paper in frame.</span>
+                        </div>
+                        <div id="auto-capture-status"
+                            class="ml-1 w-2.5 h-2.5 rounded-full bg-muted-foreground/30 transition-colors shadow-glow">
                         </div>
                     </div>
                 </div>
+    </div>
 
-                <!-- Capture Controls (SNAP button full width) -->
-                <div class="mb-6 relative z-10 px-2 lg:px-0">
-                    <button id="btn-capture"
-                        class="magnetic shadow-glow bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl w-full mx-auto transition-all active:scale-95 flex items-center justify-center tracking-wide overflow-hidden relative group">
-                        <span
-                            class="absolute inset-0 w-full h-full bg-white opacity-0 active:opacity-40 transition-opacity duration-100 mix-blend-overlay"></span>
-                        <i class="fa-solid fa-camera mr-2 group-hover:scale-110 transition-transform"></i> <span
-                            class="tracking-widest uppercase text-sm">Capture Script</span>
-                    </button>
-                </div>
+    <!-- Capture Controls (SNAP button full width) -->
+    <div class="mb-6 relative z-10 px-2 lg:px-0">
+        <button id="btn-capture"
+            class="magnetic shadow-glow bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl w-full mx-auto transition-all active:scale-95 flex items-center justify-center tracking-wide overflow-hidden relative group">
+            <span
+                class="absolute inset-0 w-full h-full bg-white opacity-0 active:opacity-40 transition-opacity duration-100 mix-blend-overlay"></span>
+            <i class="fa-solid fa-camera mr-2 group-hover:scale-110 transition-transform"></i> <span
+                class="tracking-widest uppercase text-sm">Capture Script</span>
+        </button>
+    </div>
 
-                <!-- Captured Thumbnails -->
-                <div id="thumbnails-container"
-                    class="flex overflow-x-auto space-x-3 py-2 mb-6 min-h-[70px] relative z-10 scrollbar-hide"></div>
+    <!-- Captured Thumbnails -->
+    <div id="thumbnails-container"
+        class="flex overflow-x-auto space-x-3 py-2 mb-6 min-h-[70px] relative z-10 scrollbar-hide"></div>
 
-                <!-- Action Area / Action Zone Divider -->
-                <div class="relative flex justify-center mt-6 mb-2 z-20 reveal reveal-delay-2">
-                    <button id="btn-process" disabled
-                        class="magnetic holographic shadow-glow-lg bg-card border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:bg-card disabled:holographic-none text-white font-extrabold text-sm uppercase px-10 py-5 rounded-full transition-all active:scale-95 flex items-center justify-center tracking-widest group">
-                        <span
-                            class="absolute inset-0 rounded-full border border-primary/30 group-hover:border-primary/60 transition-colors"></span>
-                        <i
-                            class="fa-solid fa-wand-magic-sparkles mr-2 text-primary group-hover:scale-110 transition-transform"></i>
-                        Grade Scanned Scripts
-                    </button>
-                </div>
+    <!-- Action Area / Sticky Bottom Bar -->
+    <div id="grading-action-bar"
+        class="fixed bottom-0 left-0 right-0 p-4 z-50 transform translate-y-full transition-transform duration-300 bg-black/80 backdrop-blur-xl border-t border-white/10 flex justify-center hidden">
+        <button id="btn-process" disabled
+            class="w-full max-w-md magnetic holographic shadow-glow-lg bg-primary border border-primary/50 text-white font-extrabold text-sm uppercase px-10 py-4 rounded-xl transition-all active:scale-95 flex items-center justify-center tracking-widest group shadow-[0_0_20px_rgba(var(--brand-rgb),0.5)]">
+            <i class="fa-solid fa-wand-magic-sparkles mr-2 group-hover:scale-110 transition-transform"></i>
+            <span id="btn-process-text">Grade 0 papers now →</span>
+        </button>
+    </div>
 
-                <div id="processing-indicator"
-                    class="hidden text-center mt-8 mb-4 text-primary font-medium flex flex-col items-center justify-center gap-3">
-                    <div class="relative flex items-center justify-center p-2">
-                        <div
-                            class="absolute inset-0 border-2 border-primary/20 border-t-primary rounded-full animate-spin">
-                        </div>
-                        <i class="fa-solid fa-microchip text-primary"></i>
-                    </div>
+    <div id="processing-indicator"
+        class="hidden text-center mt-8 mb-4 text-primary font-medium flex flex-col items-center justify-center gap-3">
+        <div class="relative flex items-center justify-center p-2">
+            <div class="absolute inset-0 border-2 border-primary/20 border-t-primary rounded-full animate-spin">
+            </div>
+            <i class="fa-solid fa-microchip text-primary"></i>
+        </div>
+        <span
+            class="text-xs font-bold tracking-widest uppercase border border-primary/20 bg-primary/10 px-5 py-2 rounded-full shadow-glow">AI
+            is Grading Papers...</span>
+    </div>
+
+    </section>
+
+    <!-- Step 2: Review Area -->
+    <section id="review-section"
+        class="reveal bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mt-16 mb-8 hidden relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
+        <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent pointer-events-none">
+        </div>
+
+        <div class="flex flex-col md:flex-row md:justify-between items-start md:items-center mb-10 gap-4 relative z-10">
+            <div class="flex flex-col">
+                <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight flex items-center mb-1">
                     <span
-                        class="text-xs font-bold tracking-widest uppercase border border-primary/20 bg-primary/10 px-5 py-2 rounded-full shadow-glow">AI
-                        is Grading Papers...</span>
-                </div>
+                        class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mr-3 border border-white/10 shadow-sm"><i
+                            class="fa-solid fa-list-check text-white text-sm"></i></span>
+                    Review Grades
+                </h2>
+                <p class="text-muted-foreground text-sm font-medium ml-11">Check the AI's work. Fix any mistakes, then
+                    Save.</p>
+            </div>
+            <button id="btn-reset"
+                class="text-xs font-bold tracking-widest uppercase text-muted-foreground hover:text-white transition-colors px-4 py-2 rounded-lg border border-white/5 hover:border-white/20 bg-black/40 hover:bg-black/60 flex items-center shadow-sm">
+                <i class="fa-solid fa-rotate-left mr-2"></i> Delete these & Start Over
+            </button>
+        </div>
 
-            </section>
+        <div class="overflow-x-visible md:overflow-x-auto mb-10 relative z-10">
+            <table class="w-full text-sm text-left block md:table">
+                <thead
+                    class="hidden md:table-header-group text-[11px] uppercase bg-black/60 border-b border-white/5 tracking-widest font-bold text-muted-foreground/80">
+                    <tr>
+                        <th scope="col" class="px-5 py-4 rounded-tl-xl border-r border-white/5">Student Name <span
+                                class="text-primary">*</span></th>
+                        <th scope="col" class="px-5 py-4 border-r border-white/5">Class</th>
+                        <th scope="col" class="px-5 py-4 text-right rounded-tr-xl" id="score-th">Score</th>
+                    </tr>
+                </thead>
+                <tbody id="results-tbody" class="block md:table-row-group space-y-4 md:space-y-0">
+                    <!-- Results go here via JS -->
+                </tbody>
+            </table>
+        </div>
 
-            <!-- Step 2: Review Area -->
-            <section id="review-section"
-                class="reveal bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mt-16 mb-8 hidden relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-300">
-                <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent pointer-events-none">
-                </div>
+        <button id="btn-export"
+            class="magnetic holographic shadow-glow w-full bg-primary hover:bg-primary/90 text-white font-extrabold text-sm uppercase tracking-widest py-5 px-6 rounded-xl transition-all active:scale-95 flex justify-center items-center group relative z-10 border border-t-white/30 border-primary shadow-[0_4px_14px_0_rgba(var(--brand-rgb),0.39)]">
+            <i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Save
+            Grades to Active Roster
+        </button>
+        <div id="export-msg" class="text-center mt-5 text-sm font-bold hidden relative z-10"></div>
 
-                <div
-                    class="flex flex-col md:flex-row md:justify-between items-start md:items-center mb-10 gap-4 relative z-10">
-                    <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight flex items-center">
-                        <span
-                            class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mr-3 border border-white/10 shadow-sm"><i
-                                class="fa-solid fa-list-check text-white text-sm"></i></span>
-                        Review Grades
-                    </h2>
-                    <button id="btn-reset"
-                        class="text-xs font-bold tracking-widest uppercase text-muted-foreground hover:text-white transition-colors px-4 py-2 rounded-lg border border-white/5 hover:border-white/20 bg-black/40 hover:bg-black/60 flex items-center shadow-sm">
-                        <i class="fa-solid fa-rotate-left mr-2"></i> Delete these & Start Over
-                    </button>
-                </div>
+        <!-- Feedback / What's Next block -->
+        <div id="whats-next-block" class="hidden mt-8 pt-8 border-t border-white/5 animate-fade-in-up relative z-10">
+            <h3
+                class="text-white font-bold text-[11px] uppercase tracking-widest mb-2 flex items-center gap-2 text-indigo-400">
+                <i class="fa-solid fa-lightbulb"></i> What would you like to do next?
+            </h3>
 
-                <div class="overflow-x-visible md:overflow-x-auto mb-10 relative z-10">
-                    <table class="w-full text-sm text-left block md:table">
-                        <thead
-                            class="hidden md:table-header-group text-[11px] uppercase bg-black/60 border-b border-white/5 tracking-widest font-bold text-muted-foreground/80">
-                            <tr>
-                                <th scope="col"
-                                    class="px-5 py-4 w-12 text-center rounded-tl-xl border-r border-white/5">#</th>
-                                <th scope="col" class="px-5 py-4 border-r border-white/5">Student Name <span
-                                        class="text-primary">*</span></th>
-                                <th scope="col" class="px-5 py-4 border-r border-white/5">Class</th>
-                                <th scope="col" class="px-5 py-4 text-right rounded-tr-xl" id="score-th">Score</th>
-                            </tr>
-                        </thead>
-                        <tbody id="results-tbody" class="block md:table-row-group space-y-4 md:space-y-0">
-                            <!-- Results go here via JS -->
-                        </tbody>
-                    </table>
-                </div>
+            <!-- Dynamic state messages will go here -->
+            <p id="whats-next-message" class="text-sm text-muted-foreground mb-4 font-medium leading-relaxed">
+            </p>
 
-                <button id="btn-export"
-                    class="magnetic holographic shadow-glow w-full bg-primary hover:bg-primary/90 text-white font-extrabold text-sm uppercase tracking-widest py-5 px-6 rounded-xl transition-all active:scale-95 flex justify-center items-center group relative z-10 border border-t-white/30 border-primary shadow-[0_4px_14px_0_rgba(var(--brand-rgb),0.39)]">
-                    <i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Save
-                    Grades to Active Roster
-                </button>
-                <div id="export-msg" class="text-center mt-5 text-sm font-bold hidden relative z-10"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="whats-next-actions">
+                <!-- Actions injected via JS based on context -->
+            </div>
+        </div>
+    </section>
+    <!-- Step 3: Analytics Dashboard (Appears after export) -->
+    <section id="analytics-section"
+        class="hidden reveal bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)]">
+        <div class="flex flex-col mb-8">
+            <div class="flex items-center gap-3 mb-1">
+                <span
+                    class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-glow"><i
+                        class="fa-solid fa-chart-pie text-emerald-400 text-sm"></i></span>
+                <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight">Results Summary</h2>
+            </div>
+            <p class="text-muted-foreground text-sm font-medium ml-11">Here's how the class performed. Download the
+                spreadsheet below.</p>
+        </div>
 
-                <!-- Feedback / What's Next block -->
-                <div id="whats-next-block"
-                    class="hidden mt-8 pt-8 border-t border-white/5 animate-fade-in-up relative z-10">
-                    <h3
-                        class="text-white font-bold text-[11px] uppercase tracking-widest mb-2 flex items-center gap-2 text-indigo-400">
-                        <i class="fa-solid fa-lightbulb"></i> What would you like to do next?
-                    </h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <!-- Average Score Card -->
+            <div class="bg-background rounded-xl p-5 border border-white/5 relative overflow-hidden group">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i
+                        class="fa-solid fa-chart-line text-4xl text-primary"></i></div>
+                <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Class Average
+                </p>
+                <p id="stat-avg" class="text-4xl font-extrabold text-white">--</p>
+            </div>
+            <!-- Highest Score Card -->
+            <div class="bg-background rounded-xl p-5 border border-white/5 relative overflow-hidden group">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i
+                        class="fa-solid fa-arrow-trend-up text-4xl text-emerald-400"></i></div>
+                <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Highest Score
+                </p>
+                <p id="stat-high" class="text-4xl font-extrabold text-emerald-400">--</p>
+                <p id="stat-high-name" class="text-xs text-muted-foreground/70 mt-1 truncate">--</p>
+            </div>
+            <!-- Lowest Score Card -->
+            <div class="bg-background rounded-xl p-5 border border-white/5 relative overflow-hidden group">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i
+                        class="fa-solid fa-arrow-trend-down text-4xl text-destructive"></i></div>
+                <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Lowest Score
+                </p>
+                <p id="stat-low" class="text-4xl font-extrabold text-destructive">--</p>
+                <p id="stat-low-name" class="text-xs text-muted-foreground/70 mt-1 truncate">--</p>
+            </div>
+        </div>
 
-                    <!-- Dynamic state messages will go here -->
-                    <p id="whats-next-message" class="text-sm text-muted-foreground mb-4 font-medium leading-relaxed">
-                    </p>
+        <div class="flex flex-col md:flex-row justify-center gap-4">
+            <button id="btn-download-sheet" onclick="window.location.href='/download-sheet'"
+                class="w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-glow flex items-center justify-center group mb-2 md:mb-0">
+                <i class="fa-solid fa-download mr-2 group-hover:translate-y-1 transition-transform"></i>
+                Download Complete Excel Sheet
+            </button>
+            <button id="btn-new-batch"
+                class="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-sm border border-white/10 flex items-center justify-center group">
+                <i class="fa-solid fa-rotate-right mr-2 group-hover:-rotate-90 transition-transform duration-500"></i>
+                Scan More Papers
+            </button>
+        </div>
+    </section>
+    </main>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="whats-next-actions">
-                        <!-- Actions injected via JS based on context -->
-                    </div>
-                </div>
-            </section>
-            <!-- Step 3: Analytics Dashboard (Appears after export) -->
-            <section id="analytics-section"
-                class="hidden reveal bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 mb-12 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)]">
-                <div class="flex items-center gap-3 mb-8">
-                    <span
-                        class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-glow"><i
-                            class="fa-solid fa-chart-pie text-emerald-400 text-sm"></i></span>
-                    <h2 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight">Class Statistics
-                    </h2>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <!-- Average Score Card -->
-                    <div class="bg-background rounded-xl p-5 border border-white/5 relative overflow-hidden group">
-                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i
-                                class="fa-solid fa-chart-line text-4xl text-primary"></i></div>
-                        <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Class Average
-                        </p>
-                        <p id="stat-avg" class="text-4xl font-extrabold text-white">--</p>
-                    </div>
-                    <!-- Highest Score Card -->
-                    <div class="bg-background rounded-xl p-5 border border-white/5 relative overflow-hidden group">
-                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i
-                                class="fa-solid fa-arrow-trend-up text-4xl text-emerald-400"></i></div>
-                        <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Highest Score
-                        </p>
-                        <p id="stat-high" class="text-4xl font-extrabold text-emerald-400">--</p>
-                        <p id="stat-high-name" class="text-xs text-muted-foreground/70 mt-1 truncate">--</p>
-                    </div>
-                    <!-- Lowest Score Card -->
-                    <div class="bg-background rounded-xl p-5 border border-white/5 relative overflow-hidden group">
-                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i
-                                class="fa-solid fa-arrow-trend-down text-4xl text-destructive"></i></div>
-                        <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Lowest Score
-                        </p>
-                        <p id="stat-low" class="text-4xl font-extrabold text-destructive">--</p>
-                        <p id="stat-low-name" class="text-xs text-muted-foreground/70 mt-1 truncate">--</p>
-                    </div>
-                </div>
-
-                <div class="flex flex-col md:flex-row justify-center gap-4">
-                    <button id="btn-download-sheet" onclick="window.location.href='/download-sheet'"
-                        class="w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-glow flex items-center justify-center group mb-2 md:mb-0">
-                        <i class="fa-solid fa-download mr-2 group-hover:translate-y-1 transition-transform"></i>
-                        Download Complete Excel Sheet
-                    </button>
-                    <button id="btn-new-batch"
-                        class="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-sm border border-white/10 flex items-center justify-center group">
-                        <i
-                            class="fa-solid fa-rotate-right mr-2 group-hover:-rotate-90 transition-transform duration-500"></i>
-                        Scan More Papers
-                    </button>
-                </div>
-            </section>
-        </main>
-
-        <!-- Footer -->
-        <footer
-            class="mt-20 mb-10 text-center text-muted-foreground/40 text-[10px] uppercase font-bold tracking-widest animate-fade-in-up flex items-center justify-center gap-2"
-            style="animation-delay: 0.5s;">
-            <div class="w-8 h-px bg-white/10"></div>
-            <p>Made with <span class="text-destructive mx-1 animate-pulse inline-block opacity-80">❤️</span> for <span
-                    class="text-white/80">QSI</span></p>
-            <div class="w-8 h-px bg-white/10"></div>
-        </footer>
+    <!-- Footer -->
+    <footer
+        class="mt-20 mb-10 text-center text-muted-foreground/40 text-[10px] uppercase font-bold tracking-widest animate-fade-in-up flex items-center justify-center gap-2"
+        style="animation-delay: 0.5s;">
+        <div class="w-8 h-px bg-white/10"></div>
+        <p>Made with <span class="text-destructive mx-1 animate-pulse inline-block opacity-80">❤️</span> for <span
+                class="text-white/80">QSI</span></p>
+        <div class="w-8 h-px bg-white/10"></div>
+    </footer>
     </div>
 
     <!-- Modal: Upload Score List Photo -->
@@ -1442,13 +1499,27 @@
         const statLow = document.getElementById('stat-low');
         const statLowName = document.getElementById('stat-low-name');
 
-        // State
         let imagesBatch = [];
         let extractedData = [];
         let currentFacingMode = 'environment';
         let stream = null;
         let imageIdCounter = 0;
         let finalAssessmentType = '';
+        let currentSubjectName = '';
+
+        function updateActionBar() {
+            const actionBar = document.getElementById('grading-action-bar');
+            const btnText = document.getElementById('btn-process-text');
+            if (imagesBatch.length > 0) {
+                actionBar.classList.remove('translate-y-full', 'hidden');
+                btnProcess.disabled = false;
+                btnText.innerText = `Grade ${imagesBatch.length} papers now →`;
+            } else {
+                actionBar.classList.add('translate-y-full');
+                btnProcess.disabled = true;
+                setTimeout(() => actionBar.classList.add('hidden'), 300); // Wait for transition
+            }
+        }
 
 
         async function initCamera() {
@@ -2061,10 +2132,10 @@
             let confidenceBadge = '';
             if (isLow) {
                 borderClass = 'border-destructive/40 ring-1 ring-destructive/20';
-                confidenceBadge = `<span class="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full ml-2"><i class="fa-solid fa-triangle-exclamation text-[8px]"></i> Low</span>`;
+                confidenceBadge = `<span title="AI is not sure about this one. Please double-check." class="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full ml-2 cursor-help"><i class="fa-solid fa-triangle-exclamation text-[8px]"></i> Low</span>`;
             } else if (isMedium) {
                 borderClass = 'border-yellow-500/30 ring-1 ring-yellow-500/10';
-                confidenceBadge = `<span class="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full ml-2"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> Med</span>`;
+                confidenceBadge = `<span title="AI is fairly sure but the handwriting was tricky." class="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full ml-2 cursor-help"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> Med</span>`;
             }
 
             const nameStr = item.name || '';
@@ -2080,8 +2151,7 @@
             tr.className = `reveal light-beam-card flex flex-col md:table-row bg-background md:bg-transparent rounded-xl md:rounded-none border ${borderClass} md:border-none md:border-b md:border-white/5 transition-colors group overflow-hidden md:hover:bg-white/[0.02] p-4 md:p-0 my-3 md:my-0 shadow-lg md:shadow-none translate-y-4 opacity-0 transition-all duration-500 hidden`;
 
             tr.innerHTML = `
-            <td class="flex justify-between items-center md:table-cell px-2 md:px-5 py-2 md:py-4 border-b border-white/5 md:border-none text-muted-foreground/50 font-mono text-xs"><span class="md:hidden font-bold text-white/40 uppercase tracking-widest text-[10px]">ID</span> ${index + 1}${confidenceBadge}</td>
-            <td class="flex flex-col md:table-cell px-2 md:px-5 py-3 border-b border-white/5 md:border-none md:border-l md:border-white/5"><span class="md:hidden text-[10px] text-muted-foreground/80 mb-1.5 uppercase tracking-widest font-bold">Student Identity <span class="text-primary">*</span></span><input type="text" data-index="${index}" data-field="name" class="w-full bg-transparent border-b border-transparent focus:border-white/20 focus:ring-0 px-0 py-1 text-white text-base md:text-sm font-semibold transition-colors outline-none placeholder:text-muted-foreground/30" value="${nameStr}" placeholder="Enter Name"></td>
+            <td class="flex flex-col md:table-cell px-2 md:px-5 py-3 border-b border-white/5 md:border-none md:border-l md:border-white/5"><span class="md:hidden text-[10px] text-muted-foreground/80 mb-1.5 uppercase tracking-widest font-bold flex items-center">Student Name <span class="text-primary ml-1">*</span> ${confidenceBadge}</span><div class="flex items-center w-full"><input type="text" data-index="${index}" data-field="name" class="w-full bg-transparent border-b border-transparent focus:border-white/20 focus:ring-0 px-0 py-1 text-white text-base md:text-sm font-semibold transition-colors outline-none placeholder:text-muted-foreground/30" value="${nameStr}" placeholder="Enter Name"><span class="hidden md:inline-flex">${confidenceBadge}</span></div></td>
             <td class="flex flex-col md:table-cell px-2 md:px-5 py-3 border-b border-white/5 md:border-none md:border-l md:border-white/5"><span class="md:hidden text-[10px] text-muted-foreground/80 mb-1.5 uppercase tracking-widest font-bold">Class</span><input type="text" data-index="${index}" data-field="class" class="w-full bg-transparent border-b border-transparent focus:border-white/20 focus:ring-0 px-0 py-1 text-white text-base md:text-sm transition-colors outline-none placeholder:text-muted-foreground/30 font-medium" value="${classStr}" placeholder="Class"></td>
             <td class="flex justify-between items-center md:table-cell px-2 md:px-5 py-4 bg-black/40 md:bg-transparent -mx-4 px-6 md:mx-0 mt-2 md:mt-0 rounded-b-xl md:rounded-none md:border-l md:border-white/5"><span class="md:hidden text-[11px] text-primary uppercase tracking-widest font-extrabold">Final Score</span><input type="text" data-index="${index}" data-field="score" class="w-24 md:w-full md:min-w-[70px] bg-white/[0.04] md:bg-transparent border border-white/10 md:border-none md:border-b md:border-transparent focus:border-primary/50 focus:bg-primary/5 focus:ring-0 md:px-2 py-2 text-primary md:text-foreground text-right font-bold text-lg md:text-sm rounded-lg md:rounded-none transition-colors outline-none placeholder:text-muted-foreground/30 shadow-inner md:shadow-none" value="${scoreStr}" placeholder="Score"></td>
             `;
@@ -2192,12 +2262,12 @@
         btnExport.addEventListener('click', async () => {
             const missingNames = extractedData.filter(item => !item.name || item.name.trim() === '');
             if (missingNames.length > 0) {
-                const proceed = confirm(`Wait! You have ${missingNames.length} scanned score(s) missing a student name (highlighted in red). \n\nIf you export now, these scores will be ignored because we don't know whose they are.\n\nDo you want to continue exporting anyway?`);
+                const proceed = confirm(`Wait! You have ${missingNames.length} scanned score(s) missing a student name (highlighted in red). \n\nIf you save now, these scores will be ignored because we don't know whose they are.\n\nDo you want to continue saving anyway?`);
                 if (!proceed) return;
             }
 
             btnExport.disabled = true;
-            btnExport.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> APPENDING...`;
+            btnExport.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> SAVING...`;
             exportMsg.classList.add('hidden');
 
             try {
@@ -2206,7 +2276,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         results: extractedData,
-                        assessmentType: finalAssessmentType
+                        assessmentType: finalAssessmentType,
+                        subjectType: currentSubjectName
                     })
                 });
 
@@ -2244,7 +2315,7 @@
             const nextBlock = document.getElementById('whats-next-block');
             if (nextBlock) nextBlock.classList.add('hidden');
 
-            btnProcess.disabled = true;
+            updateActionBar(); // Hide sticky bottom bar
             btnCapture.disabled = false;
 
             analyticsSection.classList.add('hidden');
@@ -2266,7 +2337,8 @@
                 batchCountEl.innerText = '0';
                 thumbnailsContainer.innerHTML = '';
 
-                btnProcess.disabled = true;
+                updateActionBar(); // Hide sticky bottom bar
+
                 btnCapture.disabled = false;
 
                 reviewSection.classList.remove('visible');
@@ -3096,7 +3168,7 @@
                     <button onclick="document.getElementById('btn-export').click()"
                         class="bg-emerald-500 hover:bg-emerald-400 text-black p-4 rounded-xl border border-emerald-400 transition-all flex items-center justify-center gap-3 text-sm font-bold tracking-wide group shadow-glow text-left h-full">
                         <i class="fa-solid fa-file-excel group-hover:-translate-y-1 transition-transform text-xl block"></i>
-                        <span>Awesome. Compile to Excel Dashboard!</span>
+                        <span>Awesome. Compile to Results Summary!</span>
                     </button>
                     <button onclick="document.getElementById('upload-scoresheet-modal').classList.remove('hidden'); document.getElementById('upload-scoresheet-modal').classList.add('flex'); setTimeout(() => document.getElementById('upload-scoresheet-modal').classList.remove('opacity-0'), 10);"
                         class="bg-black/40 hover:bg-white/10 text-white p-4 rounded-xl border border-white/10 transition-all flex items-center justify-center gap-3 text-sm font-bold tracking-wide group shadow-inner text-left h-full">

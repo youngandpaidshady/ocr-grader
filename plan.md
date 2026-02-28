@@ -1,4 +1,7 @@
-you're to read and understand the code, then refactor it to be more efficient and organized. also add more features to it.  
-yo're to act like a senior devloper, understand the workflow, and make it flow seamlessly. 
-discuss an optimized, user friendly workflow with me with a ai smart catch at every lumpy junction, user must experience a premium feel, no confusion when using this app
- all data types must be properly formatted sentitized and the right prompt be passed along, remove the word gemini and replace it with model
+analyze the entire project, understand the codebase
+a teacher has scanned for first ca and downloaded the excel, she found out a student score was ommited, what can be the easy fix method and how does it fit into the workflow
+lets upgrade the ui/ux making this feel premium
+curate as many suggestions as posssible, to properly optimize and elevate this site, look for possible bugs and smart ways to catch them,
+you're to act as a senior software engineer and a product manager, think deep and wide, be creative, be innovative, be critical, be intelligent
+
+remove unused files from working directory, and make sure the project is clean and organized    

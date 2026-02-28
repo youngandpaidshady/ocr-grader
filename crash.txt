@@ -1,0 +1,87 @@
+﻿venv\Scripts\python.exe
+ : C:\Users\Administrat
+or\Desktop\Script 
+recorder\app.py:6: 
+FutureWarning: 
+At line:1 char:1
++ venv\Scripts\python.e
+xe app.py 2>&1 | 
+Out-File -Encoding 
+utf8 crash.t ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (C:\Users\Admi   
+ ni...FutureWarning    
+: :String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+
+All support for the 
+`google.generativeai` 
+package has ended. It 
+will no longer be 
+receiving 
+updates or bug fixes. 
+Please switch to the 
+`google.genai` package 
+as soon as possible.
+See README for more 
+details:
+
+https://github.com/goog
+le-gemini/deprecated-ge
+nerative-ai-python/blob
+/main/README.md
+
+  import 
+google.generativeai as 
+genai
+ * Serving Flask app 'app'
+ * Debug mode: on
+WARNING: This is a 
+development server. Do 
+not use it in a 
+production deployment. 
+Use a production WSGI 
+server instead.
+ * Running on all 
+addresses (0.0.0.0)
+ * Running on 
+http://127.0.0.1:5000
+ * Running on http://17
+2.31.36.124:5000
+Press CTRL+C to quit
+ * Restarting with stat
+C:\Users\Administrator\
+Desktop\Script 
+recorder\app.py:6: 
+FutureWarning: 
+
+All support for the 
+`google.generativeai` 
+package has ended. It 
+will no longer be 
+receiving 
+updates or bug fixes. 
+Please switch to the 
+`google.genai` package 
+as soon as possible.
+See README for more 
+details:
+
+https://github.com/goog
+le-gemini/deprecated-ge
+nerative-ai-python/blob
+/main/README.md
+
+  import 
+google.generativeai as 
+genai
+ * Debugger is active!
+ * Debugger PIN: 
+122-208-116
