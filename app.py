@@ -1,7 +1,7 @@
 import os
 import base64
 import json
-from flask import Flask, request, jsonify, render_template, send_file, Response, stream_with_context
+from flask import Flask, request, jsonify, render_template, send_file, Response, stream_with_context, make_response
 from flask_cors import CORS
 import google.generativeai as genai
 import pandas as pd
@@ -11,6 +11,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 
 # Load environment variables
+import time
 load_dotenv()
 
 # Active working file path configured globally
