@@ -4067,9 +4067,58 @@
     </script>
 
     <!-- Smart Assistant FAB (always visible) -->
+    <style>
+        @keyframes fab-breathe {
+
+            0%,
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+            }
+
+            50% {
+                transform: scale(1.08);
+                box-shadow: 0 6px 30px rgba(99, 102, 241, 0.6), 0 0 40px rgba(139, 92, 246, 0.3);
+            }
+        }
+
+        @keyframes fab-wiggle {
+
+            0%,
+            100% {
+                transform: rotate(0deg);
+            }
+
+            25% {
+                transform: rotate(-8deg);
+            }
+
+            75% {
+                transform: rotate(8deg);
+            }
+        }
+
+        #smart-assistant-fab {
+            animation: fab-breathe 3s ease-in-out infinite;
+        }
+
+        #smart-assistant-fab:hover {
+            animation: none;
+        }
+
+        #smart-assistant-fab i {
+            animation: fab-wiggle 2.5s ease-in-out infinite;
+            animation-delay: 1s;
+        }
+
+        #smart-assistant-fab:hover i {
+            animation: none;
+            transform: rotate(12deg);
+        }
+    </style>
     <button id="smart-assistant-fab" onclick="openSmartAssistant()"
-        class="fixed bottom-6 right-6 z-[999] w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-[0_4px_20px_rgba(99,102,241,0.4)] hover:shadow-[0_6px_30px_rgba(99,102,241,0.6)] hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center group">
-        <i class="fa-solid fa-wand-magic-sparkles text-lg group-hover:rotate-12 transition-transform"></i>
+        class="fixed bottom-6 right-6 z-[999] w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-[0_4px_20px_rgba(99,102,241,0.4)] hover:shadow-[0_6px_30px_rgba(99,102,241,0.6)] active:scale-95 transition-all duration-200 flex items-center justify-center group">
+        <i class="fa-solid fa-wand-magic-sparkles text-lg transition-transform"></i>
         <span
             class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse border-2 border-background"></span>
     </button>
