@@ -1381,8 +1381,8 @@
 
                 <button id="btn-export"
                     class="magnetic holographic shadow-glow w-full bg-primary hover:bg-primary/90 text-white font-extrabold text-sm uppercase tracking-widest py-5 px-6 rounded-xl transition-all active:scale-95 flex justify-center items-center group relative z-10 border border-t-white/30 border-primary shadow-[0_4px_14px_0_rgba(var(--brand-rgb),0.39)]">
-                    <i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Save
-                    Grades to Active Roster
+                    <i class="fa-solid fa-download mr-2 group-hover:-translate-y-1 transition-transform"></i> Save &
+                    Download
                 </button>
                 <div id="export-msg" class="text-center mt-5 text-sm font-bold hidden relative z-10"></div>
 
@@ -2838,29 +2838,68 @@
                         });
                     });
                     if (absentNames.length > 0) {
-                        const showCount = 3;
-                        const previewNames = absentNames.slice(0, showCount).join(', ');
-                        const hasMore = absentNames.length > showCount;
-                        const moreCount = absentNames.length - showCount;
-                        const allNames = absentNames.join(', ');
-                        const toggleId = 'absent-toggle-' + Date.now();
-
                         const absentBanner = document.createElement('div');
                         absentBanner.className = 'mb-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl animate-fade-in-up';
-                        absentBanner.innerHTML = `
-                            <div class="flex items-start gap-3">
-                                <i class="fa-solid fa-user-clock text-amber-400 text-lg mt-0.5 shrink-0"></i>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-bold text-amber-400 mb-1">${absentNames.length} student(s) had no scanned paper:</p>
-                                    <p class="text-xs text-amber-300/70 leading-relaxed">
-                                        ${previewNames}${hasMore ? `<span id="${toggleId}-dots">...</span><span id="${toggleId}-full" class="hidden">, ${absentNames.slice(showCount).join(', ')}</span>` : ''}
-                                    </p>
-                                    ${hasMore ? `<button onclick="document.getElementById('${toggleId}-full').classList.toggle('hidden'); document.getElementById('${toggleId}-dots').classList.toggle('hidden'); this.textContent = this.textContent.includes('Show') ? 'Show less' : 'Show all ${absentNames.length}';" class="text-[10px] text-amber-400 font-bold mt-1.5 hover:underline">Show all ${absentNames.length}</button>` : ''}
-                                    <p class="text-[10px] text-amber-300/50 mt-2">They may have been absent. Their names appear in Excel with a blank score.</p>
-                                </div>
-                                <button onclick="this.closest('.mb-4').remove()" class="text-amber-500/40 hover:text-amber-400 transition-colors shrink-0"><i class="fa-solid fa-xmark text-sm"></i></button>
-                            </div>
-                        `;
+
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'flex items-start gap-3';
+
+                        const icon = document.createElement('i');
+                        icon.className = 'fa-solid fa-user-clock text-amber-400 text-lg mt-0.5 shrink-0';
+
+                        const content = document.createElement('div');
+                        content.className = 'flex-1 min-w-0';
+
+                        const title = document.createElement('p');
+                        title.className = 'text-sm font-bold text-amber-400 mb-2';
+                        title.textContent = absentNames.length + ' student(s) were absent or not scanned';
+
+                        const showCount = 3;
+                        const preview = document.createElement('p');
+                        preview.className = 'text-xs text-amber-300/70 leading-relaxed';
+                        preview.textContent = absentNames.slice(0, showCount).join(', ') + (absentNames.length > showCount ? '...' : '');
+
+                        content.appendChild(title);
+                        content.appendChild(preview);
+
+                        if (absentNames.length > showCount) {
+                            const fullList = document.createElement('div');
+                            fullList.className = 'hidden mt-2 max-h-40 overflow-y-auto text-xs text-amber-300/70 leading-relaxed border-t border-amber-500/10 pt-2';
+                            fullList.textContent = absentNames.join(', ');
+
+                            const toggleBtn = document.createElement('button');
+                            toggleBtn.className = 'text-[11px] text-amber-400 font-bold mt-2 hover:underline block';
+                            toggleBtn.textContent = '\u25bc Show all ' + absentNames.length + ' names';
+                            toggleBtn.addEventListener('click', function () {
+                                const isHidden = fullList.classList.contains('hidden');
+                                fullList.classList.toggle('hidden');
+                                preview.classList.toggle('hidden');
+                                this.textContent = isHidden
+                                    ? '\u25b2 Show less'
+                                    : '\u25bc Show all ' + absentNames.length + ' names';
+                            });
+
+                            content.appendChild(toggleBtn);
+                            content.appendChild(fullList);
+                        }
+
+                        const hint = document.createElement('p');
+                        hint.className = 'text-[10px] text-amber-300/40 mt-2';
+                        hint.textContent = 'Their names appear in your Excel with a blank score.';
+                        content.appendChild(hint);
+
+                        const dismissBtn = document.createElement('button');
+                        dismissBtn.className = 'text-amber-500/40 hover:text-amber-400 transition-colors shrink-0 self-start';
+                        dismissBtn.innerHTML = '<i class="fa-solid fa-xmark text-sm"></i>';
+                        dismissBtn.addEventListener('click', function () {
+                            absentBanner.remove();
+                        });
+
+                        wrapper.appendChild(icon);
+                        wrapper.appendChild(content);
+                        wrapper.appendChild(dismissBtn);
+                        absentBanner.appendChild(wrapper);
+
                         const analyticsEl = document.getElementById('analytics-section');
                         if (analyticsEl) analyticsEl.prepend(absentBanner);
                     }
@@ -2877,7 +2916,7 @@
                 exportMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> Error: ${err.message}`;
             } finally {
                 btnExport.disabled = false;
-                btnExport.innerHTML = `<i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Save Grades`;
+                btnExport.innerHTML = `<i class="fa-solid fa-download mr-2 group-hover:-translate-y-1 transition-transform"></i> Save & Download`;
             }
         });
 

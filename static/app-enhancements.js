@@ -88,7 +88,7 @@ const guideMessages = {
     'assessment': {
         message: '📝 What kind of test is this? e.g. 1st CA, 2nd CA, Exam. This labels the score column.',
         target: '#assessment-type',
-        position: 'below'
+        position: 'above'
     },
     'camera': {
         message: '📸 Point your camera at the student\'s graded paper and tap <strong>Capture</strong>. If auto-capture feels jumpy, just turn it off and snap manually.',
