@@ -687,6 +687,35 @@ function openSmartAssistant(parsedData) {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 
+    // Auto-greet: assistant always talks first
+    if (chatEl) {
+        let currentScreen = 'landing';
+        if (!document.getElementById('start-section')?.classList.contains('hidden')) currentScreen = 'setup';
+        else if (!document.getElementById('capture-section')?.classList.contains('hidden')) currentScreen = 'capture';
+        else if (!document.getElementById('review-section')?.classList.contains('hidden')) currentScreen = 'review';
+        else if (!document.getElementById('analytics-section')?.classList.contains('hidden')) currentScreen = 'results';
+
+        const greetings = {
+            'landing': "Hey! 👋 I'm your grading assistant. Tell me what you need — set up a session, add students, check results — I've got you.",
+            'setup': "Setting up? I can help pick the right assessment type, add a missing student, or get you scanning faster.",
+            'capture': "Scanning scripts — nice! If a name isn't matching or someone's missing, just tell me.",
+            'review': "Reviewing scores? I can correct names, fix scores, or add someone who's missing from the list.",
+            'results': "Results are in! Want me to analyze scores, find at-risk students, or download your Excel?"
+        };
+        const greeting = greetings[currentScreen] || greetings['landing'];
+
+        setTimeout(() => {
+            chatEl.innerHTML = `
+                <div class="flex justify-start mb-3 animate-fade-in-up">
+                    <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                        <p class="text-sm text-white leading-relaxed">${greeting}</p>
+                    </div>
+                </div>
+            `;
+            assistantHistory.push({ role: 'assistant', text: greeting });
+        }, 400);
+    }
+
     // Attach iOS keyboard focus fix
     const inputEl = document.getElementById('assistant-input');
     if (inputEl) {
