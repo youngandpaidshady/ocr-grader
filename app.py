@@ -1444,8 +1444,8 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
             conversation=conversation_context
         )
         
-        # Try models in order — lite has higher free-tier quota (30 RPM vs 15)
-        models_to_try = ['gemini-2.0-flash-lite', 'gemini-2.0-flash']
+        # Primary: best quality model. Fallback: lighter model if primary fails.
+        models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
         raw_text = None
         last_error = None
         
