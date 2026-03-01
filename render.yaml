@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: qsi-smart-grader
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: grader-db
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+
+databases:
+  - name: grader-db
+    databaseName: smartgrader
+    user: grader_user
