@@ -1,7 +1,6 @@
-analyze the entire project, understand the codebase
-a teacher has scanned for first ca and downloaded the excel, she found out a student score was ommited, what can be the easy fix method and how does it fit into the workflow
-lets upgrade the ui/ux making this feel premium
-curate as many suggestions as posssible, to properly optimize and elevate this site, look for possible bugs and smart ways to catch them,
-you're to act as a senior software engineer and a product manager, think deep and wide, be creative, be innovative, be critical, be intelligent
+export is still importing all classes, dont you get, its like this... im a chemistry teacher i take ss1q, ss1s, ss1i, but there are other teachers in the school, so when i click export, it should only export the class i.m teaching, we need a very smart system for this, how does this even fit in the workflow, coz it appears complicated to me as well, but ill explain thw whole thing so you can understand,  
+ss1 has like 3 other classes which i.m not teaching and its the same for other teachers as well, 
+basically i want my excel as the chemistry teacher to only contain the classes i.m teaching, and the same for other teachers, 
 
-remove unused files from working directory, and make sure the project is clean and organized    
+heading should be the class name, and the sub, then the toggle between classes, like in the pics...
+i have my excel should be smart as well, more like interactive chatboc where teachers can describe what they wanna do, by uploading excel the system should be able to read and analyze what's going on with the file

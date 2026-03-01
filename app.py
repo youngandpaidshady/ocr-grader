@@ -12,6 +12,7 @@ from sqlalchemy import func
 
 # Load environment variables
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 load_dotenv()
 
 # Active working file path configured globally
@@ -456,6 +457,7 @@ def upload_batch():
         
         images_base64 = data['images']
         target_class = data.get('targetClass', '').strip()
+        target_classes = data.get('targetClasses', [target_class] if target_class else [])
         smart_instruction = data.get('smartInstruction', '').strip()
         
         if not images_base64:
@@ -465,21 +467,30 @@ def upload_batch():
         if smart_instruction:
             print(f"Smart Instruction Applied: {smart_instruction}")
         
-        # Pull known names for this class to improve accuracy (Smart Name Matching)
+        # Build roster pool from ALL selected classes (3-Layer Routing)
         known_names_text = ""
         known_names = []
+        class_rosters = {}  # {class_name: [student_names]}
         
-        if target_class:
+        for tc in (target_classes if target_classes else [target_class]):
+            if not tc:
+                continue
             try:
-                # Fetch class exactly as specified in the dropdown
-                c = ClassModel.query.filter(func.lower(ClassModel.name) == target_class.lower()).first()
+                c = ClassModel.query.filter(func.lower(ClassModel.name) == tc.lower()).first()
                 if c:
                     students = StudentModel.query.filter_by(class_id=c.id).all()
-                    known_names = [s.name for s in students]
-                    if known_names:
-                        known_names_text = "\n\nCRITICAL INSTRUCTION: You are grading papers for class '{}'. Here is the authoritative list of known student names in this class: {}. If the handwritten name on the paper resembles any of these, you MUST output the exact spelling from this list. Do not invent new names.".format(c.name, known_names)
+                    names = [s.name for s in students]
+                    class_rosters[tc] = names
+                    known_names.extend(names)
             except Exception as e:
-                print("Error checking known names: {}".format(e))
+                print("Error loading roster for {}: {}".format(tc, e))
+        
+        if known_names:
+            known_names = list(set(known_names))  # Deduplicate
+            known_names_text = "\n\nCRITICAL INSTRUCTION: You are grading papers for class(es) '{}'. Here is the authoritative list of known student names across all classes: {}. If the handwritten name on the paper resembles any of these, you MUST output the exact spelling from this list. Do not invent new names.".format(
+                ', '.join(target_classes if target_classes else [target_class]),
+                known_names
+            )
         
         # Prepare contents for AI model
         dynamic_prompt = SYSTEM_PROMPT + known_names_text
@@ -488,7 +499,7 @@ def upload_batch():
             dynamic_prompt += f"\n\n--- TEACHER'S CUSTOM SMART INSTRUCTION ---\n{smart_instruction}\n--- END OF CUSTOM INSTRUCTION ---\nYou MUST strictly obey the above manual instruction given by the teacher when processing these images and finalizing the output JSON."
         
         # Concurrent processing: split images into chunks and process in parallel
-        CHUNK_SIZE = 3  # Process 3 images per model call for optimal speed/accuracy
+        CHUNK_SIZE = 5  # Increased from 3 - Gemini handles 5 images well, fewer API calls
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Attach global index to each image
@@ -534,7 +545,35 @@ def upload_batch():
                         
                     name = str(res.get('name', '')).strip().title()
                     confidence = str(res.get('confidence', 'high')).lower()
-                    if target_class:
+                    
+                    # === 3-LAYER CLASS ROUTING ===
+                    # Layer 1: OCR - try to match AI-extracted class
+                    import re as re_mod
+                    extracted_class = str(res.get('class', '')).strip().upper()
+                    matched_class = None
+                    
+                    if extracted_class:
+                        ec_cleaned = re_mod.sub(r'[^A-Z0-9]', '', extracted_class)
+                        for tc in target_classes:
+                            tc_cleaned = re_mod.sub(r'[^A-Z0-9]', '', tc.upper())
+                            if ec_cleaned == tc_cleaned:
+                                matched_class = tc
+                                break
+                    
+                    # Layer 2: Roster lookup - find which class this student is in
+                    if not matched_class and name and class_rosters:
+                        for class_name, roster in class_rosters.items():
+                            if roster:
+                                best = process.extractOne(name, roster, scorer=fuzz.token_set_ratio)
+                                if best and best[1] >= 85:
+                                    matched_class = class_name
+                                    res['name'] = best[0]  # Also fix name spelling
+                                    break
+                    
+                    # Layer 3: Fallback to primary target class
+                    if matched_class:
+                        res['class'] = matched_class
+                    elif target_class:
                         res['class'] = target_class
 
                     if name and known_names:
@@ -560,13 +599,15 @@ def upload_batch():
         
         @stream_with_context
         def generate():
-            for chunk in image_chunks:
-                try:
-                    chunk_res = process_chunk(chunk)
-                    for r in chunk_res:
-                        yield "data: {}\n\n".format(json.dumps(r))
-                except Exception as exc:
-                    print('Chunk generated an exception: {}'.format(exc))
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                futures = {executor.submit(process_chunk, chunk): chunk for chunk in image_chunks}
+                for future in as_completed(futures):
+                    try:
+                        chunk_res = future.result()
+                        for r in chunk_res:
+                            yield "data: {}\n\n".format(json.dumps(r))
+                    except Exception as exc:
+                        print('Chunk generated an exception: {}'.format(exc))
             yield "data: [DONE]\n\n"
         
         return Response(generate(), mimetype='text/event-stream')
@@ -645,7 +686,11 @@ def export_excel():
             db.session.commit()
             
         # Now generate Excel from DB cleanly organized by Class and Subject
-        classes = ClassModel.query.order_by(ClassModel.name).all()
+        class_filter = data.get('classList', [])
+        if class_filter:
+            classes = ClassModel.query.filter(ClassModel.name.in_(class_filter)).order_by(ClassModel.name).all()
+        else:
+            classes = ClassModel.query.order_by(ClassModel.name).all()
         sheets_dict = {}
         
         for c in classes:
@@ -814,7 +859,21 @@ def export_excel():
                     for cell in row:
                         cell.alignment = Alignment(horizontal='center')
                 
-        return jsonify({"message": "Successfully mapped grades to Database and generated Active Sheet."}), 200
+        # Build sheets_summary for frontend tab rendering
+        sheets_summary = {}
+        for s_name, df_sheet in sheets_dict.items():
+            parts = s_name.split(" - ", 1) if " - " in s_name else [s_name, "General"]
+            sheets_summary[s_name] = {
+                "columns": list(df_sheet.columns),
+                "rows": df_sheet.fillna('').to_dict(orient='records'),
+                "class": parts[0],
+                "subject": parts[1] if len(parts) > 1 else "General"
+            }
+
+        return jsonify({
+            "message": "Successfully mapped grades to Database and generated Active Sheet.",
+            "sheets": sheets_summary
+        }), 200
 
     except Exception as e:
         print("Excel export error: {}".format(e))
@@ -999,6 +1058,225 @@ Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like `js
     except Exception as e:
         print("Error extracting names: {}".format(e))
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/ai-resolve', methods=['POST'])
+def ai_resolve():
+    """General-purpose AI resolver for sticky situations — called when the app hits ambiguity."""
+    try:
+        data = request.json
+        situation = data.get('situation', '')
+        context = data.get('context', {})
+        
+        resolver_prompts = {
+            'unreadable_name': """A student's name could not be read from their test script.
+Here is the context: {context}
+The known student roster for this class is: {roster}
+Based on any partial characters visible and the roster, suggest the most likely student name(s).
+Return JSON: {{"suggestions": ["Name1", "Name2"], "confidence": "High|Medium|Low", "reasoning": "..."}}""",
+            
+            'weird_score': """A score was extracted but looks unusual: "{value}".
+Common formats: "8", "8/10", "80%", "eight", "8 out of 10".
+Normalize this to a simple integer score.
+Return JSON: {{"normalized_score": 8, "original": "{value}", "reasoning": "..."}}""",
+            
+            'bulk_mismatch': """Multiple scanned names could not be matched to any student roster.
+Unmatched names: {unmatched}
+Available rosters: {rosters}
+For each unmatched name, suggest the closest match from any roster, or mark as "new_student".
+Return JSON: {{"matches": [{{"scanned": "...", "suggested": "...", "class": "...", "confidence": 0.85}}]}}""",
+            
+            'excel_format': """A teacher uploaded an Excel file but the format is unexpected.
+Column headers found: {columns}
+First 3 rows of data: {sample_rows}
+Figure out which column is the student name, class, subject, and scores.
+Return JSON: {{"name_col": "...", "class_col": "...", "subject_col": "...", "score_cols": ["..."], "header_row": 1, "reasoning": "..."}}""",
+            
+            'error_explain': """An error occurred in the grading app. Explain it in simple, friendly language for a teacher (not a developer).
+Error: {error}
+Context: What the teacher was doing: {action}
+Return JSON: {{"friendly_message": "...", "suggestion": "...", "can_retry": true}}"""
+        }
+        
+        template = resolver_prompts.get(situation, 
+            'Analyze this situation and provide a helpful structured response: {context}')
+        
+        # Build the prompt with context
+        prompt = template.format(**context) if context else template
+        prompt += "\n\nReturn ONLY raw JSON. Do NOT wrap in markdown."
+        
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        raw_text = response.text.strip()
+        
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+            
+        result = json.loads(raw_text.strip())
+        return jsonify({"success": True, "result": result}), 200
+        
+    except Exception as e:
+        print("AI resolve error: {}".format(e))
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/smart-assistant', methods=['POST'])
+def smart_assistant():
+    """Smart conversational assistant with real DB data access. Designed by XO."""
+    try:
+        data = request.json
+        message = data.get('message', '')
+        context = data.get('context', {})
+        current_screen = data.get('currentScreen', 'landing')
+        
+        # Build RICH context from actual database
+        classes = ClassModel.query.order_by(ClassModel.name).all()
+        class_data = {}
+        for c in classes:
+            students = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
+            scores = ScoreModel.query.filter(
+                ScoreModel.student_id.in_([s.id for s in students])
+            ).all() if students else []
+            
+            # Get assessment types that exist for this class
+            assessment_types = list(set(s.assessment_type for s in scores)) if scores else []
+            subjects = list(set(s.subject_name for s in scores)) if scores else []
+            
+            class_data[c.name] = {
+                "student_count": len(students),
+                "students": [s.name for s in students[:15]],  # First 15 for context window
+                "assessments": assessment_types,
+                "subjects": subjects,
+                "has_scores": len(scores) > 0
+            }
+        
+        system_prompt = """You are the Smart Assistant for QSI Smart Grader, designed by XO.
+You help teachers manage their grading workflow. Be warm, smart, and always helpful.
+
+CURRENT STATE:
+- Teacher is on the "{screen}" screen
+- Session context: {context}
+
+DATABASE (live data):
+{db_data}
+
+Based on the teacher's message, respond with a JSON object:
+{{
+    "response": "A friendly, smart message (1-3 sentences). Reference real data when possible.",
+    "action": One of:
+        "setup_session" - Pre-fill class/subject/assessment and navigate to scanning
+        "view_standings" - Show results/analytics
+        "add_student" - Add student to roster (will trigger safe-add flow)
+        "edit_scores" - Navigate to review section
+        "add_class" - Open add class modal
+        "manage_enrollment" - Open enrollment management
+        "export_data" - Download Excel
+        "none" - Just informational response
+    "params": {{
+        "class_name": "...",     // for setup_session, add_student
+        "subject_name": "...",   // for setup_session
+        "assessment_type": "...", // for setup_session (suggest next logical one)
+        "student_name": "..."    // for add_student
+    }}
+}}
+
+RULES:
+- For "setup_session": figure out the NEXT assessment to grade. If 1st CA exists, suggest 2nd CA. If both exist, suggest Exam.
+- For "add_student": always confirm the class and spell the name clearly.
+- Always reference real data: "You have 30 students in SS 1Q with 1st CA scores already."
+- If unsure, ask a clarifying question (action: "none").
+- Sign off important messages with a subtle "- XO Assistant" only on first interaction.
+
+Return ONLY raw JSON. No markdown.""".format(
+            screen=current_screen,
+            context=json.dumps(context),
+            db_data=json.dumps(class_data, indent=2)
+        )
+        
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content([system_prompt, message])
+        raw_text = response.text.strip()
+        
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+            
+        result = json.loads(raw_text.strip())
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print("Smart assistant error: {}".format(e))
+        return jsonify({
+            "response": "Sorry, I had trouble with that. Could you rephrase? - XO Assistant",
+            "action": "none",
+            "params": {}
+        }), 200
+
+
+@app.route('/api/safe-add-student', methods=['POST'])
+def safe_add_student():
+    """Safely add a student to a class roster with validation guards."""
+    try:
+        data = request.json
+        student_name = str(data.get('studentName', '')).strip().title()
+        class_name = str(data.get('className', '')).strip()
+        force = data.get('force', False)  # Skip fuzzy check if user confirmed
+        
+        if not student_name or not class_name:
+            return jsonify({"error": "Student name and class are required."}), 400
+        
+        # Guard 1: Validate class exists
+        c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+        if not c:
+            return jsonify({
+                "error": "Class '{}' not found. Please create the class first.".format(class_name),
+                "suggestion": "add_class"
+            }), 404
+        
+        # Guard 2: Check for exact duplicate
+        existing = StudentModel.query.filter_by(class_id=c.id, name=student_name).first()
+        if existing:
+            return jsonify({
+                "error": "{} is already in {}.".format(student_name, class_name),
+                "duplicate": True
+            }), 409
+        
+        # Guard 3: Fuzzy duplicate check - catch near-matches (skip if forced)
+        all_students = StudentModel.query.filter_by(class_id=c.id).all()
+        all_names = [s.name for s in all_students]
+        if all_names and not force:
+            best_match = process.extractOne(student_name, all_names, scorer=fuzz.token_set_ratio)
+            if best_match and best_match[1] >= 88:
+                return jsonify({
+                    "warning": "A similar name exists: '{}' ({}% match). Is this the same student?".format(
+                        best_match[0], best_match[1]
+                    ),
+                    "similar_name": best_match[0],
+                    "similarity": best_match[1],
+                    "needs_confirmation": True
+                }), 200
+        
+        # All guards passed - safe to add
+        new_student = StudentModel(class_id=c.id, name=student_name)
+        db.session.add(new_student)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": "{} has been added to {}.".format(student_name, class_name),
+            "student_id": new_student.id,
+            "class_name": class_name,
+            "total_students": len(all_students) + 1
+        }), 201
+        
+    except Exception as e:
+        print("Safe add student error: {}".format(e))
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 
 if __name__ == '__main__':
     # Make sure templates folder exists

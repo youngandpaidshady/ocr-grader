@@ -62,6 +62,8 @@
         rel="stylesheet">
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Enhancement Styles -->
+    <link rel="stylesheet" href="/static/enhancements.css">
 
     <!-- Three.js for 3D Background Scene -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
@@ -826,14 +828,14 @@
                     <!-- Important Notice Banner (Dismissible) -->
                     <div id="notice-banner"
                         class="mb-8 border border-amber-500/30 bg-amber-500/10 rounded-xl p-4 flex items-start gap-3 shadow-inner relative transition-opacity duration-300">
-                        <i class="fa-solid fa-triangle-exclamation text-amber-500 mt-1"></i>
+                        <i class="fa-solid fa-lightbulb text-amber-500 mt-1"></i>
                         <div class="flex-1 pr-6">
-                            <h4 class="text-amber-500 font-bold text-sm tracking-wide mb-1">Important Notice</h4>
+                            <h4 class="text-amber-500 font-bold text-sm tracking-wide mb-1">Quick Heads Up 👋</h4>
                             <p class="text-amber-200/80 text-xs font-medium leading-relaxed">
-                                Always remember to click <strong class="text-amber-400">"Save Grades to Active
-                                    Roster"</strong> and then <strong class="text-amber-400">"Download Complete Excel
-                                    Sheet"</strong> when you are finished. Closing this page will lose any unsaved
-                                scans.
+                                When you're done scanning, hit <strong class="text-amber-400">"Save"</strong> to
+                                lock in your grades, then <strong class="text-amber-400">"Download"</strong> to
+                                grab your updated Excel file. Don't close the page before saving — your scans
+                                live here until you do!
                             </p>
                         </div>
                         <button
@@ -906,29 +908,28 @@
 
                         <!-- Class & Subject -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-                            <!-- Target Class -->
-                            <div class="space-y-2 group">
+                            <!-- Target Classes (Multi-select chip picker) -->
+                            <div class="space-y-2 group md:col-span-2">
                                 <label
-                                    class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Class
-                                    Name</label>
-                                <div class="flex items-center gap-2">
-                                    <div
-                                        class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-1 relative rounded-xl">
-                                        <select id="target-class"
-                                            class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-bold tracking-wide">
-                                            <option value="" disabled selected class="bg-card">-- Select a Class --
-                                            </option>
-                                        </select>
-                                        <i
-                                            class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
-                                        <div class="input-focus-anim rounded-xl"></div>
+                                    class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1"><i
+                                        class="fa-solid fa-school mr-1.5"></i>Your
+                                    Classes</label>
+                                <div id="class-picker-container"
+                                    class="bg-black/30 rounded-xl border border-white/5 p-4">
+                                    <div class="chip-grid flex flex-wrap gap-2 items-center">
+                                        <!-- Chips populated dynamically by app-enhancements.js -->
+                                        <button type="button" id="btn-add-class-chip"
+                                            onclick="document.getElementById('btn-open-paste-modal').click()">
+                                            <i class="fa-solid fa-plus mr-1.5"></i> Add Class
+                                        </button>
                                     </div>
-                                    <button type="button" id="btn-open-paste-modal"
-                                        class="shrink-0 bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30 font-bold px-4 py-4 rounded-xl transition-all shadow-glow text-sm flex items-center gap-2"
-                                        title="Add New Class">
-                                        <i class="fa-solid fa-plus"></i> <span>Add Class</span>
-                                    </button>
                                 </div>
+                                <!-- Hidden: old dropdown kept for backward compatibility -->
+                                <select id="target-class" class="hidden">
+                                    <option value="" disabled selected>-- Select a Class --</option>
+                                </select>
+                                <button type="button" id="btn-open-paste-modal" class="hidden" title="Add New Class">
+                                </button>
                             </div>
 
                             <!-- Subject Select -->
@@ -1687,8 +1688,33 @@
                         showToast(`Loaded ${studentCount} students from Excel.`, 'success');
                         window._excelRecords = result.records;
 
+                        // Track detected class in session
+                        if (typeof addToSessionClasses === 'function' && result.detected_class) {
+                            addToSessionClasses(result.detected_class);
+                        }
+                        // Track selected class in chip picker
+                        if (typeof selectedClasses !== 'undefined' && result.detected_class) {
+                            if (!selectedClasses.includes(result.detected_class)) {
+                                selectedClasses.push(result.detected_class);
+                            }
+                        }
+
+                        // Open Smart Assistant with parsed data
+                        if (typeof openSmartAssistant === 'function') {
+                            openSmartAssistant({
+                                classes: result.detected_class ? [result.detected_class] : [],
+                                subjects: result.detected_subject ? [result.detected_subject] : [],
+                                studentCount: studentCount,
+                                assessments: result.detected_assessments || []
+                            });
+                        }
+
                     } catch (err) {
                         showToast(`Error: ${err.message}`, 'error');
+                        // Try AI error explanation
+                        if (typeof handleErrorWithAI === 'function') {
+                            handleErrorWithAI(err, 'uploading Excel file');
+                        }
                     } finally {
                         btnEntryExcel.innerHTML = '<div class="w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-1 border border-emerald-500/20"><i class="fa-solid fa-file-excel text-emerald-400 text-2xl"></i></div><span class="font-bold text-[15px] tracking-wide">I Have My Excel</span><span class="text-[11px] text-muted-foreground font-medium leading-tight">Continue from where you left off.<br>Upload your previous score sheet.</span>';
                         btnEntryExcel.disabled = false;
@@ -2267,8 +2293,20 @@
             }
 
             try {
-                const base64List = imagesBatch.map(item => item.base64);
+                let base64List = imagesBatch.map(item => item.base64);
+
+                // Compress images for faster upload (Workstream 2)
+                if (typeof compressBatch === 'function') {
+                    try {
+                        base64List = await compressBatch(base64List);
+                    } catch (e) { console.warn('Compression skipped:', e); }
+                }
+
                 const targetClassVal = document.getElementById('target-class').value.trim();
+                // Track class in session
+                if (typeof addToSessionClasses === 'function' && targetClassVal) {
+                    addToSessionClasses(targetClassVal);
+                }
 
                 finalAssessmentType = assessmentTypeSelect.value === 'custom'
                     ? (customAssessmentInput.value.trim() || 'Score')
@@ -2286,8 +2324,6 @@
                     extractedData = new Array(base64List.length).fill({});
                 } else {
                     // We are appending/merging to an existing roster
-                    // Keep the names, clear out old scores if they exist (or keep them?)
-                    // Usually we want to just overwrite the newly scanned ones.
                 }
 
                 // Check Smart Mode
@@ -2301,6 +2337,7 @@
                     body: JSON.stringify({
                         images: base64List,
                         targetClass: targetClassVal,
+                        targetClasses: typeof selectedClasses !== 'undefined' ? selectedClasses : [targetClassVal],
                         smartInstruction: smartInstruction
                     })
                 });
@@ -2604,7 +2641,8 @@
                     body: JSON.stringify({
                         results: extractedData,
                         assessmentType: finalAssessmentType,
-                        subjectType: currentSubjectName
+                        subjectType: currentSubjectName,
+                        classList: typeof sessionClasses !== 'undefined' ? Array.from(sessionClasses) : []
                     })
                 });
 
@@ -2620,10 +2658,19 @@
                 reviewSection.classList.add('hidden');
                 analyticsSection.classList.remove('hidden');
 
+                // Render class-based tabs if sheets data is available
+                if (data.sheets && typeof renderResultsTabs === 'function') {
+                    renderResultsTabs(data.sheets);
+                }
+
             } catch (err) {
                 console.error("Export error:", err);
                 exportMsg.classList.remove('hidden', 'text-primary');
                 exportMsg.classList.add('text-destructive');
+                // Try AI-powered error explanation
+                if (typeof handleErrorWithAI === 'function') {
+                    handleErrorWithAI(err, 'saving grades');
+                }
                 exportMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> Error: ${err.message}`;
             } finally {
                 btnExport.disabled = false;
@@ -3913,6 +3960,56 @@
         });
 
     </script>
+
+    <!-- Smart Assistant Modal -->
+    <div id="smart-assistant-modal" class="hidden">
+        <div class="assistant-panel animate-fade-in-up">
+            <div class="assistant-header">
+                <h3><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Assistant <span
+                        class="text-[10px] text-white/30 font-medium ml-1">by XO</span></h3>
+                <button onclick="closeSmartAssistant()" class="text-white/40 hover:text-white transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="assistant-body">
+                <div id="assistant-summary"></div>
+                <div class="assistant-actions mt-4">
+                    <button class="assistant-action-btn" onclick="executeAssistantAction('scan_papers')">
+                        <i class="fa-solid fa-camera text-primary bg-primary/15"></i>
+                        <div><span>Grade Next Test</span>
+                            <p>Scan new scripts for this class</p>
+                        </div>
+                    </button>
+                    <button class="assistant-action-btn" onclick="executeAssistantAction('edit_scores')">
+                        <i class="fa-solid fa-pen-to-square text-amber-400 bg-amber-500/15"></i>
+                        <div><span>Edit Scores</span>
+                            <p>Fix or update existing scores</p>
+                        </div>
+                    </button>
+                    <button class="assistant-action-btn" onclick="executeAssistantAction('view_standings')">
+                        <i class="fa-solid fa-ranking-star text-emerald-400 bg-emerald-500/15"></i>
+                        <div><span>View Standings</span>
+                            <p>See rankings and analytics</p>
+                        </div>
+                    </button>
+                    <button class="assistant-action-btn" onclick="executeAssistantAction('add_student')">
+                        <i class="fa-solid fa-user-plus text-blue-400 bg-blue-500/15"></i>
+                        <div><span>Add Student</span>
+                            <p>Add a new student to roster</p>
+                        </div>
+                    </button>
+                </div>
+                <div id="assistant-chat" class="mt-6"></div>
+            </div>
+            <div class="assistant-input-bar">
+                <input type="text" id="assistant-input" placeholder="Ask me anything..." autocomplete="off">
+                <button id="assistant-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhancement Layer -->
+    <script src="/static/app-enhancements.js"></script>
 </body>
 
 </html>
