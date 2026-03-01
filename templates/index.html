@@ -884,25 +884,7 @@
                         </div>
                     </div>
 
-                    <!-- Important Notice Banner (Dismissible) -->
-                    <div id="notice-banner"
-                        class="mb-8 border border-amber-500/20 bg-amber-500/[0.07] rounded-xl p-4 flex items-start gap-3 relative transition-opacity duration-300">
-                        <i class="fa-solid fa-lightbulb text-amber-500 mt-1"></i>
-                        <div class="flex-1 pr-6">
-                            <h4 class="text-amber-500 font-bold text-sm tracking-wide mb-1">Quick Heads Up 👋</h4>
-                            <p class="text-amber-200/70 text-xs font-medium leading-relaxed">
-                                When you're done scanning, hit <strong class="text-amber-400">"Save"</strong> to
-                                lock in your grades, then <strong class="text-amber-400">"Download"</strong> to
-                                grab your updated Excel file. Don't close the page before saving — your scans
-                                live here until you do!
-                            </p>
-                        </div>
-                        <button
-                            onclick="document.getElementById('notice-banner').classList.add('opacity-0', 'pointer-events-none'); setTimeout(() => document.getElementById('notice-banner').classList.add('hidden'), 300)"
-                            class="absolute top-3 right-3 text-amber-500/40 hover:text-amber-500 transition-colors p-1">
-                            <i class="fa-solid fa-xmark text-sm"></i>
-                        </button>
-                    </div>
+
 
                     <!-- Recent Sessions -->
                     <div id="recent-sessions-container" class="mb-6 hidden">
@@ -1193,6 +1175,24 @@
                         and press Capture.</p>
                 </div>
 
+                <!-- Quick Heads Up (shown on capture screen) -->
+                <div id="notice-banner"
+                    class="mb-4 mx-1 border border-amber-500/20 bg-amber-500/[0.07] rounded-xl p-3 flex items-start gap-3 relative transition-opacity duration-300">
+                    <i class="fa-solid fa-lightbulb text-amber-500 mt-0.5 text-sm"></i>
+                    <div class="flex-1 pr-6">
+                        <p class="text-amber-200/70 text-xs font-medium leading-relaxed">
+                            When done, hit <strong class="text-amber-400">"Save"</strong> to lock in grades, then
+                            <strong class="text-amber-400">"Download"</strong> for your Excel. Don't close the page
+                            before saving!
+                        </p>
+                    </div>
+                    <button
+                        onclick="this.parentElement.classList.add('opacity-0', 'pointer-events-none'); setTimeout(() => this.parentElement.classList.add('hidden'), 300)"
+                        class="absolute top-2 right-2 text-amber-500/40 hover:text-amber-500 transition-colors p-1">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+
                 <!-- Video Feed with Overlays -->
                 <div id="video-container"
                     class="mb-6 border-2 border-primary/20 flex items-center justify-center bg-black shadow-inner overflow-hidden relative group z-10 rounded-2xl">
@@ -1475,9 +1475,10 @@
                 class="mx-auto max-w-xs p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] backdrop-blur-sm text-center">
                 <p
                     class="text-[11px] uppercase font-bold tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
-                    Made with <span class="inline-block animate-pulse">❤️</span> for QSI
+                    Made with <span class="text-red-400 inline-block animate-pulse">❤️</span> for QSI
                 </p>
-                <p class="text-[9px] text-white/20 mt-1.5 tracking-widest">SMART GRADER v2.0</p>
+                <p class="text-[9px] text-white/30 mt-1.5 tracking-widest">SMART GRADER v2.0 <span
+                        class="text-white/50">by XO</span></p>
             </div>
         </footer>
     </div>
@@ -1730,7 +1731,7 @@
                 entryExcelUpload.addEventListener('change', async (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
-                    btnEntryExcel.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-400"></i><span class="font-bold">Loading...</span>';
+                    btnEntryExcel.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-400"></i><span class="font-bold text-white">Loading...</span><span class="text-[11px] text-emerald-300/60 font-medium">Parsing your Excel file</span>';
                     btnEntryExcel.disabled = true;
 
                     const formData = new FormData();

@@ -18,12 +18,38 @@ load_dotenv()
 # Active working file path configured globally
 WORKING_EXCEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ActiveRoaster.xlsx")
 
-# Configure AI Model
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key or api_key == "your_gemini_api_key_here":
-    print("WARNING: API key is not set correctly in .env file.")
+# Configure AI Model — supports multiple API keys (comma-separated) for rotation
+import threading
+_api_keys_raw = os.getenv("GEMINI_API_KEY", "")
+API_KEYS = [k.strip() for k in _api_keys_raw.split(",") if k.strip() and k.strip() != "your_gemini_api_key_here"]
+_current_key_index = 0
+_key_lock = threading.Lock()
 
-genai.configure(api_key=api_key)
+if not API_KEYS:
+    print("WARNING: No API keys set in .env file. Set GEMINI_API_KEY (comma-separated for multiple).")
+else:
+    print("Loaded {} API key(s) for rotation.".format(len(API_KEYS)))
+
+def get_current_api_key():
+    """Get the current API key."""
+    if not API_KEYS:
+        return None
+    return API_KEYS[_current_key_index % len(API_KEYS)]
+
+def rotate_api_key():
+    """Rotate to the next API key. Returns the new key."""
+    global _current_key_index
+    if len(API_KEYS) <= 1:
+        return get_current_api_key()
+    with _key_lock:
+        _current_key_index = (_current_key_index + 1) % len(API_KEYS)
+        new_key = API_KEYS[_current_key_index]
+        genai.configure(api_key=new_key)
+        print("Rotated to API key #{} of {}".format(_current_key_index + 1, len(API_KEYS)))
+    return new_key
+
+# Configure with the first key
+genai.configure(api_key=get_current_api_key())
 
 # Initialize Flask App
 app = Flask(__name__)
@@ -530,7 +556,22 @@ def upload_batch():
                     "mime_type": "image/jpeg",
                     "data": img_b64
                 })
-            response = model.generate_content(contents)
+            # Retry with key rotation on rate limit
+            response = None
+            for attempt in range(3):
+                try:
+                    response = model.generate_content(contents)
+                    break
+                except Exception as retry_err:
+                    err_str = str(retry_err).lower()
+                    if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                        rotate_api_key()
+                        if attempt < 2:
+                            time.sleep([3, 8][attempt])
+                    else:
+                        raise retry_err
+            if not response:
+                raise Exception("All API keys exhausted for this chunk")
             response_text = response.text.strip()
             if response_text.startswith("```json"):
                 response_text = response_text[7:]
@@ -1462,9 +1503,10 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
                     print("Smart assistant model {} attempt {}/3 failed: {}".format(model_name, attempt + 1, model_err))
                     # Only retry on rate limit errors, not on model-not-found etc.
                     if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                        rotate_api_key()  # Switch to next API key
                         if attempt < 2:
-                            wait = [5, 15][attempt]  # 5s then 15s
-                            print("Rate limited, waiting {}s...".format(wait))
+                            wait = [3, 8][attempt]
+                            print("Rate limited, rotated key & waiting {}s...".format(wait))
                             time.sleep(wait)
                     else:
                         break  # Non-rate-limit error, skip to next model
