@@ -647,7 +647,7 @@ function openSmartAssistant(parsedData) {
             const classesList = parsedData.classes?.join(', ') || 'Unknown';
             const assessments = parsedData.assessments?.join(', ') || 'None detected';
             summaryEl.innerHTML = `
-        < div class="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl" >
+                <div class="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
                     <i class="fa-solid fa-file-excel text-emerald-400 text-2xl"></i>
                     <div>
                         <p class="text-sm font-bold text-white">Your file looks good!</p>
@@ -656,8 +656,8 @@ function openSmartAssistant(parsedData) {
                             <strong>${classesList}</strong> with <strong>${assessments}</strong> scores.
                         </p>
                     </div>
-                </div >
-        `;
+                </div>
+            `;
         } else {
             // General context — show a friendly, screen-aware greeting
             const welcomeMessages = {
@@ -669,13 +669,13 @@ function openSmartAssistant(parsedData) {
             };
             const msg = welcomeMessages[currentScreen] || welcomeMessages['landing'];
             summaryEl.innerHTML = `
-        < div class="flex items-start gap-3 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl" >
+                <div class="flex items-start gap-3 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
                     <i class="fa-solid fa-wand-magic-sparkles text-indigo-400 text-xl"></i>
                     <div>
                         <p class="text-sm text-white/90 leading-relaxed">${msg}</p>
                     </div>
-                </div >
-        `;
+                </div>
+            `;
         }
     }
 
@@ -725,11 +725,11 @@ async function sendAssistantMessage(message) {
     // Add user message to chat (skip system messages)
     if (displayMessage) {
         chatEl.innerHTML += `
-        < div class="flex justify-end mb-3" >
-            <div class="bg-primary/20 border border-primary/30 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
-                <p class="text-sm text-white">${displayMessage}</p>
+            <div class="flex justify-end mb-3">
+                <div class="bg-primary/20 border border-primary/30 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
+                    <p class="text-sm text-white">${displayMessage}</p>
+                </div>
             </div>
-            </div >
         `;
     }
 
@@ -738,7 +738,7 @@ async function sendAssistantMessage(message) {
 
     // Show typing indicator
     chatEl.innerHTML += `
-        < div id = "assistant-typing" class="flex justify-start mb-3" >
+        <div id="assistant-typing" class="flex justify-start mb-3">
             <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
                 <div class="flex gap-1.5">
                     <span class="w-2 h-2 bg-white/40 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
@@ -746,8 +746,8 @@ async function sendAssistantMessage(message) {
                     <span class="w-2 h-2 bg-white/40 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
                 </div>
             </div>
-        </div >
-        `;
+        </div>
+    `;
     chatEl.scrollTop = chatEl.scrollHeight;
 
     // Detect current screen
@@ -810,58 +810,54 @@ async function sendAssistantMessage(message) {
             };
             const label = actionLabels[data.action] || '▶ Do this';
             actionBtn = `
-        < button onclick = "executeAssistantAction('${data.action}', ${JSON.stringify(data.params || {}).replace(/" / g, '&quot;')
-                }) "
-class="mt-2 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-bold rounded-lg transition-all border border-primary/30 inline-flex items-center gap-1.5" >
-    ${label}
-                </button >
-    `;
+                <button onclick="executeAssistantAction('${data.action}', ${JSON.stringify(data.params || {}).replace(/"/g, '&quot;')})"
+                    class="mt-2 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-bold rounded-lg transition-all border border-primary/30 inline-flex items-center gap-1.5">
+                    ${label}
+                </button>
+            `;
         }
 
         // Render rich insight cards if the action returns them
         let insightsHTML = '';
         if (data.params?.insights && Array.isArray(data.params.insights)) {
-            insightsHTML = `< div class="mt-3 space-y-1.5" > ${data.params.insights.map(i =>
+            insightsHTML = `<div class="mt-3 space-y-1.5">${data.params.insights.map(i =>
                 `<div class="flex items-start gap-2 text-xs text-white/70"><i class="fa-solid fa-chart-line text-primary mt-0.5"></i><span>${i}</span></div>`
-            ).join('')
-                }</div > `;
+            ).join('')}</div>`;
         }
         if (data.params?.anomalies && Array.isArray(data.params.anomalies)) {
-            insightsHTML += `< div class="mt-3 space-y-1.5" > ${data.params.anomalies.map(a =>
+            insightsHTML += `<div class="mt-3 space-y-1.5">${data.params.anomalies.map(a =>
                 `<div class="flex items-start gap-2 text-xs text-amber-400"><i class="fa-solid fa-triangle-exclamation mt-0.5"></i><span><strong>${a.name}</strong>: ${a.score} — ${a.reason || 'unusual score'}</span></div>`
-            ).join('')
-                }</div > `;
+            ).join('')}</div>`;
         }
         if (data.params?.at_risk && Array.isArray(data.params.at_risk)) {
-            insightsHTML += `< div class="mt-3 space-y-1.5" > ${data.params.at_risk.map(s =>
+            insightsHTML += `<div class="mt-3 space-y-1.5">${data.params.at_risk.map(s =>
                 `<div class="flex items-start gap-2 text-xs text-red-400"><i class="fa-solid fa-circle-exclamation mt-0.5"></i><span><strong>${s.name}</strong> (${s.class || ''}) — Score: ${s.score}</span></div>`
-            ).join('')
-                }</div > `;
+            ).join('')}</div>`;
         }
         if (data.params?.report_text) {
-            insightsHTML += `< div class="mt-3 p-3 bg-white/5 rounded-lg border border-white/10 text-xs text-white/80 whitespace-pre-line" > ${data.params.report_text}</div > `;
+            insightsHTML += `<div class="mt-3 p-3 bg-white/5 rounded-lg border border-white/10 text-xs text-white/80 whitespace-pre-line">${data.params.report_text}</div>`;
         }
 
         chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-            <p class="text-sm text-white leading-relaxed">${data.response || 'I\'m not sure how to help with that.'}</p>
-            ${insightsHTML}
-            ${actionBtn}
-        </div>
-            </div >
-    `;
+            <div class="flex justify-start mb-3">
+                <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                    <p class="text-sm text-white leading-relaxed">${data.response || 'I\'m not sure how to help with that.'}</p>
+                    ${insightsHTML}
+                    ${actionBtn}
+                </div>
+            </div>
+        `;
         chatEl.scrollTop = chatEl.scrollHeight;
 
     } catch (e) {
         document.getElementById('assistant-typing')?.remove();
         chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
-            <p class="text-sm text-destructive">Sorry, something went wrong. Try again?</p>
-        </div>
-            </div >
-    `;
+            <div class="flex justify-start mb-3">
+                <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
+                    <p class="text-sm text-destructive">Sorry, something went wrong. Try again?</p>
+                </div>
+            </div>
+        `;
     }
 }
 
@@ -986,7 +982,7 @@ function executeAssistantAction(action, params) {
                 for (let i = 0; i < extractedData.length; i++) {
                     if ((extractedData[i].name || '').toLowerCase().includes(targetName)) {
                         extractedData[i].score = params.new_score;
-                        const scoreInput = document.querySelector(`input[data - index= "${i}"][data - field="score"]`);
+                        const scoreInput = document.querySelector(`input[data-index="${i}"][data-field="score"]`);
                         if (scoreInput) {
                             scoreInput.value = params.new_score;
                             scoreInput.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-500/20');
@@ -998,7 +994,7 @@ function executeAssistantAction(action, params) {
                 }
                 const chatEl = document.getElementById('assistant-chat');
                 if (chatEl) {
-                    chatEl.innerHTML += `< div class="flex justify-start mb-3" > <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i>${found ? 'Score updated!' : 'Could not find that student.'}</p></div></div > `;
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i>${found ? 'Score updated!' : 'Could not find that student.'}</p></div></div>`;
                     chatEl.scrollTop = chatEl.scrollHeight;
                 }
             }
@@ -1014,7 +1010,7 @@ function executeAssistantAction(action, params) {
                 }).then(r => r.json()).then(data => {
                     const chatEl = document.getElementById('assistant-chat');
                     if (chatEl) {
-                        chatEl.innerHTML += `< div class="flex justify-start mb-3" > <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-emerald-400">${data.message || data.error || 'Done!'}</p></div></div > `;
+                        chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-emerald-400">${data.message || data.error || 'Done!'}</p></div></div>`;
                         chatEl.scrollTop = chatEl.scrollHeight;
                     }
                 });
@@ -1062,47 +1058,47 @@ async function safeAddStudent(studentName, className) {
 
         if (data.success) {
             chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[80%]">
-            <p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i> ${data.message}</p>
-            <p class="text-xs text-emerald-300/60 mt-1">${className} now has ${data.total_students} students.</p>
-        </div>
-                </div >
-    `;
+                <div class="flex justify-start mb-3">
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[80%]">
+                        <p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i> ${data.message}</p>
+                        <p class="text-xs text-emerald-300/60 mt-1">${className} now has ${data.total_students} students.</p>
+                    </div>
+                </div>
+            `;
         } else if (data.needs_confirmation) {
             chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-            <p class="text-sm text-amber-400 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> ${data.warning}</p>
-            <div class="flex gap-2 mt-3">
-                <button onclick="safeAddStudentForce('${studentName.replace(/'/g, "\\'")}', '${className.replace(/'/g, "\\'")}')" 
+                <div class="flex justify-start mb-3">
+                    <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                        <p class="text-sm text-amber-400 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> ${data.warning}</p>
+                        <div class="flex gap-2 mt-3">
+                            <button onclick="safeAddStudentForce('${studentName.replace(/'/g, "\\'")}', '${className.replace(/'/g, "\\'")}')" 
                                 class="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-500/30">
-                Yes, add as new student
-            </button>
-            <button onclick="this.closest('.flex.justify-start').remove()"
-                class="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 text-xs font-bold rounded-lg border border-white/10">
-                Cancel - same person
-            </button>
-        </div>
-                    </div >
-                </div >
-    `;
+                                Yes, add as new student
+                            </button>
+                            <button onclick="this.closest('.flex.justify-start').remove()"
+                                class="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 text-xs font-bold rounded-lg border border-white/10">
+                                Cancel - same person
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
         } else if (data.duplicate) {
             chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
-            <p class="text-sm text-white"><i class="fa-solid fa-info-circle mr-1.5 text-blue-400"></i> ${data.error}</p>
-        </div>
-                </div >
-    `;
+                <div class="flex justify-start mb-3">
+                    <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
+                        <p class="text-sm text-white"><i class="fa-solid fa-info-circle mr-1.5 text-blue-400"></i> ${data.error}</p>
+                    </div>
+                </div>
+            `;
         } else {
             chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
-            <p class="text-sm text-destructive">${data.error || 'Something went wrong.'}</p>
-        </div>
-                </div >
-    `;
+                <div class="flex justify-start mb-3">
+                    <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
+                        <p class="text-sm text-destructive">${data.error || 'Something went wrong.'}</p>
+                    </div>
+                </div>
+            `;
         }
         chatEl.scrollTop = chatEl.scrollHeight;
     } catch (e) {
@@ -1121,12 +1117,12 @@ async function safeAddStudentForce(studentName, className) {
         const chatEl = document.getElementById('assistant-chat');
         if (chatEl && data.success) {
             chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3">
-            <p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i> ${data.message}</p>
-        </div>
-                </div >
-    `;
+                <div class="flex justify-start mb-3">
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3">
+                        <p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i> ${data.message}</p>
+                    </div>
+                </div>
+            `;
             chatEl.scrollTop = chatEl.scrollHeight;
         }
     } catch (e) {
@@ -1149,19 +1145,19 @@ async function handleAssistantFileUpload(input) {
 
     // Show upload indicator
     chatEl.innerHTML += `
-    < div class="flex justify-end mb-3" >
-        <div class="bg-primary/10 border border-primary/20 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
-            <p class="text-sm text-white"><i class="fa-solid ${icon} ${color} mr-2"></i>${file.name}</p>
-            <p class="text-[10px] text-white/40 mt-1">${(file.size / 1024).toFixed(1)} KB</p>
+        <div class="flex justify-end mb-3">
+            <div class="bg-primary/10 border border-primary/20 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
+                <p class="text-sm text-white"><i class="fa-solid ${icon} ${color} mr-2"></i>${file.name}</p>
+                <p class="text-[10px] text-white/40 mt-1">${(file.size / 1024).toFixed(1)} KB</p>
+            </div>
         </div>
-        </div >
     `;
     chatEl.innerHTML += `
-    < div id = "upload-typing" class="flex justify-start mb-3" >
-        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
-            <p class="text-sm text-white/60"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Processing your file...</p>
+        <div id="upload-typing" class="flex justify-start mb-3">
+            <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
+                <p class="text-sm text-white/60"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Processing your file...</p>
+            </div>
         </div>
-        </div >
     `;
     chatEl.scrollTop = chatEl.scrollHeight;
 
@@ -1193,24 +1189,24 @@ async function handleAssistantFileUpload(input) {
 
             if (data.results && data.results.length > 0) {
                 let resultHTML = data.results.map(r =>
-                    `< div class="flex justify-between text-xs py-1 border-b border-white/5" ><span>${r.name || 'Unknown'}</span><span class="font-bold text-primary">${r.score || '?'}</span></div > `
+                    `<div class="flex justify-between text-xs py-1 border-b border-white/5"><span>${r.name || 'Unknown'}</span><span class="font-bold text-primary">${r.score || '?'}</span></div>`
                 ).join('');
                 chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-            <p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-check-circle mr-1.5"></i>Found ${data.results.length} scores!</p>
-            <div class="max-h-40 overflow-y-auto">${resultHTML}</div>
-        </div>
-                    </div >
-    `;
+                    <div class="flex justify-start mb-3">
+                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                            <p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-check-circle mr-1.5"></i>Found ${data.results.length} scores!</p>
+                            <div class="max-h-40 overflow-y-auto">${resultHTML}</div>
+                        </div>
+                    </div>
+                `;
             } else {
                 chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
-            <p class="text-sm text-white">${data.error || "I couldn't read any scores from that image. Try a clearer photo."}</p>
-        </div>
-                    </div >
-    `;
+                    <div class="flex justify-start mb-3">
+                        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
+                            <p class="text-sm text-white">${data.error || "I couldn't read any scores from that image. Try a clearer photo."}</p>
+                        </div>
+                    </div>
+                `;
             }
         } else if (isExcel) {
             // Send Excel to upload endpoint
@@ -1231,34 +1227,34 @@ async function handleAssistantFileUpload(input) {
                 if (data.detected_assessments?.length) summary += `.Assessments: ${data.detected_assessments.join(', ')} `;
 
                 chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-            <p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i>Excel loaded!</p>
-            <p class="text-xs text-white/70 mt-1">${summary}</p>
-        </div>
-                    </div >
-    `;
+                    <div class="flex justify-start mb-3">
+                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                            <p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i>Excel loaded!</p>
+                            <p class="text-xs text-white/70 mt-1">${summary}</p>
+                        </div>
+                    </div>
+                `;
                 // Now ask assistant to analyze it
                 sendAssistantMessage(`[SYSTEM] Teacher just uploaded ${file.name}. ${summary}. Suggest what to do next.`);
             } else {
                 chatEl.innerHTML += `
-    < div class= "flex justify-start mb-3" >
-    <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
-        <p class="text-sm text-destructive">${data.error || "Couldn't parse the Excel file."}</p>
-    </div>
-                    </div >
-    `;
+                    <div class="flex justify-start mb-3">
+                        <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
+                            <p class="text-sm text-destructive">${data.error || "Couldn't parse the Excel file."}</p>
+                        </div>
+                    </div>
+                `;
             }
         }
     } catch (err) {
         document.getElementById('upload-typing')?.remove();
         chatEl.innerHTML += `
-    < div class="flex justify-start mb-3" >
-        <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
-            <p class="text-sm text-destructive">Upload failed: ${err.message}</p>
-        </div>
-            </div >
-    `;
+            <div class="flex justify-start mb-3">
+                <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
+                    <p class="text-sm text-destructive">Upload failed: ${err.message}</p>
+                </div>
+            </div>
+        `;
     }
     chatEl.scrollTop = chatEl.scrollHeight;
 }
