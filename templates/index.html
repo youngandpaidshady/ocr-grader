@@ -1880,6 +1880,9 @@
             // Immediate UI transition
             startSection.classList.add('hidden');
             captureSection.classList.remove('hidden');
+            // Hide hero on capture page
+            const appHero = document.getElementById('app-hero');
+            if (appHero) appHero.classList.add('hidden');
 
             // Start the actual Camera
             initCamera();
