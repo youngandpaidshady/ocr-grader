@@ -1444,9 +1444,35 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
             conversation=conversation_context
         )
         
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content([system_prompt, message])
-        raw_text = response.text.strip()
+        # Try models in order — lite has higher free-tier quota (30 RPM vs 15)
+        models_to_try = ['gemini-2.0-flash-lite', 'gemini-2.0-flash']
+        raw_text = None
+        last_error = None
+        
+        for model_name in models_to_try:
+            for attempt in range(3):
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content([system_prompt, message])
+                    raw_text = response.text.strip()
+                    break
+                except Exception as model_err:
+                    last_error = model_err
+                    err_str = str(model_err).lower()
+                    print("Smart assistant model {} attempt {}/3 failed: {}".format(model_name, attempt + 1, model_err))
+                    # Only retry on rate limit errors, not on model-not-found etc.
+                    if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                        if attempt < 2:
+                            wait = [5, 15][attempt]  # 5s then 15s
+                            print("Rate limited, waiting {}s...".format(wait))
+                            time.sleep(wait)
+                    else:
+                        break  # Non-rate-limit error, skip to next model
+            if raw_text:
+                break
+        
+        if not raw_text:
+            raise last_error or Exception("All models failed")
         
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
