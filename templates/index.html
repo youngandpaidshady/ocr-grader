@@ -2431,7 +2431,7 @@
 
                 if (!isAppending) {
                     tbody.innerHTML = '';
-                    extractedData = new Array(base64List.length).fill({});
+                    extractedData = Array.from({ length: base64List.length }, () => ({}));
                 } else {
                     // We are appending/merging to an existing roster
                 }
@@ -2838,16 +2838,27 @@
                         });
                     });
                     if (absentNames.length > 0) {
+                        const showCount = 3;
+                        const previewNames = absentNames.slice(0, showCount).join(', ');
+                        const hasMore = absentNames.length > showCount;
+                        const moreCount = absentNames.length - showCount;
+                        const allNames = absentNames.join(', ');
+                        const toggleId = 'absent-toggle-' + Date.now();
+
                         const absentBanner = document.createElement('div');
                         absentBanner.className = 'mb-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl animate-fade-in-up';
                         absentBanner.innerHTML = `
                             <div class="flex items-start gap-3">
-                                <i class="fa-solid fa-user-clock text-amber-400 text-lg mt-0.5"></i>
-                                <div>
-                                    <p class="text-sm font-bold text-amber-400 mb-1">Heads up — ${absentNames.length} student(s) had no scanned paper:</p>
-                                    <p class="text-xs text-amber-300/70 leading-relaxed">${absentNames.join(', ')}</p>
-                                    <p class="text-[10px] text-amber-300/50 mt-2">They may have been absent. Their names still appear in your Excel with a blank score.</p>
+                                <i class="fa-solid fa-user-clock text-amber-400 text-lg mt-0.5 shrink-0"></i>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-bold text-amber-400 mb-1">${absentNames.length} student(s) had no scanned paper:</p>
+                                    <p class="text-xs text-amber-300/70 leading-relaxed">
+                                        ${previewNames}${hasMore ? `<span id="${toggleId}-dots">...</span><span id="${toggleId}-full" class="hidden">, ${absentNames.slice(showCount).join(', ')}</span>` : ''}
+                                    </p>
+                                    ${hasMore ? `<button onclick="document.getElementById('${toggleId}-full').classList.toggle('hidden'); document.getElementById('${toggleId}-dots').classList.toggle('hidden'); this.textContent = this.textContent.includes('Show') ? 'Show less' : 'Show all ${absentNames.length}';" class="text-[10px] text-amber-400 font-bold mt-1.5 hover:underline">Show all ${absentNames.length}</button>` : ''}
+                                    <p class="text-[10px] text-amber-300/50 mt-2">They may have been absent. Their names appear in Excel with a blank score.</p>
                                 </div>
+                                <button onclick="this.closest('.mb-4').remove()" class="text-amber-500/40 hover:text-amber-400 transition-colors shrink-0"><i class="fa-solid fa-xmark text-sm"></i></button>
                             </div>
                         `;
                         const analyticsEl = document.getElementById('analytics-section');
