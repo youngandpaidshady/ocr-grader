@@ -5,14 +5,34 @@
  */
 
 // ═══════════════════════════════════════════════
-//  SESSION CLASS TRACKING
+//  SESSION CLASS TRACKING (with localStorage persistence)
 // ═══════════════════════════════════════════════
-const sessionClasses = new Set();
+const sessionClasses = new Set(
+    JSON.parse(localStorage.getItem('qsi_sessionClasses') || '[]')
+);
 
 function addToSessionClasses(className) {
     if (className && className.trim()) {
         sessionClasses.add(className.trim());
+        localStorage.setItem('qsi_sessionClasses', JSON.stringify([...sessionClasses]));
     }
+}
+
+function clearSessionData() {
+    sessionClasses.clear();
+    selectedClasses = [];
+    localStorage.removeItem('qsi_sessionClasses');
+    localStorage.removeItem('qsi_lastSubject');
+    localStorage.removeItem('qsi_lastAssessment');
+    // Clear global state
+    if (typeof extractedData !== 'undefined') window.extractedData = [];
+    if (typeof imagesBatch !== 'undefined') window.imagesBatch = [];
+    if (typeof window._excelRecords !== 'undefined') window._excelRecords = null;
+    sheetsData = null;
+    activeTab = null;
+    assistantContext = {};
+    assistantHistory = [];
+    console.log('[QSI] Session data cleared');
 }
 
 // ═══════════════════════════════════════════════
@@ -51,17 +71,17 @@ async function compressBatch(images) {
 // ═══════════════════════════════════════════════
 const guideMessages = {
     'landing': {
-        message: '👋 Welcome! If you have the Excel from last time, tap <strong>"I Have My Excel"</strong>. First time? Tap <strong>"Start Fresh"</strong>.',
+        message: '👋 Welcome! If you\'ve used this before, tap <strong>"I Have My Excel"</strong> to pick up where you left off. Starting fresh? Tap <strong>"Start Fresh"</strong> and add your class list to get going.',
         target: '#landing-phase',
-        position: 'center'
+        position: 'fixed-top'
     },
     'class-picker': {
-        message: '☝️ Check all the classes you\'re grading today. You can scan one class at a time or mix — the AI sorts them automatically!',
+        message: '📋 Pick the class(es) you\'re grading. <strong>Make sure your class list is complete</strong> — the AI matches scanned names against it. You can always add missing students later from the class picker.',
         target: '#class-picker-container',
         position: 'below'
     },
     'subject': {
-        message: '📘 What subject are you teaching? This keeps each subject\'s scores separate in your file.',
+        message: '📘 What subject is this for? This keeps each subject\'s scores separate in your file.',
         target: '#subject-name',
         position: 'below'
     },
@@ -71,26 +91,23 @@ const guideMessages = {
         position: 'below'
     },
     'camera': {
-        message: '📸 Point your camera at the graded script. Hold steady — it\'ll auto-snap when ready! Tap the shutter for manual.',
+        message: '📸 Point your camera at the student\'s graded paper and tap <strong>Capture</strong>. If auto-capture feels jumpy, just turn it off and snap manually.',
         target: '#btn-capture',
         position: 'above'
     },
     'review': {
-        message: '✅ Check each student\'s name and score. Tap any field to fix mistakes. When everything looks good, tap <strong>"Save"</strong> below.',
+        message: '✅ Double-check each name and score. Tap any field to fix mistakes, then hit <strong>"Save"</strong> when it all looks right.',
         target: '#review-section',
         position: 'top'
     },
     'after-save': {
-        message: '🎉 Done! Tap <strong>"Download"</strong> for your updated Excel file. Keep this file safe — it\'s your master copy for next time!',
+        message: '🎉 Grades saved! Tap <strong>"Download"</strong> to get your updated Excel file. Keep that file safe — you\'ll need it next time!',
         target: '#btn-download-sheet',
         position: 'above'
     }
 };
 
 function showGuide(guideKey) {
-    // Don't re-show dismissed guides in this session
-    if (sessionStorage.getItem('guide_' + guideKey)) return;
-
     const guide = guideMessages[guideKey];
     if (!guide) return;
 
@@ -101,42 +118,53 @@ function showGuide(guideKey) {
     const popup = document.createElement('div');
     popup.className = 'guide-popup';
     popup.innerHTML = `
-        <div class="guide-popup-content">
-            <div class="guide-popup-message">${guide.message}</div>
-            <button class="guide-popup-dismiss" onclick="dismissGuide('${guideKey}', this)">
-                Got it 👍
+        <div class="guide-popup-content flex items-start gap-3 relative">
+            <i class="fa-solid fa-circle-info text-blue-500 text-xl mt-0.5 shrink-0"></i>
+            <div class="guide-popup-message flex-1 pr-4 text-sm font-medium text-white/90">
+                ${guide.message}
+            </div>
+            <button class="guide-popup-dismiss absolute top-3 right-3 text-white/40 hover:text-white transition-colors" onclick="dismissGuide('${guideKey}', this)">
+                <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
-        <div class="guide-popup-arrow"></div>
     `;
 
     document.body.appendChild(popup);
 
-    // Position near target
-    const target = document.querySelector(guide.target);
-    if (target) {
-        const rect = target.getBoundingClientRect();
-        const scrollY = window.scrollY;
+    // Wait for render to get dimensions
+    requestAnimationFrame(() => {
+        const target = document.querySelector(guide.target);
+        if (target) {
+            const rect = target.getBoundingClientRect();
+            const scrollY = window.scrollY;
+            const popupWidth = popup.offsetWidth || 280;
+            const popupHeight = popup.offsetHeight || 100;
 
-        if (guide.position === 'center') {
-            popup.style.top = (rect.top + scrollY + rect.height / 2) + 'px';
-            popup.style.left = '50%';
-            popup.style.transform = 'translate(-50%, -50%)';
-        } else if (guide.position === 'below') {
-            popup.style.top = (rect.bottom + scrollY + 12) + 'px';
-            popup.style.left = Math.max(16, rect.left) + 'px';
-        } else if (guide.position === 'above') {
-            popup.style.bottom = (window.innerHeight - rect.top - scrollY + 12) + 'px';
-            popup.style.left = Math.max(16, rect.left) + 'px';
-        } else {
-            popup.style.top = (rect.top + scrollY) + 'px';
-            popup.style.left = '50%';
-            popup.style.transform = 'translateX(-50%)';
+            if (guide.position === 'fixed-top') {
+                popup.style.top = (scrollY + 80) + 'px'; // Below header
+                popup.style.left = '50%';
+                popup.style.marginLeft = -(popupWidth / 2) + 'px';
+                return; // don't add pulse to target
+            } else if (guide.position === 'center') {
+                popup.style.top = (rect.top + scrollY + rect.height / 2 - popupHeight / 2) + 'px';
+                popup.style.left = '50%';
+                popup.style.marginLeft = -(popupWidth / 2) + 'px';
+            } else if (guide.position === 'below') {
+                popup.style.top = (rect.bottom + scrollY + 12) + 'px';
+                popup.style.left = Math.max(16, rect.left) + 'px';
+            } else if (guide.position === 'above') {
+                popup.style.bottom = (window.innerHeight - rect.top - scrollY + 12) + 'px';
+                popup.style.left = Math.max(16, rect.left) + 'px';
+            } else {
+                popup.style.top = (rect.top + scrollY) + 'px';
+                popup.style.left = '50%';
+                popup.style.marginLeft = -(popupWidth / 2) + 'px';
+            }
+
+            // Add pulsing indicator to target
+            target.classList.add('guide-pulse');
         }
-
-        // Add pulsing indicator to target
-        target.classList.add('guide-pulse');
-    }
+    });
 
     // Auto-dismiss after 10s
     setTimeout(() => {
@@ -145,7 +173,6 @@ function showGuide(guideKey) {
 }
 
 function dismissGuide(guideKey, btn) {
-    sessionStorage.setItem('guide_' + guideKey, '1');
     const popup = btn ? btn.closest('.guide-popup') : document.querySelector('.guide-popup');
     if (popup) {
         popup.classList.add('guide-popup-exit');
@@ -224,6 +251,8 @@ function renderClassChips(container, classes) {
 
 function toggleClassChip(chip, className) {
     const idx = selectedClasses.indexOf(className);
+    const subjectSelect = document.getElementById('subject-name');
+
     if (idx > -1) {
         selectedClasses.splice(idx, 1);
         chip.classList.remove('class-chip-active');
@@ -234,7 +263,9 @@ function toggleClassChip(chip, className) {
         chip.classList.add('class-chip-active');
         chip.querySelector('i').className = 'fa-solid fa-check-circle mr-1.5 text-xs';
         addToSessionClasses(className);
+
     }
+
 
     // Sync to old dropdown (use first selected class)
     const oldSelect = document.getElementById('target-class');
@@ -244,95 +275,9 @@ function toggleClassChip(chip, className) {
     }
 
     // Show enrollment prompt if subject is already selected
-    const subjectSelect = document.getElementById('subject-name');
-    if (subjectSelect && subjectSelect.value && selectedClasses.length > 0) {
-        checkEnrollmentForClasses();
-    }
+    // (Removed — enrollment replaced with General/Elective toggle)
 }
 
-// ═══════════════════════════════════════════════
-//  ENROLLMENT CHECK (Workstream 3 Layer 3)
-// ═══════════════════════════════════════════════
-function checkEnrollmentForClasses() {
-    const subjectSelect = document.getElementById('subject-name');
-    const subjectName = subjectSelect ? (subjectSelect.value === 'custom'
-        ? document.getElementById('custom-subject')?.value?.trim()
-        : subjectSelect.value) : '';
-
-    if (!subjectName || selectedClasses.length === 0) return;
-
-    // Show enrollment confirmation for each selected class
-    selectedClasses.forEach(className => {
-        const key = `enrollment_${className}_${subjectName}`;
-        if (sessionStorage.getItem(key)) return; // Already confirmed
-
-        showEnrollmentPrompt(className, subjectName);
-    });
-}
-
-function showEnrollmentPrompt(className, subjectName) {
-    const existing = document.querySelector(`.enrollment-prompt[data-class="${className}"]`);
-    if (existing) return;
-
-    const container = document.getElementById('enrollment-prompts') || createEnrollmentContainer();
-    const prompt = document.createElement('div');
-    prompt.className = 'enrollment-prompt animate-fade-in-up';
-    prompt.dataset.class = className;
-    prompt.innerHTML = `
-        <div class="flex items-center gap-3 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
-            <i class="fa-solid fa-users text-indigo-400 text-lg"></i>
-            <div class="flex-1">
-                <p class="text-sm font-bold text-white">${className} — ${subjectName}</p>
-                <p class="text-xs text-indigo-300/70 mt-0.5">Do all students in this class take ${subjectName}?</p>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="confirmEnrollment('${className}', '${subjectName}', true, this)"
-                    class="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold rounded-lg transition-all border border-emerald-500/30">
-                    Yes, all
-                </button>
-                <button onclick="openSelectiveEnrollment('${className}', '${subjectName}')"
-                    class="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded-lg transition-all border border-white/10">
-                    Let me pick
-                </button>
-            </div>
-        </div>
-    `;
-    container.appendChild(prompt);
-}
-
-function createEnrollmentContainer() {
-    const c = document.createElement('div');
-    c.id = 'enrollment-prompts';
-    c.className = 'space-y-3 mb-5';
-    const assessmentContainer = document.getElementById('assessment-type-container');
-    if (assessmentContainer) {
-        assessmentContainer.parentNode.insertBefore(c, assessmentContainer);
-    }
-    return c;
-}
-
-function confirmEnrollment(className, subjectName, allEnrolled, btn) {
-    sessionStorage.setItem(`enrollment_${className}_${subjectName}`, allEnrolled ? 'all' : 'selective');
-    const prompt = btn.closest('.enrollment-prompt');
-    if (prompt) {
-        prompt.classList.add('opacity-0', 'scale-95');
-        setTimeout(() => prompt.remove(), 300);
-    }
-}
-
-function openSelectiveEnrollment(className, subjectName) {
-    // Trigger the existing selective enrollment modal
-    const targetClassSelect = document.getElementById('target-class');
-    if (targetClassSelect) {
-        targetClassSelect.value = className;
-        targetClassSelect.dispatchEvent(new Event('change'));
-    }
-    // Open the paste/enrollment modal via the existing mechanism
-    const pasteBtn = document.getElementById('btn-open-paste-modal');
-    if (pasteBtn) pasteBtn.click();
-
-    sessionStorage.setItem(`enrollment_${className}_${subjectName}`, 'selective');
-}
 
 // ═══════════════════════════════════════════════
 //  DUPLICATE DETECTION (Workstream 4)
@@ -448,39 +393,79 @@ function resolveDuplicate(existingIdx, action, btn, newScore) {
 }
 
 // ═══════════════════════════════════════════════
-//  TABBED RESULTS (Workstream 5)
+//  TABBED RESULTS — Level-Grouped (Workstream 5 v2)
 // ═══════════════════════════════════════════════
 let sheetsData = null;
 let activeTab = null;
 
-function renderResultsTabs(sheets) {
+function parseClassLevel(className) {
+    const cleaned = (className || '').replace(/\./g, '').toUpperCase().trim().replace(/\s+/g, ' ');
+    const match = cleaned.match(/^([A-Z]+)\s*(\d+)\s*(.*)$/);
+    if (match) {
+        return { level: match[1] + match[2], arm: match[3].trim() || '_default', normalized: cleaned };
+    }
+    return { level: cleaned || 'OTHER', arm: '_default', normalized: className };
+}
+
+function renderResultsTabs(sheets, downloads) {
     sheetsData = sheets;
     const analyticsSection = document.getElementById('analytics-section');
     if (!analyticsSection) return;
 
-    // Remove old tab bar if exists
+    // Remove old tab bar and content if exists
     const oldTabBar = analyticsSection.querySelector('.results-tab-bar');
     if (oldTabBar) oldTabBar.remove();
-
-    // Remove old table container if exists
     const oldTable = analyticsSection.querySelector('.results-tab-content');
     if (oldTable) oldTable.remove();
 
     const sheetNames = Object.keys(sheets);
     if (sheetNames.length === 0) return;
 
-    // Create tab bar
+    // Group sheets by level
+    const levelGroups = {};
+    sheetNames.forEach(name => {
+        const sheet = sheets[name];
+        const level = sheet.level || parseClassLevel(sheet.class || name).level;
+        if (!levelGroups[level]) levelGroups[level] = [];
+        levelGroups[level].push({ name, sheet });
+    });
+
+    // Create level-grouped tab bar
     const tabBar = document.createElement('div');
     tabBar.className = 'results-tab-bar';
-    tabBar.innerHTML = `<div class="results-tabs-scroll">${sheetNames.map((name, i) => {
-        const sheet = sheets[name];
-        return `<button class="results-tab ${i === 0 ? 'results-tab-active' : ''}" 
-                data-sheet="${name}" onclick="switchResultsTab('${name.replace(/'/g, "\\'")}', this)">
-                <span class="results-tab-class">${sheet.class}</span>
-                <span class="results-tab-subject">${sheet.subject}</span>
+
+    let tabsHTML = '<div class="results-tabs-scroll">';
+    let isFirst = true;
+    Object.entries(levelGroups).forEach(([level, items]) => {
+        if (Object.keys(levelGroups).length > 1) {
+            tabsHTML += `<span class="results-level-label">${level}</span>`;
+        }
+        items.forEach(({ name, sheet }) => {
+            const activeClass = isFirst ? 'results-tab-active' : '';
+            const escapedName = name.replace(/'/g, "\\'");
+            tabsHTML += `<button class="results-tab ${activeClass}" 
+                data-sheet="${name}" onclick="switchResultsTab('${escapedName}', this)">
+                <span class="results-tab-class">${sheet.class || name}</span>
+                <span class="results-tab-subject">${sheet.subject || ''}</span>
             </button>`;
-    }).join('')
-        }</div>`;
+            isFirst = false;
+        });
+    });
+    tabsHTML += '</div>';
+
+    // Add download buttons per level if multiple files
+    if (downloads && downloads.length > 1) {
+        tabsHTML += '<div class="results-download-row">';
+        downloads.forEach(dl => {
+            tabsHTML += `<a href="${dl.url}&subject=${encodeURIComponent(sheets[Object.keys(sheets)[0]]?.subject || '')}" 
+                class="results-download-btn" download>
+                <i class="fa-solid fa-download mr-1.5"></i>${dl.filename}
+            </a>`;
+        });
+        tabsHTML += '</div>';
+    }
+
+    tabBar.innerHTML = tabsHTML;
 
     // Insert after the heading
     const heading = analyticsSection.querySelector('.flex.flex-col.mb-8');
@@ -587,31 +572,81 @@ function openSmartAssistant(parsedData) {
     const modal = document.getElementById('smart-assistant-modal');
     if (!modal) return;
 
-    // Store context from parsed Excel
-    assistantContext = {
-        classes: parsedData?.classes || [],
-        subjects: parsedData?.subjects || [],
-        students: parsedData?.studentCount || 0,
-        assessments: parsedData?.assessments || []
-    };
+    // Hide the FAB while the modal is open
+    const fab = document.getElementById('smart-assistant-fab');
+    if (fab) fab.classList.add('hidden');
 
-    // Build summary
+    // Build context — either from Excel upload data or from the current UI state
+    if (parsedData && parsedData.classes) {
+        assistantContext = {
+            classes: parsedData.classes || [],
+            subjects: parsedData.subjects || [],
+            students: parsedData.studentCount || 0,
+            assessments: parsedData.assessments || []
+        };
+    } else {
+        // Build from current UI state
+        const currentClasses = typeof selectedClasses !== 'undefined' ? [...selectedClasses] : [];
+        const subjSelect = document.getElementById('subject-name');
+        const currentSubject = subjSelect ? (subjSelect.value === 'custom'
+            ? document.getElementById('custom-subject')?.value?.trim()
+            : subjSelect.value) : '';
+        const assessSelect = document.getElementById('assessment-type');
+        const currentAssessment = assessSelect ? assessSelect.value : '';
+
+        assistantContext = {
+            classes: currentClasses,
+            subjects: currentSubject ? [currentSubject] : [],
+            students: 0,
+            assessments: currentAssessment ? [currentAssessment] : []
+        };
+    }
+
+    // Detect current screen for context-aware welcome
+    let currentScreen = 'landing';
+    if (!document.getElementById('start-section')?.classList.contains('hidden')) currentScreen = 'setup';
+    else if (!document.getElementById('capture-section')?.classList.contains('hidden')) currentScreen = 'capture';
+    else if (!document.getElementById('review-section')?.classList.contains('hidden')) currentScreen = 'review';
+    else if (!document.getElementById('analytics-section')?.classList.contains('hidden')) currentScreen = 'results';
+
+    // Build context-aware welcome summary
     const summaryEl = modal.querySelector('#assistant-summary');
-    if (summaryEl && parsedData) {
-        const classesList = parsedData.classes?.join(', ') || 'Unknown';
-        const assessments = parsedData.assessments?.join(', ') || 'None detected';
-        summaryEl.innerHTML = `
-            <div class="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                <i class="fa-solid fa-file-excel text-emerald-400 text-2xl"></i>
-                <div>
-                    <p class="text-sm font-bold text-white">File analyzed successfully!</p>
-                    <p class="text-xs text-emerald-300/70 mt-1">
-                        Found <strong>${parsedData.studentCount || 0} students</strong> in 
-                        <strong>${classesList}</strong> with <strong>${assessments}</strong> scores.
-                    </p>
+    if (summaryEl) {
+        if (parsedData && parsedData.classes) {
+            // Excel upload context — show the file summary
+            const classesList = parsedData.classes?.join(', ') || 'Unknown';
+            const assessments = parsedData.assessments?.join(', ') || 'None detected';
+            summaryEl.innerHTML = `
+                <div class="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                    <i class="fa-solid fa-file-excel text-emerald-400 text-2xl"></i>
+                    <div>
+                        <p class="text-sm font-bold text-white">Your file looks good!</p>
+                        <p class="text-xs text-emerald-300/70 mt-1">
+                            Found <strong>${parsedData.studentCount || 0} students</strong> in 
+                            <strong>${classesList}</strong> with <strong>${assessments}</strong> scores.
+                        </p>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        } else {
+            // General context — show a friendly, screen-aware greeting
+            const welcomeMessages = {
+                'landing': "Hey there! \ud83d\udc4b I can help you set up a grading session, check your results, or add students to your class list. Just ask!",
+                'setup': "Looks like you're setting things up. Need help picking the right assessment type, or want to add a missing student?",
+                'capture': "You're scanning scripts \u2014 nice! If a student's name isn't coming up right, I can help fix it or add them to the list.",
+                'review': "Reviewing your results? I can help correct names or scores, or add someone who's missing.",
+                'results': "Here are your results! Want to download your Excel, check rankings, or start grading the next test?"
+            };
+            const msg = welcomeMessages[currentScreen] || welcomeMessages['landing'];
+            summaryEl.innerHTML = `
+                <div class="flex items-start gap-3 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-400 text-xl"></i>
+                    <div>
+                        <p class="text-sm text-white/90 leading-relaxed">${msg}</p>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     // Clear chat history
@@ -621,6 +656,29 @@ function openSmartAssistant(parsedData) {
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+
+    // Attach iOS keyboard focus fix
+    const inputEl = document.getElementById('assistant-input');
+    if (inputEl) {
+        // Only attach once
+        if (!inputEl.dataset.hasKeyboardFix) {
+            inputEl.addEventListener('focus', () => {
+                // On iOS, the visual viewport shrinks but the layout viewport doesn't always. 
+                // Push the panel up explicitly.
+                requestAnimationFrame(() => {
+                    modal.style.paddingBottom = '60px'; // Approx height of iOS Safari accessory bar
+                    setTimeout(() => chatEl.scrollTop = chatEl.scrollHeight, 100);
+                });
+            });
+            inputEl.addEventListener('blur', () => {
+                // Delay slightly to handle keyboard fully closing before reverting padding
+                setTimeout(() => {
+                    modal.style.paddingBottom = ''; // Clear inline style so css takes over
+                }, 100);
+            });
+            inputEl.dataset.hasKeyboardFix = 'true';
+        }
+    }
 }
 
 async function sendAssistantMessage(message) {
@@ -630,14 +688,20 @@ async function sendAssistantMessage(message) {
     const inputEl = document.getElementById('assistant-input');
     if (!chatEl) return;
 
-    // Add user message
-    chatEl.innerHTML += `
-        <div class="flex justify-end mb-3">
-            <div class="bg-primary/20 border border-primary/30 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
-                <p class="text-sm text-white">${message}</p>
+    // Add user message to history
+    const displayMessage = message.startsWith('[SYSTEM]') ? null : message;
+    assistantHistory.push({ role: 'user', text: message });
+
+    // Add user message to chat (skip system messages)
+    if (displayMessage) {
+        chatEl.innerHTML += `
+            <div class="flex justify-end mb-3">
+                <div class="bg-primary/20 border border-primary/30 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
+                    <p class="text-sm text-white">${displayMessage}</p>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 
     // Clear input
     if (inputEl) inputEl.value = '';
@@ -664,16 +728,35 @@ async function sendAssistantMessage(message) {
     else if (!document.getElementById('analytics-section')?.classList.contains('hidden')) currentScreen = 'results';
 
     try {
+        // Build live session info for v3 assistant
+        const sessionInfo = {
+            classesGraded: [...sessionClasses],
+            subject: document.getElementById('subject-name')?.value || '',
+            assessmentsDone: [],
+            selectedClasses: [...selectedClasses]
+        };
+        // Send current results if available
+        const liveResults = (typeof extractedData !== 'undefined' && extractedData) ?
+            extractedData.filter(r => r && r.name).map(r => ({
+                name: r.name || '', score: r.score || '', class: r.class || ''
+            })) : [];
+
         const response = await fetch('/api/smart-assistant', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message,
                 context: assistantContext,
-                currentScreen: currentScreen
+                currentScreen: currentScreen,
+                currentResults: liveResults,
+                sessionInfo: sessionInfo,
+                history: assistantHistory.slice(-20) // Send last 20 messages for context
             })
         });
         const data = await response.json();
+
+        // Track assistant response in history
+        assistantHistory.push({ role: 'assistant', text: data.response || '', action: data.action || 'none' });
 
         // Remove typing indicator
         document.getElementById('assistant-typing')?.remove();
@@ -681,18 +764,55 @@ async function sendAssistantMessage(message) {
         // Add assistant response
         let actionBtn = '';
         if (data.action && data.action !== 'none') {
+            const actionLabels = {
+                'setup_session': '🎯 Set it up',
+                'correct_score': '✏️ Fix it',
+                'add_student': '➕ Add them',
+                'add_students_batch': '➕ Add all',
+                'move_student': '🔀 Move them',
+                'analyze_scores': '📊 Show analysis',
+                'compare_classes': '⚖️ Compare',
+                'flag_anomalies': '🔍 Show issues',
+                'find_at_risk': '⚠️ Show at-risk',
+                'generate_report': '📋 Generate',
+                'export_data': '💾 Download',
+                'view_standings': '🏆 View standings'
+            };
+            const label = actionLabels[data.action] || '▶ Do this';
             actionBtn = `
                 <button onclick="executeAssistantAction('${data.action}', ${JSON.stringify(data.params || {}).replace(/"/g, '&quot;')})"
                     class="mt-2 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-bold rounded-lg transition-all border border-primary/30 inline-flex items-center gap-1.5">
-                    <i class="fa-solid fa-play text-[10px]"></i> Do this
+                    ${label}
                 </button>
             `;
         }
 
+        // Render rich insight cards if the action returns them
+        let insightsHTML = '';
+        if (data.params?.insights && Array.isArray(data.params.insights)) {
+            insightsHTML = `<div class="mt-3 space-y-1.5">${data.params.insights.map(i =>
+                `<div class="flex items-start gap-2 text-xs text-white/70"><i class="fa-solid fa-chart-line text-primary mt-0.5"></i><span>${i}</span></div>`
+            ).join('')}</div>`;
+        }
+        if (data.params?.anomalies && Array.isArray(data.params.anomalies)) {
+            insightsHTML += `<div class="mt-3 space-y-1.5">${data.params.anomalies.map(a =>
+                `<div class="flex items-start gap-2 text-xs text-amber-400"><i class="fa-solid fa-triangle-exclamation mt-0.5"></i><span><strong>${a.name}</strong>: ${a.score} — ${a.reason || 'unusual score'}</span></div>`
+            ).join('')}</div>`;
+        }
+        if (data.params?.at_risk && Array.isArray(data.params.at_risk)) {
+            insightsHTML += `<div class="mt-3 space-y-1.5">${data.params.at_risk.map(s =>
+                `<div class="flex items-start gap-2 text-xs text-red-400"><i class="fa-solid fa-circle-exclamation mt-0.5"></i><span><strong>${s.name}</strong> (${s.class || ''}) — Score: ${s.score}</span></div>`
+            ).join('')}</div>`;
+        }
+        if (data.params?.report_text) {
+            insightsHTML += `<div class="mt-3 p-3 bg-white/5 rounded-lg border border-white/10 text-xs text-white/80 whitespace-pre-line">${data.params.report_text}</div>`;
+        }
+
         chatEl.innerHTML += `
             <div class="flex justify-start mb-3">
-                <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2 max-w-[80%]">
-                    <p class="text-sm text-white">${data.response || 'I\'m not sure how to help with that.'}</p>
+                <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                    <p class="text-sm text-white leading-relaxed">${data.response || 'I\'m not sure how to help with that.'}</p>
+                    ${insightsHTML}
                     ${actionBtn}
                 </div>
             </div>
@@ -713,11 +833,16 @@ async function sendAssistantMessage(message) {
 
 function executeAssistantAction(action, params) {
     const modal = document.getElementById('smart-assistant-modal');
+    const fab = document.getElementById('smart-assistant-fab');
+    const hideModal = () => {
+        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+        if (fab) fab.classList.remove('hidden');
+    };
 
     switch (action) {
         case 'setup_session': {
             // Smart setup: pre-fill class, subject, assessment and navigate
-            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            hideModal();
 
             // Show setup section
             if (typeof window.showSetup === 'function') {
@@ -801,7 +926,7 @@ function executeAssistantAction(action, params) {
             if (classes.length > 0) {
                 sendAssistantMessage(`Show me the current standings for ${classes.join(', ')}.`);
             } else {
-                if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+                hideModal();
                 document.getElementById('btn-export')?.click();
             }
             break;
@@ -814,15 +939,73 @@ function executeAssistantAction(action, params) {
             }
             break;
         }
+        case 'add_students_batch': {
+            if (params?.students && params?.class_name) {
+                params.students.forEach(name => safeAddStudent(name, params.class_name));
+            }
+            break;
+        }
+        case 'correct_score': {
+            if (params?.student_name && params?.new_score !== undefined && typeof extractedData !== 'undefined') {
+                const targetName = params.student_name.toLowerCase();
+                let found = false;
+                for (let i = 0; i < extractedData.length; i++) {
+                    if ((extractedData[i].name || '').toLowerCase().includes(targetName)) {
+                        extractedData[i].score = params.new_score;
+                        const scoreInput = document.querySelector(`input[data-index="${i}"][data-field="score"]`);
+                        if (scoreInput) {
+                            scoreInput.value = params.new_score;
+                            scoreInput.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-500/20');
+                            setTimeout(() => scoreInput.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-500/20'), 2000);
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                const chatEl = document.getElementById('assistant-chat');
+                if (chatEl) {
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i>${found ? 'Score updated!' : 'Could not find that student.'}</p></div></div>`;
+                    chatEl.scrollTop = chatEl.scrollHeight;
+                }
+            }
+            break;
+        }
+        case 'move_student': {
+            if (params?.student_name && params?.class_name && params?.target_class) {
+                // Move via API
+                fetch('/api/move-student', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ studentName: params.student_name, fromClass: params.class_name, toClass: params.target_class })
+                }).then(r => r.json()).then(data => {
+                    const chatEl = document.getElementById('assistant-chat');
+                    if (chatEl) {
+                        chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-emerald-400">${data.message || data.error || 'Done!'}</p></div></div>`;
+                        chatEl.scrollTop = chatEl.scrollHeight;
+                    }
+                });
+            }
+            break;
+        }
+        case 'analyze_scores':
+        case 'compare_classes':
+        case 'compare_assessments':
+        case 'flag_anomalies':
+        case 'find_at_risk':
+        case 'generate_report':
+            // These actions return data in params — already rendered via insightsHTML above
+            break;
         case 'add_class':
-            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            hideModal();
             document.getElementById('btn-open-paste-modal')?.click();
             break;
         case 'manage_enrollment':
-            sendAssistantMessage('I need to update which students take my subject.');
+        case 'update_roster':
+            hideModal();
+            document.getElementById('btn-open-paste-modal')?.click();
             break;
         case 'export_data':
-            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            hideModal();
             document.getElementById('btn-export')?.click();
             break;
         default:
@@ -916,6 +1099,158 @@ async function safeAddStudentForce(studentName, className) {
         console.error('Force add error:', e);
     }
 }
+// === FILE UPLOAD IN ASSISTANT CHAT ===
+async function handleAssistantFileUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = ''; // Reset so same file can be re-uploaded
+
+    const chatEl = document.getElementById('assistant-chat');
+    if (!chatEl) return;
+
+    const isImage = file.type.startsWith('image/');
+    const isExcel = /\.(xlsx|xls|csv)$/i.test(file.name);
+    const icon = isImage ? 'fa-image' : 'fa-file-excel';
+    const color = isImage ? 'text-blue-400' : 'text-emerald-400';
+
+    // Show upload indicator
+    chatEl.innerHTML += `
+        <div class="flex justify-end mb-3">
+            <div class="bg-primary/10 border border-primary/20 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
+                <p class="text-sm text-white"><i class="fa-solid ${icon} ${color} mr-2"></i>${file.name}</p>
+                <p class="text-[10px] text-white/40 mt-1">${(file.size / 1024).toFixed(1)} KB</p>
+            </div>
+        </div>
+    `;
+    chatEl.innerHTML += `
+        <div id="upload-typing" class="flex justify-start mb-3">
+            <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
+                <p class="text-sm text-white/60"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Processing your file...</p>
+            </div>
+        </div>
+    `;
+    chatEl.scrollTop = chatEl.scrollHeight;
+
+    try {
+        const formData = new FormData();
+
+        if (isImage) {
+            // Send image to OCR endpoint
+            formData.append('images', file);
+            const targetClass = document.getElementById('target-class')?.value || '';
+            formData.append('targetClass', targetClass);
+            formData.append('assessmentType', 'Score');
+            formData.append('subjectType', document.getElementById('subject-name')?.value || '');
+
+            const response = await fetch('/upload-batch', {
+                method: 'POST',
+                body: JSON.stringify({
+                    images: [await fileToBase64(file)],
+                    targetClass: targetClass,
+                    assessmentType: 'Score',
+                    subjectType: document.getElementById('subject-name')?.value || ''
+                }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+
+            // Remove typing indicator
+            document.getElementById('upload-typing')?.remove();
+
+            if (data.results && data.results.length > 0) {
+                let resultHTML = data.results.map(r =>
+                    `<div class="flex justify-between text-xs py-1 border-b border-white/5"><span>${r.name || 'Unknown'}</span><span class="font-bold text-primary">${r.score || '?'}</span></div>`
+                ).join('');
+                chatEl.innerHTML += `
+                    <div class="flex justify-start mb-3">
+                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                            <p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-check-circle mr-1.5"></i>Found ${data.results.length} scores!</p>
+                            <div class="max-h-40 overflow-y-auto">${resultHTML}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                chatEl.innerHTML += `
+                    <div class="flex justify-start mb-3">
+                        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
+                            <p class="text-sm text-white">${data.error || "I couldn't read any scores from that image. Try a clearer photo."}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        } else if (isExcel) {
+            // Send Excel to upload endpoint
+            formData.append('file', file);
+            const response = await fetch('/api/upload-excel-scorelist', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            // Remove typing indicator
+            document.getElementById('upload-typing')?.remove();
+
+            if (response.ok) {
+                let summary = `Found ${data.total_students || '?'} students`;
+                if (data.detected_class) summary += ` in ${data.detected_class}`;
+                if (data.detected_subject) summary += ` — ${data.detected_subject}`;
+                if (data.detected_assessments?.length) summary += `. Assessments: ${data.detected_assessments.join(', ')}`;
+
+                chatEl.innerHTML += `
+                    <div class="flex justify-start mb-3">
+                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                            <p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i>Excel loaded!</p>
+                            <p class="text-xs text-white/70 mt-1">${summary}</p>
+                        </div>
+                    </div>
+                `;
+                // Now ask assistant to analyze it
+                sendAssistantMessage(`[SYSTEM] Teacher just uploaded ${file.name}. ${summary}. Suggest what to do next.`);
+            } else {
+                chatEl.innerHTML += `
+                    <div class="flex justify-start mb-3">
+                        <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
+                            <p class="text-sm text-destructive">${data.error || "Couldn't parse the Excel file."}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    } catch (err) {
+        document.getElementById('upload-typing')?.remove();
+        chatEl.innerHTML += `
+            <div class="flex justify-start mb-3">
+                <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
+                    <p class="text-sm text-destructive">Upload failed: ${err.message}</p>
+                </div>
+            </div>
+        `;
+    }
+    chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// === PROACTIVE ASSISTANT TRIGGER ===
+function triggerProactiveAssistant(eventType, details) {
+    // Auto-open and send a system message when key events happen
+    const msg = `[SYSTEM] ${eventType}: ${details}. Proactively suggest what to do next. Be warm, brief, and helpful.`;
+
+    // Open assistant if not already open
+    const modal = document.getElementById('smart-assistant-modal');
+    if (modal && modal.classList.contains('hidden')) {
+        if (typeof openSmartAssistant === 'function') openSmartAssistant();
+    }
+
+    setTimeout(() => sendAssistantMessage(msg), 500);
+}
 
 function closeSmartAssistant() {
     const modal = document.getElementById('smart-assistant-modal');
@@ -923,12 +1258,18 @@ function closeSmartAssistant() {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
     }
+    // Show the FAB again
+    const fab = document.getElementById('smart-assistant-fab');
+    if (fab) fab.classList.remove('hidden');
 }
 
 // ═══════════════════════════════════════════════
 //  INITIALIZATION — Hook into existing app
 // ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize the class chip picker on page load so existing classes show up
+    initClassPicker();
+
     // Show landing guide on first visit
     setTimeout(() => showGuide('landing'), 1500);
 
@@ -940,13 +1281,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Track subject selection for enrollment check
+    // Track subject selection
     const subjectSelect = document.getElementById('subject-name');
     if (subjectSelect) {
         subjectSelect.addEventListener('change', () => {
             if (selectedClasses.length > 0) {
                 setTimeout(() => showGuide('assessment'), 500);
-                checkEnrollmentForClasses();
             }
         });
     }

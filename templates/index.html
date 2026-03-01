@@ -763,8 +763,8 @@
     <!-- Depth Layer 3: Foreground Content -->
     <div class="max-w-4xl mx-auto p-4 md:p-8 relative z-10 w-full animate-fade-in-up">
 
-        <!-- Step Progress Indicator -->
-        <div id="step-progress" class="mb-8 pt-6 max-w-md mx-auto px-4">
+        <!-- Step Progress Indicator (hidden — replaced by How It Works strip in landing card) -->
+        <div id="step-progress" class="mb-8 pt-6 max-w-md mx-auto px-4 hidden">
             <div class="step-indicator">
                 <div class="step-dot step-active" data-step="start" title="Start">
                     <i class="fa-solid fa-play text-[10px]"></i>
@@ -817,21 +817,80 @@
 
                 <!-- PHASE 1: LANDING (3 Options) -->
                 <div id="landing-phase"
-                    class="bg-card rounded-[1rem] border border-white/5 p-6 md:p-10 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)]">
-                    <div class="text-center mb-8">
-                        <h2 class="text-2xl md:text-3xl font-heading font-black text-white mb-3 tracking-tight">What are
-                            we grading today?</h2>
-                        <p class="text-muted-foreground text-sm font-medium">Pick up where you left off, or start fresh.
-                        </p>
+                    class="relative rounded-[1.25rem] border border-white/[0.08] p-6 md:p-10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] overflow-hidden"
+                    style="background: linear-gradient(135deg, rgba(30,32,44,0.95) 0%, rgba(20,22,34,0.98) 50%, rgba(25,28,42,0.95) 100%); backdrop-filter: blur(20px);">
+
+                    <!-- Subtle corner glow accents -->
+                    <div
+                        class="absolute top-0 left-0 w-40 h-40 bg-primary/10 blur-[80px] rounded-full -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                    </div>
+                    <div
+                        class="absolute bottom-0 right-0 w-48 h-48 bg-indigo-500/[0.08] blur-[80px] rounded-full translate-x-1/4 translate-y-1/4 pointer-events-none">
+                    </div>
+
+                    <!-- Heading -->
+                    <div class="text-center mb-8 relative">
+                        <h2 class="text-2xl md:text-3xl font-heading font-black text-white mb-2 tracking-tight">
+                            What are we grading today?
+                        </h2>
+                        <p class="text-muted-foreground/70 text-sm font-medium">Pick up where you left off, or start
+                            fresh.</p>
+                    </div>
+
+                    <!-- How It Works Strip -->
+                    <div class="flex items-center justify-center gap-2 md:gap-4 mb-10 px-2">
+                        <div class="flex flex-col items-center gap-2 group">
+                            <div
+                                class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 border border-blue-500/20 flex items-center justify-center group-hover:scale-110 group-hover:border-blue-400/40 transition-all duration-300 shadow-[0_4px_15px_rgba(59,130,246,0.15)]">
+                                <i class="fa-solid fa-camera-retro text-blue-400 text-lg md:text-xl"></i>
+                            </div>
+                            <span
+                                class="text-[10px] md:text-[11px] font-bold text-blue-300/80 uppercase tracking-wider">Scan</span>
+                        </div>
+                        <div class="flex items-center pb-5">
+                            <div
+                                class="w-8 md:w-12 h-[2px] bg-gradient-to-r from-blue-500/40 to-emerald-500/40 rounded-full relative">
+                                <div
+                                    class="absolute inset-0 bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full animate-pulse opacity-50">
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-[8px] text-emerald-400/50 -ml-1"></i>
+                        </div>
+                        <div class="flex flex-col items-center gap-2 group">
+                            <div
+                                class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-500/20 flex items-center justify-center group-hover:scale-110 group-hover:border-emerald-400/40 transition-all duration-300 shadow-[0_4px_15px_rgba(16,185,129,0.15)]">
+                                <i class="fa-solid fa-brain text-emerald-400 text-lg md:text-xl"></i>
+                            </div>
+                            <span
+                                class="text-[10px] md:text-[11px] font-bold text-emerald-300/80 uppercase tracking-wider">AI
+                                Grades</span>
+                        </div>
+                        <div class="flex items-center pb-5">
+                            <div
+                                class="w-8 md:w-12 h-[2px] bg-gradient-to-r from-emerald-500/40 to-violet-500/40 rounded-full relative">
+                                <div class="absolute inset-0 bg-gradient-to-r from-emerald-400 to-violet-400 rounded-full animate-pulse opacity-50"
+                                    style="animation-delay: 0.5s;"></div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-[8px] text-violet-400/50 -ml-1"></i>
+                        </div>
+                        <div class="flex flex-col items-center gap-2 group">
+                            <div
+                                class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-violet-600/10 border border-violet-500/20 flex items-center justify-center group-hover:scale-110 group-hover:border-violet-400/40 transition-all duration-300 shadow-[0_4px_15px_rgba(139,92,246,0.15)]">
+                                <i class="fa-solid fa-file-excel text-violet-400 text-lg md:text-xl"></i>
+                            </div>
+                            <span
+                                class="text-[10px] md:text-[11px] font-bold text-violet-300/80 uppercase tracking-wider">Get
+                                Excel</span>
+                        </div>
                     </div>
 
                     <!-- Important Notice Banner (Dismissible) -->
                     <div id="notice-banner"
-                        class="mb-8 border border-amber-500/30 bg-amber-500/10 rounded-xl p-4 flex items-start gap-3 shadow-inner relative transition-opacity duration-300">
+                        class="mb-8 border border-amber-500/20 bg-amber-500/[0.07] rounded-xl p-4 flex items-start gap-3 relative transition-opacity duration-300">
                         <i class="fa-solid fa-lightbulb text-amber-500 mt-1"></i>
                         <div class="flex-1 pr-6">
                             <h4 class="text-amber-500 font-bold text-sm tracking-wide mb-1">Quick Heads Up 👋</h4>
-                            <p class="text-amber-200/80 text-xs font-medium leading-relaxed">
+                            <p class="text-amber-200/70 text-xs font-medium leading-relaxed">
                                 When you're done scanning, hit <strong class="text-amber-400">"Save"</strong> to
                                 lock in your grades, then <strong class="text-amber-400">"Download"</strong> to
                                 grab your updated Excel file. Don't close the page before saving — your scans
@@ -840,7 +899,7 @@
                         </div>
                         <button
                             onclick="document.getElementById('notice-banner').classList.add('opacity-0', 'pointer-events-none'); setTimeout(() => document.getElementById('notice-banner').classList.add('hidden'), 300)"
-                            class="absolute top-3 right-3 text-amber-500/50 hover:text-amber-500 transition-colors p-1">
+                            class="absolute top-3 right-3 text-amber-500/40 hover:text-amber-500 transition-colors p-1">
                             <i class="fa-solid fa-xmark text-sm"></i>
                         </button>
                     </div>
@@ -854,29 +913,48 @@
                         <div id="recent-sessions-list" class="space-y-2"></div>
                     </div>
 
-                    <!-- Two Entry Cards -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto mb-10">
+                    <!-- Two Entry Buttons — Big and Bold -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
                         <button id="btn-entry-excel" type="button"
-                            class="entry-card holographic btn-3d magnetic bg-black/40 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] relative overflow-hidden h-full reveal reveal-delay-3">
+                            class="entry-card holographic btn-3d magnetic relative group overflow-hidden rounded-2xl p-8 flex flex-col items-center justify-center gap-4 text-center transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                            style="background: linear-gradient(160deg, rgba(16,185,129,0.08) 0%, rgba(0,0,0,0.4) 50%, rgba(16,185,129,0.05) 100%); border: 1.5px solid rgba(16,185,129,0.2);">
                             <div
-                                class="w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform duration-300 border border-emerald-500/20 floating">
-                                <i class="fa-solid fa-file-excel text-emerald-400 text-2xl"></i>
+                                class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500">
                             </div>
-                            <span class="font-bold text-[15px] tracking-wide text-emerald-100">I Have My Excel</span>
-                            <span class="text-[11px] text-emerald-200/50 font-medium leading-tight">Pick up
-                                exactly<br>where you left off.</span>
+                            <div
+                                class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-8 bg-emerald-500/20 blur-[20px] opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                            </div>
+                            <div
+                                class="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/25 to-emerald-600/10 flex items-center justify-center border border-emerald-500/25 group-hover:border-emerald-400/40 transition-all duration-300 shadow-[0_4px_20px_rgba(16,185,129,0.15)] floating">
+                                <i class="fa-solid fa-file-excel text-emerald-400 text-3xl"></i>
+                            </div>
+                            <div class="relative">
+                                <span class="block font-bold text-lg tracking-wide text-white mb-1">I Have My
+                                    Excel</span>
+                                <span class="text-xs text-emerald-300/70 font-medium">Pick up exactly where you left
+                                    off</span>
+                            </div>
                         </button>
                         <input type="file" id="entry-excel-upload" accept=".xlsx,.xls,.csv" class="hidden">
 
                         <button id="btn-entry-fresh" type="button" onclick="window.showSetup && window.showSetup(null)"
-                            class="entry-card holographic btn-3d magnetic bg-black/30 hover:bg-primary/10 border border-white/10 hover:border-primary/50 text-white p-6 rounded-2xl flex flex-col items-center justify-center gap-3 group text-center shadow-inner hover:shadow-glow relative overflow-hidden h-full reveal reveal-delay-2">
+                            class="entry-card holographic btn-3d magnetic relative group overflow-hidden rounded-2xl p-8 flex flex-col items-center justify-center gap-4 text-center transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                            style="background: linear-gradient(160deg, rgba(99,102,241,0.08) 0%, rgba(0,0,0,0.4) 50%, rgba(99,102,241,0.05) 100%); border: 1.5px solid rgba(99,102,241,0.2);">
                             <div
-                                class="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform duration-300 border border-primary/20 floating">
-                                <i class="fa-solid fa-wand-magic-sparkles text-primary text-2xl"></i>
+                                class="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500">
                             </div>
-                            <span class="font-bold text-[15px] tracking-wide">Start Fresh</span>
-                            <span class="text-[11px] text-muted-foreground font-medium leading-tight">Brand new
-                                class.<br>Set up your students and begin.</span>
+                            <div
+                                class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-8 bg-indigo-500/20 blur-[20px] opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                            </div>
+                            <div
+                                class="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/25 to-indigo-600/10 flex items-center justify-center border border-indigo-500/25 group-hover:border-indigo-400/40 transition-all duration-300 shadow-[0_4px_20px_rgba(99,102,241,0.15)] floating">
+                                <i class="fa-solid fa-wand-magic-sparkles text-indigo-400 text-3xl"></i>
+                            </div>
+                            <div class="relative">
+                                <span class="block font-bold text-lg tracking-wide text-white mb-1">Start Fresh</span>
+                                <span class="text-xs text-indigo-300/50 font-medium">Set up your class and start
+                                    grading</span>
+                            </div>
                         </button>
                     </div>
                 </div>
@@ -1005,54 +1083,26 @@
                             </div>
                         </div>
 
-                        <!-- Enrollment: Who takes this subject? -->
-                        <div id="enrollment-section" class="pt-4 border-t border-white/5 border-dashed mb-5 hidden">
+                        <!-- Subject Type: General or Elective -->
+                        <div id="subject-type-section" class="pt-4 border-t border-white/5 border-dashed mb-5 hidden">
                             <label
-                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 mb-3">Who
-                                takes this subject?</label>
+                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1 mb-3">
+                                <i class="fa-solid fa-bookmark mr-1.5"></i>Subject Type
+                            </label>
                             <div class="flex rounded-xl overflow-hidden border border-white/10 bg-black/30">
-                                <button type="button" id="btn-enroll-general"
+                                <button type="button" id="btn-subject-general"
                                     class="flex-1 py-3 px-4 text-xs font-bold transition-all text-white bg-primary/20 border-r border-white/10 flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                                    <i class="fa-solid fa-users text-primary"></i> Everyone in Class
+                                    <i class="fa-solid fa-users text-primary"></i> General
                                 </button>
-                                <button type="button" id="btn-enroll-selective"
+                                <button type="button" id="btn-subject-elective"
                                     class="flex-1 py-3 px-4 text-xs font-bold transition-all text-muted-foreground hover:text-white flex items-center justify-center gap-2">
-                                    <i class="fa-solid fa-user-check text-yellow-400/50"></i> Only Some Students
+                                    <i class="fa-solid fa-user-check text-yellow-400/50"></i> Elective
                                 </button>
                             </div>
-                            <p id="enrollment-desc" class="text-[10px] text-muted-foreground/70 pl-1 mt-2">All
-                                students
-                                take this subject</p>
-
-                            <!-- Selective students inline container -->
-                            <div id="selective-inline-container"
-                                class="hidden mt-4 border border-yellow-500/30 rounded-xl p-4 md:p-6 bg-yellow-500/5 shadow-inner">
-                                <label
-                                    class="block text-[11px] font-bold text-yellow-500 uppercase tracking-widest mb-4 flex items-center">
-                                    <i class="fa-solid fa-list-check mr-2"></i> Tick the students who take this
-                                    subject
-                                </label>
-
-                                <div class="mb-5 border border-yellow-500/30 bg-black/40 hover:bg-yellow-500/10 rounded-xl p-4 cursor-pointer transition-all shadow-[0_0_15px_rgba(234,179,8,0.05)] hover:shadow-[0_0_20px_rgba(234,179,8,0.1)] flex items-center justify-center gap-2 group"
-                                    onclick="document.getElementById('enrollment-list-file').click()">
-                                    <i
-                                        class="fa-solid fa-camera text-yellow-500 group-hover:scale-110 transition-transform"></i>
-                                    <span class="text-[13px] font-bold text-yellow-500">Scan Handwritten List
-                                        Instead</span>
-                                    <input type="file" id="enrollment-list-file" accept="image/*, .pdf" class="hidden"
-                                        onchange="document.getElementById('enrollment-file-label').innerText = this.files[0] ? this.files[0].name : '';">
-                                </div>
-                                <p id="enrollment-file-label"
-                                    class="text-xs text-center text-yellow-400/80 mb-3 font-medium min-h-[16px]">
-                                </p>
-
-                                <div id="selective-students-list"
-                                    class="space-y-1 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                                    <div class="p-4 text-center text-sm text-yellow-500/60 font-medium">Select a
-                                        class
-                                        and subject first to view students.</div>
-                                </div>
-                            </div>
+                            <p id="subject-type-desc" class="text-[10px] text-muted-foreground/70 pl-1 mt-2">
+                                <i class="fa-solid fa-circle-info mr-1 text-primary/50"></i>Every student in the class
+                                takes this subject. We'll let you know if anyone is missing after grading.
+                            </p>
                         </div>
 
                         <!-- Smart Mode Toggle -->
@@ -1386,7 +1436,13 @@
                     <button id="btn-download-sheet" onclick="window.location.href='/download-sheet'"
                         class="w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-glow flex items-center justify-center group mb-2 md:mb-0">
                         <i class="fa-solid fa-download mr-2 group-hover:translate-y-1 transition-transform"></i>
-                        Download Complete Excel Sheet
+                        Download Excel
+                    </button>
+                    <button id="btn-share-sheet"
+                        class="w-full md:w-auto bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-bold py-4 px-8 rounded-xl transition-all shadow-sm border border-indigo-500/20 flex items-center justify-center group mb-2 md:mb-0"
+                        onclick="if(navigator.share){navigator.share({title:'Scoresheet',text:'Here is the scoresheet backup',url:window.location.href}).catch(()=>{})}else{navigator.clipboard.writeText(window.location.origin+'/download-sheet').then(()=>{if(typeof showToast==='function')showToast('Link copied!','success')})}">
+                        <i class="fa-solid fa-share-nodes mr-2 group-hover:scale-110 transition-transform"></i>
+                        Share to Colleague
                     </button>
                     <button id="btn-new-batch"
                         class="w-full md:w-auto bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-sm border border-white/10 flex items-center justify-center group">
@@ -1609,6 +1665,10 @@
                         setupPhase.style.transform = 'translateY(0)';
                     });
                 }
+                // Refresh class chip picker so existing classes show up
+                if (typeof window.initClassPicker === 'function') {
+                    window.initClassPicker();
+                }
                 const banner = document.getElementById('setup-context-banner');
                 if (contextText && banner) {
                     document.getElementById('setup-context-text').textContent = contextText;
@@ -1623,10 +1683,24 @@
             const btnBackToLanding = document.getElementById('btn-back-to-landing');
             if (btnBackToLanding) btnBackToLanding.addEventListener('click', window.showLanding);
 
-            // "Start Fresh" button
+            // "Start Fresh" button — wipe all caches
             const btnEntryFresh = document.getElementById('btn-entry-fresh');
             if (btnEntryFresh) {
                 btnEntryFresh.addEventListener('click', () => {
+                    // Clear all cached session data
+                    if (typeof clearSessionData === 'function') clearSessionData();
+                    extractedData = [];
+                    imagesBatch = [];
+                    if (typeof window._excelRecords !== 'undefined') window._excelRecords = null;
+                    // Reset form fields
+                    const tc = document.getElementById('target-class');
+                    if (tc) tc.selectedIndex = 0;
+                    const sj = document.getElementById('subject-name');
+                    if (sj) sj.selectedIndex = 0;
+                    const at = document.getElementById('assessment-type');
+                    if (at) at.selectedIndex = 0;
+                    currentSubjectName = '';
+                    finalAssessmentType = '';
                     window.showSetup(null);
                 });
             }
@@ -1751,6 +1825,15 @@
         // Auto-Capture Elements
         const autoCaptureToggle = document.getElementById('auto-capture-toggle');
         const autoCaptureStatus = document.getElementById('auto-capture-status');
+
+        // Show a helpful tip when auto-capture is turned on
+        if (autoCaptureToggle) {
+            autoCaptureToggle.addEventListener('change', () => {
+                if (autoCaptureToggle.checked && typeof showToast === 'function') {
+                    showToast('Auto-capture is on! If it snaps too quickly or feels unstable, turn it off and use the manual capture button instead.', 'info');
+                }
+            });
+        }
 
         // Start Section Elements
         const startSection = document.getElementById('start-section');
@@ -2313,6 +2396,14 @@
                     : assessmentTypeSelect.value;
                 scoreTh.innerText = finalAssessmentType;
 
+                // Fix: Set currentSubjectName from the subject dropdown
+                const subjSelect = document.getElementById('subject-name');
+                if (subjSelect) {
+                    currentSubjectName = subjSelect.value === 'custom'
+                        ? (document.getElementById('custom-subject')?.value?.trim() || '')
+                        : subjSelect.value;
+                }
+
                 captureSection.classList.add('hidden');
                 reviewSection.classList.remove('hidden');
 
@@ -2482,8 +2573,11 @@
 
             tr.className = `reveal light-beam-card flex flex-col md:table-row bg-background md:bg-transparent rounded-xl md:rounded-none border ${borderClass} md:border-none md:border-b md:border-white/5 transition-colors group overflow-hidden md:hover:bg-white/[0.02] p-4 md:p-0 my-3 md:my-0 shadow-lg md:shadow-none translate-y-4 opacity-0 transition-all duration-500 hidden`;
 
+            const isManual = confidence === 'manual';
+            const deleteBtn = isManual ? `<button onclick="deleteManualRow(${index}, this)" class="ml-2 w-7 h-7 flex items-center justify-center rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all text-xs border border-red-500/20" title="Remove row"><i class="fa-solid fa-xmark"></i></button>` : '';
+
             tr.innerHTML = `
-            <td class="flex flex-col md:table-cell px-2 md:px-5 py-3 border-b border-white/5 md:border-none md:border-l md:border-white/5"><span class="md:hidden text-[10px] text-muted-foreground/80 mb-1.5 uppercase tracking-widest font-bold flex items-center">Student Name <span class="text-primary ml-1">*</span> ${confidenceBadge}</span><div class="flex items-center w-full"><input type="text" data-index="${index}" data-field="name" class="w-full bg-transparent border-b border-transparent focus:border-white/20 focus:ring-0 px-0 py-1 text-white text-base md:text-sm font-semibold transition-colors outline-none placeholder:text-muted-foreground/30" value="${nameStr}" placeholder="Enter Name"><span class="hidden md:inline-flex">${confidenceBadge}</span></div></td>
+            <td class="flex flex-col md:table-cell px-2 md:px-5 py-3 border-b border-white/5 md:border-none md:border-l md:border-white/5"><span class="md:hidden text-[10px] text-muted-foreground/80 mb-1.5 uppercase tracking-widest font-bold flex items-center">Student Name <span class="text-primary ml-1">*</span> ${confidenceBadge}</span><div class="flex items-center w-full"><input type="text" data-index="${index}" data-field="name" class="w-full bg-transparent border-b border-transparent focus:border-white/20 focus:ring-0 px-0 py-1 text-white text-base md:text-sm font-semibold transition-colors outline-none placeholder:text-muted-foreground/30" value="${nameStr}" placeholder="Enter Name"><span class="hidden md:inline-flex">${confidenceBadge}</span>${deleteBtn}</div></td>
             <td class="flex flex-col md:table-cell px-2 md:px-5 py-3 border-b border-white/5 md:border-none md:border-l md:border-white/5"><span class="md:hidden text-[10px] text-muted-foreground/80 mb-1.5 uppercase tracking-widest font-bold">Class</span><input type="text" data-index="${index}" data-field="class" class="w-full bg-transparent border-b border-transparent focus:border-white/20 focus:ring-0 px-0 py-1 text-white text-base md:text-sm transition-colors outline-none placeholder:text-muted-foreground/30 font-medium" value="${classStr}" placeholder="Class"></td>
             <td class="flex justify-between items-center md:table-cell px-2 md:px-5 py-4 bg-black/40 md:bg-transparent -mx-4 px-6 md:mx-0 mt-2 md:mt-0 rounded-b-xl md:rounded-none md:border-l md:border-white/5"><span class="md:hidden text-[11px] text-primary uppercase tracking-widest font-extrabold">Final Score</span><input type="text" data-index="${index}" data-field="score" class="w-24 md:w-full md:min-w-[70px] bg-white/[0.04] md:bg-transparent border border-white/10 md:border-none md:border-b md:border-transparent focus:border-primary/50 focus:bg-primary/5 focus:ring-0 md:px-2 py-2 text-primary md:text-foreground text-right font-bold text-lg md:text-sm rounded-lg md:rounded-none transition-colors outline-none placeholder:text-muted-foreground/30 shadow-inner md:shadow-none" value="${scoreStr}" placeholder="Score"></td>
             `;
@@ -2556,6 +2650,31 @@
             if (tip) tip.classList.remove('hidden');
 
             showToast('New row added. Type the student name and score.', 'info', 3000);
+        }
+
+        function deleteManualRow(index, btn) {
+            if (index >= 0 && index < extractedData.length) {
+                extractedData.splice(index, 1);
+                const row = btn.closest('tr');
+                if (row) {
+                    row.style.opacity = '0';
+                    row.style.transform = 'translateX(50px)';
+                    setTimeout(() => row.remove(), 300);
+                }
+                // Re-index remaining rows
+                setTimeout(() => {
+                    const rows = document.querySelectorAll('#results-body tr, #review-section tbody tr');
+                    rows.forEach((tr, i) => {
+                        tr.querySelectorAll('input[data-index]').forEach(input => {
+                            input.setAttribute('data-index', i);
+                        });
+                        tr.querySelectorAll('button[onclick*="deleteManualRow"]').forEach(btn => {
+                            btn.setAttribute('onclick', `deleteManualRow(${i}, this)`);
+                        });
+                    });
+                }, 350);
+                showToast('Row removed.', 'info', 2000);
+            }
         }
 
         // Analytics Calculation
@@ -2642,6 +2761,7 @@
                         results: extractedData,
                         assessmentType: finalAssessmentType,
                         subjectType: currentSubjectName,
+                        subjectMode: typeof currentSubjectMode !== 'undefined' ? currentSubjectMode : 'general',
                         classList: typeof sessionClasses !== 'undefined' ? Array.from(sessionClasses) : []
                     })
                 });
@@ -2658,9 +2778,62 @@
                 reviewSection.classList.add('hidden');
                 analyticsSection.classList.remove('hidden');
 
-                // Render class-based tabs if sheets data is available
+                // Render class-based tabs with level grouping + download links
                 if (data.sheets && typeof renderResultsTabs === 'function') {
-                    renderResultsTabs(data.sheets);
+                    renderResultsTabs(data.sheets, data.downloads || []);
+                }
+
+                // Update download button with subject-aware URL
+                const downloadBtn = document.getElementById('btn-download-sheet');
+                if (downloadBtn && data.downloads && data.downloads.length > 0) {
+                    const dl = data.downloads[0];
+                    const subj = data.subject || currentSubjectName || '';
+                    downloadBtn.onclick = () => window.location.href = dl.url + '&subject=' + encodeURIComponent(subj);
+                }
+
+                // Proactive assistant trigger — nudge after save
+                if (typeof sendAssistantMessage === 'function' && typeof sessionClasses !== 'undefined') {
+                    const classesGraded = [...sessionClasses];
+                    const subj = data.subject || currentSubjectName || '';
+                    const proactiveMsg = `[SYSTEM] Teacher just saved grades for ${classesGraded.join(', ')} in ${subj} (${finalAssessmentType}). ${Object.keys(data.sheets || {}).length} class sheets generated. Proactively suggest what to do next — download, grade another class/assessment, or review results. Be warm and brief.`;
+                    // Show assistant with the proactive message after a short delay
+                    setTimeout(() => {
+                        const fab = document.getElementById('smart-assistant-fab');
+                        if (fab) {
+                            // Pulse the FAB to draw attention
+                            fab.classList.add('animate-bounce');
+                            setTimeout(() => fab.classList.remove('animate-bounce'), 2000);
+                        }
+                    }, 1500);
+                }
+
+                // Show absent-student banner for general subjects (blank scores, not 0)
+                const subMode = typeof currentSubjectMode !== 'undefined' ? currentSubjectMode : 'general';
+                if (subMode === 'general' && data.sheets) {
+                    let absentNames = [];
+                    Object.values(data.sheets).forEach(sheet => {
+                        (sheet.rows || []).forEach(row => {
+                            if (row['Total Score'] === '' || row['Total Score'] === 0 || row['Total Score'] === '0') {
+                                absentNames.push(row['Name'] + ' (' + (sheet.class || '') + ')');
+                            }
+                        });
+                    });
+                    if (absentNames.length > 0) {
+                        const absentBanner = document.createElement('div');
+                        absentBanner.className = 'mb-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl animate-fade-in-up';
+                        absentBanner.innerHTML = `
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-user-clock text-amber-400 text-lg mt-0.5"></i>
+                                <div>
+                                    <p class="text-sm font-bold text-amber-400 mb-1">Heads up — ${absentNames.length} student(s) had no scanned paper:</p>
+                                    <p class="text-xs text-amber-300/70 leading-relaxed">${absentNames.join(', ')}</p>
+                                    <p class="text-[10px] text-amber-300/50 mt-2">They may have been absent. Their names still appear in your Excel with a blank score.</p>
+                                </div>
+                            </div>
+                        `;
+                        const analyticsEl = document.getElementById('analytics-section');
+                        if (analyticsEl) analyticsEl.prepend(absentBanner);
+                    }
                 }
 
             } catch (err) {
@@ -2674,11 +2847,11 @@
                 exportMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> Error: ${err.message}`;
             } finally {
                 btnExport.disabled = false;
-                btnExport.innerHTML = `<i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Compile To Dashboard`;
+                btnExport.innerHTML = `<i class="fa-solid fa-file-csv mr-2 group-hover:-translate-y-1 transition-transform"></i> Save Grades`;
             }
         });
 
-        // Start Next Batch
+        // Start Next Batch — with camera reset
         btnNewBatch.addEventListener('click', () => {
             imagesBatch = [];
             extractedData = [];
@@ -2695,6 +2868,13 @@
             analyticsSection.classList.add('hidden');
             reviewSection.classList.add('hidden');
             captureSection.classList.remove('hidden');
+
+            // Fix: Kill and reinitialize camera to avoid glitchy stream
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            initCamera();
 
             if (autoCaptureToggle.checked) {
                 stillTimeStart = null;
@@ -2938,9 +3118,8 @@
                     if (response.ok) {
                         showToast(`${result.message}`, 'success');
 
-                        // Keep UI in sync
+                        // Keep old dropdown UI in sync (if it exists)
                         if (targetClassSelect) {
-                            // Let's add the new class to the dropdown list if it doesn't already exist
                             let exists = false;
                             for (let i = 0; i < targetClassSelect.options.length; i++) {
                                 if (targetClassSelect.options[i].text === targetClass) {
@@ -2954,6 +3133,21 @@
                                 newOption.className = "bg-card";
                                 targetClassSelect.add(newOption);
                             }
+                            targetClassSelect.dispatchEvent(new Event('change'));
+                        }
+
+                        // Always sync the multi-select chip picker (even if targetClassSelect is missing)
+                        if (typeof window.selectedClasses !== 'undefined') {
+                            if (!window.selectedClasses.includes(targetClass)) {
+                                window.selectedClasses.push(targetClass);
+                            }
+                            if (typeof window.addToSessionClasses === 'function') {
+                                window.addToSessionClasses(targetClass);
+                            }
+                        }
+                        // Refresh the class chip picker to show the new/updated class
+                        if (typeof window.initClassPicker === 'function') {
+                            window.initClassPicker();
                         }
 
                         // Clear textarea
@@ -2964,7 +3158,7 @@
                     }
                 } catch (error) {
                     console.error('Error pasting roster:', error);
-                    showToast('An error occurred. Please try again.', 'error');
+                    showToast('An error occurred: ' + (error.message || 'Please try again.'), 'error');
                 } finally {
                     btnSubmitPaste.innerHTML = originalBtnText;
                 }
@@ -3031,11 +3225,11 @@
                     customAssessmentWrapper.classList.add('hidden');
                 }
 
-                // Show enrollment section once assessment is selected
+                // Show subject type section once assessment is selected
                 if (e.target.value) {
-                    const enrollmentSection = document.getElementById('enrollment-section');
-                    if (enrollmentSection) {
-                        enrollmentSection.classList.remove('hidden');
+                    const subjectTypeSection = document.getElementById('subject-type-section');
+                    if (subjectTypeSection) {
+                        subjectTypeSection.classList.remove('hidden');
                     }
                 }
             });
@@ -3064,36 +3258,26 @@
 
         // (Duplicate window.load and btnStartCamera removed — handled earlier)
 
-        const btnEnrollGeneral = document.getElementById('btn-enroll-general');
-        const btnEnrollSelective = document.getElementById('btn-enroll-selective');
+        const btnSubjectGeneral = document.getElementById('btn-subject-general');
+        const btnSubjectElective = document.getElementById('btn-subject-elective');
         const btnToggleSmartMode = document.getElementById('btn-toggle-smart-mode');
         const smartSwitchBg = document.getElementById('smart-mode-switch-bg');
         const smartSwitchKnob = document.getElementById('smart-mode-switch-knob');
         const smartInstructionWrapper = document.getElementById('smart-instruction-wrapper');
-        const selectiveModal = document.getElementById('selective-enrollment-modal');
-        const btnCloseSelective = document.getElementById('btn-close-selective-modal');
-
-        if (btnEnrollGeneral && btnEnrollSelective) {
-            btnEnrollGeneral.addEventListener('click', () => {
-                btnEnrollGeneral.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 border-r border-white/10 text-white bg-primary/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]";
-                btnEnrollSelective.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 text-muted-foreground hover:text-white";
-                document.getElementById('enrollment-desc').textContent = "All students take this subject";
-
-                const inlineContainer = document.getElementById('selective-inline-container');
-                if (inlineContainer) {
-                    inlineContainer.classList.add('hidden');
-                }
+        // Subject Type Toggle: General / Elective
+        let currentSubjectMode = 'general'; // Default to general
+        if (btnSubjectGeneral && btnSubjectElective) {
+            btnSubjectGeneral.addEventListener('click', () => {
+                currentSubjectMode = 'general';
+                btnSubjectGeneral.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 border-r border-white/10 text-white bg-primary/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]";
+                btnSubjectElective.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 text-muted-foreground hover:text-white";
+                document.getElementById('subject-type-desc').innerHTML = '<i class="fa-solid fa-circle-info mr-1 text-primary/50"></i>Every student in the class takes this subject. We\'ll let you know if anyone is missing after grading.';
             });
-            btnEnrollSelective.addEventListener('click', () => {
-                btnEnrollSelective.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 text-yellow-500 bg-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.2)]";
-                btnEnrollGeneral.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 border-r border-white/10 text-muted-foreground hover:text-white";
-                document.getElementById('enrollment-desc').textContent = "Only selected students take this";
-
-                const inlineContainer = document.getElementById('selective-inline-container');
-                if (inlineContainer) {
-                    inlineContainer.classList.remove('hidden');
-                    loadSelectiveStudents();
-                }
+            btnSubjectElective.addEventListener('click', () => {
+                currentSubjectMode = 'elective';
+                btnSubjectElective.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 text-yellow-500 bg-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.2)]";
+                btnSubjectGeneral.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 border-r border-white/10 text-muted-foreground hover:text-white";
+                document.getElementById('subject-type-desc').innerHTML = '<i class="fa-solid fa-circle-info mr-1 text-yellow-400/50"></i>Not everyone takes this — only scanned students will appear in results. Use <strong>Smart Mode</strong> if someone\'s name is missing.';
             });
         }
 
@@ -3115,157 +3299,6 @@
             });
         }
 
-        async function loadSelectiveStudents() {
-            const tc = document.getElementById('target-class').value;
-            const sn = document.getElementById('subject-name').value === 'custom'
-                ? document.getElementById('custom-subject').value.trim()
-                : document.getElementById('subject-name').value;
-
-            const listContainer = document.getElementById('selective-students-list');
-
-            if (!tc || !sn) {
-                listContainer.innerHTML = '<div class="p-4 text-center text-sm text-muted-foreground">Please select a Target Class and Subject first.</div>';
-                return;
-            }
-
-            listContainer.innerHTML = '<div class="p-4 text-center text-sm text-primary"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading students...</div>';
-
-            try {
-                const classesRes = await fetch('/api/classes');
-                const classes = await classesRes.json();
-                const cls = classes.find(c => c.name === tc);
-                if (!cls) {
-                    listContainer.innerHTML = '<div class="p-4 text-center text-sm text-destructive">Class not found in database.</div>';
-                    return;
-                }
-
-                const studentsRes = await fetch(`/api/students?class_id=${cls.id}`);
-                const students = await studentsRes.json();
-
-                const enrollRes = await fetch(`/api/enrollments?class_id=${cls.id}&subject_name=${encodeURIComponent(sn)}`);
-                const enrollData = await enrollRes.json();
-                const enrolledIds = enrollData.enrolled || [];
-
-                if (students.length === 0) {
-                    listContainer.innerHTML = '<div class="p-4 text-center text-sm text-muted-foreground">No students found in this class.</div>';
-                    return;
-                }
-
-                let html = '';
-                students.forEach(student => {
-                    const isChecked = enrolledIds.includes(student.id) ? 'checked' : '';
-                    html += `
-                        <label class="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg cursor-pointer transition-colors border-b border-white/5 last:border-0 border-yellow-500/10">
-                            <input type="checkbox" class="selective-student-checkbox h-5 w-5 rounded border-yellow-500/30 bg-black/40 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-background" value="${student.id}" data-name="${student.name}" ${isChecked} onchange="saveSelectiveEnrollment(this)">
-                            <span class="text-sm font-medium text-white">${student.name}</span>
-                        </label>
-                     `;
-                });
-                listContainer.innerHTML = html;
-                listContainer.dataset.classId = cls.id;
-            } catch (err) {
-                console.error(err);
-                listContainer.innerHTML = '<div class="p-4 text-center text-sm text-destructive">Failed to load students.</div>';
-            }
-        }
-
-        async function saveSelectiveEnrollment(checkboxElement) {
-            const listContainer = document.getElementById('selective-students-list');
-            const classId = listContainer.dataset.classId;
-            const sn = document.getElementById('subject-name').value === 'custom'
-                ? document.getElementById('custom-subject').value.trim()
-                : document.getElementById('subject-name').value;
-
-            if (!classId || !sn) return;
-
-            const checkboxes = document.querySelectorAll('.selective-student-checkbox:checked');
-            const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-
-            try {
-                const res = await fetch('/api/enrollments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        class_id: parseInt(classId),
-                        subject_name: sn,
-                        student_ids: selectedIds
-                    })
-                });
-                if (!res.ok) {
-                    showToast('Failed to auto-save enrollment', 'error');
-                }
-            } catch (err) {
-                console.error("Save selective error:", err);
-            }
-        }
-
-        const enrollmentListFile = document.getElementById('enrollment-list-file');
-        const enrollmentFileLabel = document.getElementById('enrollment-file-label');
-        if (enrollmentListFile) {
-            enrollmentListFile.addEventListener('change', async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                const tc = document.getElementById('target-class').value;
-                if (!tc) {
-                    showToast('Please select a Target Class first.', 'warning');
-                    return;
-                }
-
-                enrollmentFileLabel.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-primary"></i> Extracting names...';
-
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    const base64Data = event.target.result.split(',')[1];
-                    try {
-                        const response = await fetch('/api/extract-names', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                image: base64Data,
-                                targetClass: tc
-                            })
-                        });
-
-                        const result = await response.json();
-                        if (response.ok && result.names) {
-                            enrollmentFileLabel.innerHTML = `<span class="text-emerald-400"><i class="fa-solid fa-check"></i> Found ${result.names.length} names. Updating checklist...</span>`;
-
-                            const listContainer = document.getElementById('selective-students-list');
-                            const checkboxes = listContainer.querySelectorAll('.selective-student-checkbox');
-
-                            checkboxes.forEach(cb => {
-                                cb.checked = false;
-                                const studentName = cb.dataset.name.toLowerCase();
-                                if (result.names.some(n => studentName === String(n).toLowerCase())) {
-                                    cb.checked = true;
-                                }
-                            });
-
-                            setTimeout(() => {
-                                enrollmentFileLabel.innerText = 'Snap a photo of the handwritten list.';
-                                enrollmentListFile.value = '';
-                            }, 3000);
-                        } else {
-                            throw new Error(result.error || "Failed to extract names");
-                        }
-                    } catch (err) {
-                        console.error('Extraction error:', err);
-                        enrollmentFileLabel.innerHTML = `<span class="text-destructive"><i class="fa-solid fa-triangle-exclamation"></i> Error extracting. Try again.</span>`;
-                    }
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-
-        if (btnCloseSelective) {
-            btnCloseSelective.addEventListener('click', () => {
-                if (selectiveModal) {
-                    selectiveModal.classList.remove('flex');
-                    selectiveModal.classList.add('hidden');
-                }
-            });
-        }
 
         const btnCloseScoresheetModal = document.getElementById('btn-close-scoresheet-modal');
         if (btnCloseScoresheetModal) {
@@ -3961,9 +3994,17 @@
 
     </script>
 
+    <!-- Smart Assistant FAB (always visible) -->
+    <button id="smart-assistant-fab" onclick="openSmartAssistant()"
+        class="fixed bottom-6 right-6 z-[999] w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-[0_4px_20px_rgba(99,102,241,0.4)] hover:shadow-[0_6px_30px_rgba(99,102,241,0.6)] hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center group">
+        <i class="fa-solid fa-wand-magic-sparkles text-lg group-hover:rotate-12 transition-transform"></i>
+        <span
+            class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse border-2 border-background"></span>
+    </button>
+
     <!-- Smart Assistant Modal -->
-    <div id="smart-assistant-modal" class="hidden">
-        <div class="assistant-panel animate-fade-in-up">
+    <div id="smart-assistant-modal" class="hidden" onclick="if(event.target===this)closeSmartAssistant()">
+        <div class="assistant-panel animate-fade-in-up" onclick="event.stopPropagation()">
             <div class="assistant-header">
                 <h3><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Assistant <span
                         class="text-[10px] text-white/30 font-medium ml-1">by XO</span></h3>
@@ -3977,31 +4018,51 @@
                     <button class="assistant-action-btn" onclick="executeAssistantAction('scan_papers')">
                         <i class="fa-solid fa-camera text-primary bg-primary/15"></i>
                         <div><span>Grade Next Test</span>
-                            <p>Scan new scripts for this class</p>
+                            <p>Scan new scripts for a class</p>
                         </div>
                     </button>
                     <button class="assistant-action-btn" onclick="executeAssistantAction('edit_scores')">
                         <i class="fa-solid fa-pen-to-square text-amber-400 bg-amber-500/15"></i>
-                        <div><span>Edit Scores</span>
-                            <p>Fix or update existing scores</p>
+                        <div><span>Fix a Score</span>
+                            <p>Correct a mistake in the results</p>
                         </div>
                     </button>
                     <button class="assistant-action-btn" onclick="executeAssistantAction('view_standings')">
                         <i class="fa-solid fa-ranking-star text-emerald-400 bg-emerald-500/15"></i>
-                        <div><span>View Standings</span>
-                            <p>See rankings and analytics</p>
+                        <div><span>See Results</span>
+                            <p>Check rankings and download Excel</p>
                         </div>
                     </button>
                     <button class="assistant-action-btn" onclick="executeAssistantAction('add_student')">
                         <i class="fa-solid fa-user-plus text-blue-400 bg-blue-500/15"></i>
-                        <div><span>Add Student</span>
-                            <p>Add a new student to roster</p>
+                        <div><span>Add a Student</span>
+                            <p>Someone missing from the list?</p>
+                        </div>
+                    </button>
+                    <button class="assistant-action-btn"
+                        onclick="sendAssistantMessage('Analyze my current scores and flag anything unusual')">
+                        <i class="fa-solid fa-chart-line text-cyan-400 bg-cyan-500/15"></i>
+                        <div><span>Analyze Scores</span>
+                            <p>Get insights and spot anomalies</p>
+                        </div>
+                    </button>
+                    <button class="assistant-action-btn" onclick="executeAssistantAction('update_roster')">
+                        <i class="fa-solid fa-list-check text-violet-400 bg-violet-500/15"></i>
+                        <div><span>Update Class List</span>
+                            <p>Add or fix names in a class roster</p>
                         </div>
                     </button>
                 </div>
                 <div id="assistant-chat" class="mt-6"></div>
             </div>
             <div class="assistant-input-bar">
+                <button id="assistant-upload-btn" onclick="document.getElementById('assistant-file-input').click()"
+                    class="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all border border-white/10"
+                    title="Upload image or Excel">
+                    <i class="fa-solid fa-paperclip"></i>
+                </button>
+                <input type="file" id="assistant-file-input" class="hidden" accept="image/*,.xlsx,.xls,.csv"
+                    onchange="handleAssistantFileUpload(this)">
                 <input type="text" id="assistant-input" placeholder="Ask me anything..." autocomplete="off">
                 <button id="assistant-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
             </div>

@@ -208,13 +208,19 @@ def handle_classes():
 
         if not raw_name:
             return jsonify({"error": "Class name is required"}), 400
+
+        # Normalize class name: uppercase, split letters from digits, add space (e.g. 'ss1q' -> 'SS 1Q')
+        import re as re_mod
+        c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', raw_name.upper())
+        match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
+        normalized_name = "{} {}".format(match.group(1), match.group(2)) if match else raw_name.strip().upper()
             
-        print("Upserting class: {}".format(raw_name))
+        print("Upserting class: {} (normalized: {})".format(raw_name, normalized_name))
             
         # Get or Create class (Upsert mechanism)
-        c = ClassModel.query.filter(func.lower(ClassModel.name) == raw_name.lower()).first()
+        c = ClassModel.query.filter(func.lower(ClassModel.name) == normalized_name.lower()).first()
         if not c:
-            c = ClassModel(name=raw_name)
+            c = ClassModel(name=normalized_name)
             db.session.add(c)
             db.session.commit()
         
@@ -621,8 +627,37 @@ def upload_batch():
         return jsonify({"error": str(e)}), 500
 
 
+def parse_class_level(class_name):
+    """Smart class parser: extracts level and arm from any Nigerian school format.
+    Handles: SS 1Q, JSS2A, ss1q, S.S 1 Q, J.S.S. 1B, SSS 3 Gold, Primary 4A, etc.
+    Returns: {"level": "SS1", "arm": "Q", "normalized": "SS 1Q"}
+    """
+    import re as re_mod
+    raw = str(class_name).strip()
+    # Step 1: Remove dots and extra whitespace, uppercase
+    cleaned = re_mod.sub(r'\.', '', raw).upper().strip()
+    cleaned = re_mod.sub(r'\s+', ' ', cleaned)
+    
+    # Step 2: Match pattern — (letters)(optional space)(digits)(optional space)(arm)
+    # Handles: JSS 2A, SS1Q, SSS 3 Gold, PRIMARY 4A
+    match = re_mod.match(r'^([A-Z]+)\s*(\d+)\s*(.*)$', cleaned)
+    if match:
+        prefix = match.group(1)  # SS, JSS, SSS, PRIMARY, PRI
+        number = match.group(2)  # 1, 2, 3
+        arm = match.group(3).strip()  # Q, A, Gold, or empty
+        
+        level = "{}{}".format(prefix, number)  # SS1, JSS2, SSS3
+        normalized = "{} {}{}".format(prefix, number, arm)  # SS 1Q, JSS 2A
+        
+        return {"level": level, "arm": arm or "_default", "normalized": normalized}
+    
+    # Step 3: Fallback — treat entire name as level with no arm
+    return {"level": cleaned or "UNKNOWN", "arm": "_default", "normalized": raw}
+
+
 @app.route('/export-excel', methods=['POST'])
 def export_excel():
+    """Generates Excel from scanned results. No scores saved to DB — only rosters are persisted."""
     try:
         data = request.json
         if not data or 'results' not in data:
@@ -630,253 +665,272 @@ def export_excel():
             
         results = data['results']
         assessment_type = data.get('assessmentType', 'Score').strip()
-        subject_name = data.get('subjectType', data.get('subjectName', 'Uncategorized')).strip()
+        subject_name = data.get('subjectType', data.get('subjectName', '')).strip()
         if not assessment_type:
             assessment_type = 'Score'
+        if not subject_name or subject_name.lower() == 'uncategorized':
+            subject_name = data.get('subjectName', data.get('subjectType', '')).strip()
         if not subject_name:
-            subject_name = 'Uncategorized'
+            subject_name = 'General'
             
         if not results:
              return jsonify({"error": "No data to export"}), 400
+
+        subject_mode = data.get('subjectMode', 'general').strip().lower()
              
-        # Map incoming OCR data to DB
+        # === ROSTER-ONLY DB SYNC ===
+        # Only update class rosters (student names), NOT scores
         import re
         for r in results:
             name = str(r.get('name', '')).strip().title()
-            
-            # Extract letters and numbers for class formatting (e.g., JSS1Q -> JSS 1Q)
+            if not name:
+                continue
+                
             c_raw = str(r.get('class', '')).strip().upper()
             c_cleaned = re.sub(r'[^A-Z0-9]', '', c_raw)
             match = re.match(r'([A-Z]+)(\d+.*)', c_cleaned)
             class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
             
-            score_val = str(r.get('score', '')).strip()
-            
-            if not name:
-                continue
-                
-            # Find class in DB
+            # Ensure class exists
             c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
             if not c:
-                # If class doesn't exist, create it (fallback mechanism if front-end failed to send valid class)
                 c = ClassModel(name=class_name)
                 db.session.add(c)
                 db.session.commit()
                 
-            # Find student
+            # Ensure student exists in roster (fuzzy match)
             student = StudentModel.query.filter_by(class_id=c.id, name=name).first()
             if not student:
-                 # Attempt fuzzy match
-                 existing_students = StudentModel.query.filter_by(class_id=c.id).all()
-                 existing_names = [s.name for s in existing_students]
-                 if existing_names:
-                     best_match_tuple = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
-                     if best_match_tuple and best_match_tuple[1] >= 85:
-                         student = StudentModel.query.filter_by(class_id=c.id, name=best_match_tuple[0]).first()
-                         
-                 # If still no student, create
-                 if not student:
-                     student = StudentModel(class_id=c.id, name=name)
-                     db.session.add(student)
-                     db.session.commit()
-                     
-            # Save score safely under the Subject tag!
-            score_record = ScoreModel.query.filter_by(student_id=student.id, assessment_type=assessment_type, subject_name=subject_name).first()
-            if score_record:
-                score_record.score_value = score_val
-            else:
-                score_record = ScoreModel(student_id=student.id, score_value=score_val, assessment_type=assessment_type, subject_name=subject_name)
-                db.session.add(score_record)
-            db.session.commit()
+                existing_students = StudentModel.query.filter_by(class_id=c.id).all()
+                existing_names = [s.name for s in existing_students]
+                if existing_names:
+                    best_match_tuple = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
+                    if best_match_tuple and best_match_tuple[1] >= 85:
+                        student = StudentModel.query.filter_by(class_id=c.id, name=best_match_tuple[0]).first()
+                if not student:
+                    student = StudentModel(class_id=c.id, name=name)
+                    db.session.add(student)
+                    db.session.commit()
             
-        # Now generate Excel from DB cleanly organized by Class and Subject
-        class_filter = data.get('classList', [])
-        if class_filter:
-            classes = ClassModel.query.filter(ClassModel.name.in_(class_filter)).order_by(ClassModel.name).all()
-        else:
-            classes = ClassModel.query.order_by(ClassModel.name).all()
-        sheets_dict = {}
+        # === BUILD EXCEL DIRECTLY FROM RESULTS (not from DB scores) ===
         
-        for c in classes:
-            all_students = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
-            if not all_students:
+        # Group results by class name
+        class_results = {}
+        for r in results:
+            name = str(r.get('name', '')).strip().title()
+            if not name:
                 continue
-                
-            # Accumulate subjects currently known for this class
-            class_subjects = set()
-            for s in all_students:
-                for score in ScoreModel.query.filter_by(student_id=s.id).all():
-                    class_subjects.add(score.subject_name)
-                    
-            if not class_subjects:
-                # Provide a blank worksheet if the class has absolutely no grades yet
-                sheet_name = c.name[:31]
-                data_rows = [{'Name': s.name, 'Class': c.name, 'Total Score': 0, 'Position': ''} for s in all_students]
-                sheets_dict[sheet_name] = pd.DataFrame(data_rows)
-                continue
-                
-            for subj in class_subjects:
-                # Format specific worksheet per subject limit max Excel width 31
-                sheet_name = "{} - {}".format(c.name, subj)[:31]
+            c_raw = str(r.get('class', '')).strip().upper()
+            c_cleaned = re.sub(r'[^A-Z0-9]', '', c_raw)
+            match = re.match(r'([A-Z]+)(\d+.*)', c_cleaned)
+            class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
+            
+            if class_name not in class_results:
+                class_results[class_name] = []
+            class_results[class_name].append({
+                'name': name,
+                'score': str(r.get('score', '')).strip(),
+                'class': class_name
+            })
+        
+        # For general mode: include roster students who weren't scanned (blank, not 0)
+        class_filter = data.get('classList', [])
+        if subject_mode == 'general' and class_filter:
+            for class_name in class_filter:
+                c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+                if c:
+                    roster = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
+                    scanned_names = [r['name'].lower() for r in class_results.get(class_name, [])]
+                    for s in roster:
+                        if s.name.lower() not in scanned_names:
+                            # Fuzzy check
+                            if scanned_names:
+                                best = process.extractOne(s.name, scanned_names, scorer=fuzz.token_set_ratio)
+                                if best and best[1] >= 85:
+                                    continue  # Already scanned under a slightly different name
+                            if class_name not in class_results:
+                                class_results[class_name] = []
+                            class_results[class_name].append({
+                                'name': s.name,
+                                'score': '',  # Blank, not 0
+                                'class': class_name
+                            })
+        
+        # === GROUP BY CLASS LEVEL ===
+        # SS 1Q + SS 1S → level SS1 (one file)
+        # SS 2A + SS 2B → level SS2 (separate file)
+        level_groups = {}  # {level: {arm: [results]}}
+        class_to_level = {}  # {class_name: {"level": ..., "arm": ...}}
+        
+        for class_name, rows in class_results.items():
+            parsed = parse_class_level(class_name)
+            level = parsed["level"]
+            arm = parsed["arm"]
+            class_to_level[class_name] = parsed
+            
+            if level not in level_groups:
+                level_groups[level] = {}
+            if class_name not in level_groups[level]:
+                level_groups[level][class_name] = []
+            level_groups[level][class_name].extend(rows)
+        
+        # === GENERATE EXCEL FILES (one per level) ===
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.utils import get_column_letter
+        
+        all_sheets_summary = {}
+        generated_files = {}  # {level: filepath}
+        
+        for level, classes_in_level in level_groups.items():
+            # File per level
+            safe_subject = re.sub(r'[^A-Za-z0-9 ]', '', subject_name).strip()
+            filename = "{}_{}.xlsx".format(safe_subject or "Scores", level)
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+            generated_files[level] = {"path": filepath, "filename": filename}
+            
+            sheets_dict = {}
+            
+            for class_name, rows in classes_in_level.items():
+                sheet_name = class_name[:31]
                 data_rows = []
                 
-                # Enrollment Guard: If ANY Selective Enrollments exist for this Subject, lock the roster
-                enrollments = EnrollmentModel.query.filter_by(subject_name=subj).filter(EnrollmentModel.student_id.in_([s.id for s in all_students])).all()
-                valid_student_ids = [e.student_id for e in enrollments] if enrollments else [s.id for s in all_students]
-                
-                filtered_students = [s for s in all_students if s.id in valid_student_ids]
-                
-                for s in filtered_students:
+                for r in rows:
                     row = {
-                        'Name': s.name,
-                        'Class': c.name # Explicitly add Class column to fix the "Class column is broken" issue
+                        'Name': r['name'],
+                        'Class': class_name
                     }
-                    scores = ScoreModel.query.filter_by(student_id=s.id, subject_name=subj).all()
-                    
-                    if not scores and enrollments:
-                        # If they are selectively enrolled but have no scores, STILL show them!
-                        pass
-                    elif not scores:
-                        # Skip strictly general students who have absolutely zero grades logged under this specific Subject
-                        continue
-
-                    total_score = 0.0
-                    for score in scores:
-                        row[score.assessment_type] = score.score_value
+                    score_val = r.get('score', '')
+                    if score_val:
+                        row[assessment_type] = score_val
                         # Auto tally
                         try:
-                            val = str(score.score_value)
+                            val = str(score_val)
                             if '/' in val: val = val.split('/')[0]
-                            total_score += float(val)
+                            row['Total Score'] = float(val)
                         except:
-                            pass
-                    row['Total Score'] = total_score
+                            row['Total Score'] = ''
+                    else:
+                        row['Total Score'] = ''
                     data_rows.append(row)
-                    
+                
                 if not data_rows:
                     continue
                     
                 df = pd.DataFrame(data_rows)
                 
-                # Enforce a strictly curated column order for better readability
+                # Column ordering
                 pref_order = ['Name', 'Class', '1st CA', '2nd CA', 'Assignment', 'Open Day', 'Exam']
                 existing_cols = list(df.columns)
-                custom_cols = [c for c in existing_cols if c not in pref_order and c not in ['Total Score', 'Position', 'Rank']]
+                custom_cols = [col for col in existing_cols if col not in pref_order and col not in ['Total Score', 'Position', 'Rank']]
                 
                 final_cols = []
-                # 1. Preferred known columns in exact order
-                for c in pref_order:
-                    if c in existing_cols:
-                        final_cols.append(c)
-                # 2. Any dynamically added custom assessment types
+                for col in pref_order:
+                    if col in existing_cols:
+                        final_cols.append(col)
                 final_cols.extend(custom_cols)
-                # 3. Always pin Total Score to the end
-                if 'Total Score' in existing_cols: 
+                if 'Total Score' in existing_cols:
                     final_cols.append('Total Score')
                 
-                # Apply the reordering
                 df = df[final_cols]
                 
-                # Ranking
-                df['Rank'] = df['Total Score'].rank(method='min', ascending=False)
-                
-                def format_position(rank):
-                    if pd.isna(rank): return ''
-                    r = int(rank)
-                    if 11 <= (r % 100) <= 13: return "{}th".format(r)
-                    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
-                    return "{}{}".format(r, suffix)
+                # Ranking — only rank rows with actual scores
+                if 'Total Score' in df.columns:
+                    numeric_scores = pd.to_numeric(df['Total Score'], errors='coerce')
+                    df['Rank'] = numeric_scores.rank(method='min', ascending=False)
                     
-                df['Position'] = df['Rank'].apply(format_position)
-                df = df.drop(columns=['Rank'])
+                    def format_position(rank):
+                        if pd.isna(rank): return ''
+                        r = int(rank)
+                        if 11 <= (r % 100) <= 13: return "{}th".format(r)
+                        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+                        return "{}{}".format(r, suffix)
+                        
+                    df['Position'] = df['Rank'].apply(format_position)
+                    df = df.drop(columns=['Rank'])
                 
                 sheets_dict[sheet_name] = df
             
-        if not sheets_dict:
-             # Create an empty template if absolutely no data exists
-             sheets_dict['General'] = pd.DataFrame(columns=["Name", "Class", "Total Score", "Position"])
-        # Generate the Excel file with openpyxl for Nigerian Scoresheet formatting
-        from openpyxl.styles import Font, Alignment, PatternFill
-        from openpyxl.utils.dataframe import dataframe_to_rows
-        from openpyxl.utils import get_column_letter
-
-        with pd.ExcelWriter(WORKING_EXCEL_PATH, engine='openpyxl') as writer:
-            for s_name, df_sheet in sheets_dict.items():
-                
-                # Check if this is a general list or a specific subject
-                is_general = s_name == 'General'
-                
-                # If specific, try to parse Class and Subject out of the sheet name
-                class_str = "All"
-                subj_str = "Various"
-                if " - " in s_name:
-                    parts = s_name.split(" - ", 1)
-                    class_str = parts[0]
-                    subj_str = parts[1]
-                
-                # We won't use pandas to_excel directly for the formatting, we write rows manually
-                df_sheet.to_excel(writer, sheet_name=s_name, index=False, startrow=4)
-                
-                worksheet = writer.sheets[s_name]
-                
-                # Row 1: Main Title
-                worksheet.merge_cells('A1:G1')
-                title_cell = worksheet['A1']
-                title_cell.value = "QSI SMART GRADER SCORESHEET"
-                title_cell.font = Font(bold=True, size=16)
-                title_cell.alignment = Alignment(horizontal='center', vertical='center')
-                
-                # Row 2: Class
-                worksheet.merge_cells('A2:E2')
-                class_cell = worksheet['A2']
-                class_cell.value = f"CLASS: {class_str}"
-                class_cell.font = Font(bold=True, size=12)
-                
-                # Row 3: Subject
-                worksheet.merge_cells('A3:E3')
-                subj_cell = worksheet['A3']
-                subj_cell.value = f"SUBJECT: {subj_str}"
-                subj_cell.font = Font(bold=True, size=12)
-                
-                # Style the Data Headers (Row 5)
-                header_font = Font(bold=True)
-                header_fill = PatternFill(start_color="EAEAEA", end_color="EAEAEA", fill_type="solid")
-                for col_idx in range(1, len(df_sheet.columns) + 1):
-                    cell = worksheet.cell(row=5, column=col_idx)
-                    cell.font = header_font
-                    cell.fill = header_fill
-                    cell.alignment = Alignment(horizontal='center')
+            if not sheets_dict:
+                continue
+            
+            # Write Excel for this level
+            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+                for s_name, df_sheet in sheets_dict.items():
+                    df_sheet.to_excel(writer, sheet_name=s_name, index=False, startrow=4)
+                    worksheet = writer.sheets[s_name]
                     
-                    # Auto-adjust column width
-                    col_letter = get_column_letter(col_idx)
-                    column_header = df_sheet.columns[col_idx - 1]
-                    # Give 'Name' column more space
-                    if column_header == 'Name':
-                        worksheet.column_dimensions[col_letter].width = 30
-                    elif column_header == 'Class':
-                        worksheet.column_dimensions[col_letter].width = 15
-                    else:
-                        worksheet.column_dimensions[col_letter].width = 12
-                        
-                # Center align all data cells for numbers/scores
-                for row in worksheet.iter_rows(min_row=6, max_row=worksheet.max_row, min_col=3, max_col=worksheet.max_column):
-                    for cell in row:
+                    # Row 1: Title
+                    worksheet.merge_cells('A1:G1')
+                    title_cell = worksheet['A1']
+                    title_cell.value = "QSI SMART GRADER SCORESHEET"
+                    title_cell.font = Font(bold=True, size=16)
+                    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+                    
+                    # Row 2: Class
+                    worksheet.merge_cells('A2:E2')
+                    class_cell = worksheet['A2']
+                    class_cell.value = "CLASS: {}".format(s_name)
+                    class_cell.font = Font(bold=True, size=12)
+                    
+                    # Row 3: Subject
+                    worksheet.merge_cells('A3:E3')
+                    subj_cell = worksheet['A3']
+                    subj_cell.value = "SUBJECT: {}".format(subject_name)
+                    subj_cell.font = Font(bold=True, size=12)
+                    
+                    # Style headers (Row 5)
+                    header_font = Font(bold=True)
+                    header_fill = PatternFill(start_color="EAEAEA", end_color="EAEAEA", fill_type="solid")
+                    for col_idx in range(1, len(df_sheet.columns) + 1):
+                        cell = worksheet.cell(row=5, column=col_idx)
+                        cell.font = header_font
+                        cell.fill = header_fill
                         cell.alignment = Alignment(horizontal='center')
-                
-        # Build sheets_summary for frontend tab rendering
-        sheets_summary = {}
-        for s_name, df_sheet in sheets_dict.items():
-            parts = s_name.split(" - ", 1) if " - " in s_name else [s_name, "General"]
-            sheets_summary[s_name] = {
-                "columns": list(df_sheet.columns),
-                "rows": df_sheet.fillna('').to_dict(orient='records'),
-                "class": parts[0],
-                "subject": parts[1] if len(parts) > 1 else "General"
-            }
+                        
+                        col_letter = get_column_letter(col_idx)
+                        column_header = df_sheet.columns[col_idx - 1]
+                        if column_header == 'Name':
+                            worksheet.column_dimensions[col_letter].width = 30
+                        elif column_header == 'Class':
+                            worksheet.column_dimensions[col_letter].width = 15
+                        else:
+                            worksheet.column_dimensions[col_letter].width = 12
+                            
+                    # Center data cells
+                    for row in worksheet.iter_rows(min_row=6, max_row=worksheet.max_row, min_col=3, max_col=worksheet.max_column):
+                        for cell in row:
+                            cell.alignment = Alignment(horizontal='center')
+            
+            # Build sheet summaries for this level
+            for s_name, df_sheet in sheets_dict.items():
+                all_sheets_summary[s_name] = {
+                    "columns": list(df_sheet.columns),
+                    "rows": df_sheet.fillna('').to_dict(orient='records'),
+                    "class": s_name,
+                    "subject": subject_name,
+                    "level": level
+                }
+        
+        # Also copy the first (or only) level file to WORKING_EXCEL_PATH for backward compat
+        if generated_files:
+            import shutil
+            first_level = list(generated_files.keys())[0]
+            shutil.copy2(generated_files[first_level]["path"], WORKING_EXCEL_PATH)
+        
+        # Build download info
+        downloads = []
+        for level, info in generated_files.items():
+            downloads.append({
+                "level": level,
+                "filename": info["filename"],
+                "url": "/download-sheet?level={}".format(level)
+            })
 
         return jsonify({
-            "message": "Successfully mapped grades to Database and generated Active Sheet.",
-            "sheets": sheets_summary
+            "message": "Grades saved! {} file(s) ready for download.".format(len(downloads)),
+            "sheets": all_sheets_summary,
+            "downloads": downloads,
+            "subject": subject_name
         }), 200
 
     except Exception as e:
@@ -887,13 +941,41 @@ def export_excel():
 
 @app.route('/download-sheet', methods=['GET'])
 def download_sheet():
-    """Returns the compiled Excel file to the user."""
+    """Returns the compiled Excel file, optionally filtered by level."""
+    level = request.args.get('level', '').strip()
+    subject = request.args.get('subject', '').strip()
+    
+    if level:
+        # Look for level-specific file
+        import re as re_mod
+        safe_subject = re_mod.sub(r'[^A-Za-z0-9 ]', '', subject).strip() if subject else "Scores"
+        filename = "{}_{}.xlsx".format(safe_subject or "Scores", level)
+        filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+        
+        if os.path.exists(filepath):
+            try:
+                download_name = "{}_{}.xlsx".format(safe_subject or "Scores", level)
+                response = make_response(send_file(
+                    filepath, 
+                    as_attachment=True, 
+                    download_name=download_name,
+                    mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ))
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+                return response
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+    
+    # Fallback to working file
     if os.path.exists(WORKING_EXCEL_PATH):
         try:
+            download_name = "{}_Scoresheet.xlsx".format(subject) if subject else "Scoresheet.xlsx"
             response = make_response(send_file(
                 WORKING_EXCEL_PATH, 
                 as_attachment=True, 
-                download_name="OCR_Graded_Results.xlsx",
+                download_name=download_name,
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             ))
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -1125,14 +1207,86 @@ Return JSON: {{"friendly_message": "...", "suggestion": "...", "can_retry": true
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/move-student', methods=['POST'])
+def move_student():
+    """Move a student from one class to another."""
+    try:
+        data = request.json
+        student_name = data.get('studentName', '').strip().title()
+        from_class = data.get('fromClass', '').strip()
+        to_class = data.get('toClass', '').strip()
+        
+        if not student_name or not from_class or not to_class:
+            return jsonify({"error": "Missing student name, source class, or target class"}), 400
+        
+        # Find source class and student
+        source = ClassModel.query.filter(func.lower(ClassModel.name) == from_class.lower()).first()
+        if not source:
+            return jsonify({"error": "Source class '{}' not found".format(from_class)}), 404
+        
+        student = StudentModel.query.filter_by(class_id=source.id, name=student_name).first()
+        if not student:
+            # Try fuzzy match
+            existing = StudentModel.query.filter_by(class_id=source.id).all()
+            names = [s.name for s in existing]
+            if names:
+                best = process.extractOne(student_name, names, scorer=fuzz.token_set_ratio)
+                if best and best[1] >= 80:
+                    student = StudentModel.query.filter_by(class_id=source.id, name=best[0]).first()
+            if not student:
+                return jsonify({"error": "Student '{}' not found in {}".format(student_name, from_class)}), 404
+        
+        # Ensure target class exists
+        target = ClassModel.query.filter(func.lower(ClassModel.name) == to_class.lower()).first()
+        if not target:
+            target = ClassModel(name=to_class)
+            db.session.add(target)
+            db.session.commit()
+        
+        # Check for duplicate in target
+        existing_in_target = StudentModel.query.filter_by(class_id=target.id, name=student.name).first()
+        if existing_in_target:
+            return jsonify({"error": "'{}' is already in {}".format(student.name, to_class)}), 400
+        
+        # Move the student
+        student.class_id = target.id
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Moved {} from {} to {} ✓".format(student.name, from_class, to_class),
+            "success": True
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/smart-assistant', methods=['POST'])
 def smart_assistant():
-    """Smart conversational assistant with real DB data access. Designed by XO."""
+    """Smart Assistant v3 — Full intelligence upgrade. Designed by XO.
+    16 action types, proactive insights, anomaly detection, cross-class analysis.
+    """
     try:
         data = request.json
         message = data.get('message', '')
         context = data.get('context', {})
         current_screen = data.get('currentScreen', 'landing')
+        current_results = data.get('currentResults', [])  # Live scores from frontend
+        session_info = data.get('sessionInfo', {})  # Classes graded, subject, etc.
+        history = data.get('history', [])  # Conversation history
+        
+        # Build conversation history string
+        conversation_context = ""
+        if history and len(history) > 1:  # More than just the current message
+            conv_lines = []
+            for h in history[:-1]:  # Exclude current message (it's sent separately)
+                role = "Teacher" if h.get('role') == 'user' else "You (Assistant)"
+                text = h.get('text', '')
+                if text.startswith('[SYSTEM]'):
+                    role = 'SYSTEM'
+                    text = text[8:].strip()
+                conv_lines.append("{}: {}".format(role, text))
+            conversation_context = "\nCONVERSATION HISTORY (maintain context!):\n{}\n".format("\n".join(conv_lines[-10:]))
         
         # Build RICH context from actual database
         classes = ClassModel.query.order_by(ClassModel.name).all()
@@ -1149,53 +1303,145 @@ def smart_assistant():
             
             class_data[c.name] = {
                 "student_count": len(students),
-                "students": [s.name for s in students[:15]],  # First 15 for context window
+                "students": [s.name for s in students[:20]],
                 "assessments": assessment_types,
                 "subjects": subjects,
                 "has_scores": len(scores) > 0
             }
         
+        # Build current session analytics if results are available
+        session_analytics = ""
+        if current_results:
+            valid_scores = []
+            missing_names = []
+            for r in current_results:
+                name = r.get('name', '').strip()
+                score = r.get('score', '').strip()
+                if not name:
+                    missing_names.append(r)
+                    continue
+                try:
+                    val = str(score)
+                    if '/' in val: val = val.split('/')[0]
+                    numeric = float(val)
+                    valid_scores.append({"name": name, "score": numeric, "class": r.get('class', '')})
+                except:
+                    pass
+            
+            if valid_scores:
+                scores_list = [s['score'] for s in valid_scores]
+                avg = sum(scores_list) / len(scores_list)
+                highest = max(valid_scores, key=lambda x: x['score'])
+                lowest = min(valid_scores, key=lambda x: x['score'])
+                
+                # Anomaly detection — scores that deviate significantly from average
+                anomalies = []
+                if len(scores_list) > 3:
+                    import statistics
+                    stdev = statistics.stdev(scores_list) if len(scores_list) > 1 else 0
+                    for s in valid_scores:
+                        if stdev > 0 and abs(s['score'] - avg) > (2 * stdev):
+                            anomalies.append(s)
+                
+                session_analytics = """
+CURRENT GRADING SESSION ANALYTICS:
+- Total students scanned: {total}
+- Average score: {avg:.1f}
+- Highest: {high_name} ({high_score})
+- Lowest: {low_name} ({low_score})
+- Students with missing names: {missing}
+- Anomalies (unusual scores): {anomalies}
+- Score distribution: {dist}
+""".format(
+                    total=len(valid_scores),
+                    avg=avg,
+                    high_name=highest['name'], high_score=highest['score'],
+                    low_name=lowest['name'], low_score=lowest['score'],
+                    missing=len(missing_names),
+                    anomalies=json.dumps([{"name": a['name'], "score": a['score']} for a in anomalies]) if anomalies else "None detected",
+                    dist="Below avg: {}, Above avg: {}".format(
+                        len([s for s in scores_list if s < avg]),
+                        len([s for s in scores_list if s >= avg])
+                    )
+                )
+        
         system_prompt = """You are the Smart Assistant for QSI Smart Grader, designed by XO.
-You help teachers manage their grading workflow. Be warm, smart, and always helpful.
+You are an intelligent, proactive teaching aide — not just a chatbot. You think ahead, analyze data, and help teachers work smarter.
+
+PERSONALITY: Warm, smart, helpful. Talk like a brilliant colleague who genuinely cares about the teacher's work. Use natural language — never robotic. Reference real data and names when possible.
 
 CURRENT STATE:
 - Teacher is on the "{screen}" screen
-- Session context: {context}
+- Session: {session}
+- Context: {context}
 
-DATABASE (live data):
+DATABASE (live rosters):
 {db_data}
 
-Based on the teacher's message, respond with a JSON object:
+{analytics}
+
+ACTIONS YOU CAN TAKE (pick the best one):
 {{
-    "response": "A friendly, smart message (1-3 sentences). Reference real data when possible.",
+    "response": "Your warm, natural response (1-3 sentences). Use real names and data.",
     "action": One of:
-        "setup_session" - Pre-fill class/subject/assessment and navigate to scanning
-        "view_standings" - Show results/analytics
-        "add_student" - Add student to roster (will trigger safe-add flow)
-        "edit_scores" - Navigate to review section
-        "add_class" - Open add class modal
-        "manage_enrollment" - Open enrollment management
-        "export_data" - Download Excel
-        "none" - Just informational response
+        "setup_session" - Set up class/subject/assessment, navigate to scanning
+        "view_standings" - Show results and rankings
+        "add_student" - Add a student to a class roster
+        "add_students_batch" - Add multiple students at once
+        "move_student" - Move a student between classes
+        "correct_score" - Fix a specific student's score in the current session
+        "edit_scores" - Go to review screen to fix scores
+        "add_class" - Open the add-class form
+        "update_roster" - Open class list for name fixes
+        "export_data" - Download the Excel file
+        "analyze_scores" - Show analytics card (averages, trends, insights)
+        "compare_classes" - Side-by-side class performance comparison
+        "compare_assessments" - Compare across assessment types (1st CA vs 2nd CA)
+        "flag_anomalies" - Highlight unusual scores that may be errors
+        "find_at_risk" - List students who are failing or at risk
+        "generate_report" - Create a formatted summary for admin/principal
+        "none" - Just a conversational answer, no action needed
     "params": {{
-        "class_name": "...",     // for setup_session, add_student
-        "subject_name": "...",   // for setup_session
-        "assessment_type": "...", // for setup_session (suggest next logical one)
-        "student_name": "..."    // for add_student
+        "class_name": "...",
+        "subject_name": "...",
+        "assessment_type": "...",
+        "student_name": "...",
+        "target_class": "...",
+        "new_score": "...",
+        "students": ["name1", "name2"],
+        "report_text": "...",
+        "insights": [list of insight strings],
+        "anomalies": [list of {{name, score, reason}}],
+        "at_risk": [list of {{name, score, class}}]
     }}
 }}
 
-RULES:
-- For "setup_session": figure out the NEXT assessment to grade. If 1st CA exists, suggest 2nd CA. If both exist, suggest Exam.
-- For "add_student": always confirm the class and spell the name clearly.
-- Always reference real data: "You have 30 students in SS 1Q with 1st CA scores already."
-- If unsure, ask a clarifying question (action: "none").
-- Sign off important messages with a subtle "- XO Assistant" only on first interaction.
+INTELLIGENCE RULES:
+1. For "setup_session": Figure out the NEXT logical assessment. If 1st CA exists, suggest 2nd CA. If both exist, suggest Exam.
+2. For "correct_score": The teacher says something like "Adekunie should be 8" — extract the name and new score.
+3. For "analyze_scores": Calculate and share meaningful insights from the analytics data above. Be specific with numbers.
+4. For "compare_classes": Compare averages, pass rates, top performers between classes.
+5. For "flag_anomalies": Look for scores that seem like typos (way too high or low vs class average).
+6. For "find_at_risk": Students scoring below 40% or consistently declining.
+7. For "generate_report": Write a brief, professional summary suitable for a school principal.
+8. For "add_students_batch": When teacher lists multiple names, extract all of them.
+9. For "move_student": Confirm source and destination classes.
+10. BE PROACTIVE: If you notice something interesting in the data, mention it! ("By the way, SS 1Q's average is 15 points higher than SS 1S — worth looking into?")
+11. Always reference real student names and real data. Never make up data.
+12. If the teacher's request is ambiguous, ask a smart clarifying question.
+13. Keep responses conversational and natural — like texting a smart colleague.
+14. CONVERSATION MEMORY: You have conversation history. Reference what was said earlier. If the teacher says things like "wait", "hold on", "never mind", "go back", "do it", "yes", "no" — these refer to the previous exchange. Maintain continuity.
+15. SHORT REPLIES for short messages. If teacher says "yes" or "ok", don't write a paragraph — just acknowledge and act.
 
-Return ONLY raw JSON. No markdown.""".format(
+{conversation}
+
+Return ONLY raw JSON. No markdown wrapping.""".format(
             screen=current_screen,
+            session=json.dumps(session_info),
             context=json.dumps(context),
-            db_data=json.dumps(class_data, indent=2)
+            db_data=json.dumps(class_data, indent=2),
+            analytics=session_analytics,
+            conversation=conversation_context
         )
         
         model = genai.GenerativeModel('gemini-2.5-flash')
@@ -1204,6 +1450,8 @@ Return ONLY raw JSON. No markdown.""".format(
         
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
+        if raw_text.startswith("```"):
+            raw_text = raw_text[3:]
         if raw_text.endswith("```"):
             raw_text = raw_text[:-3]
             
@@ -1212,8 +1460,10 @@ Return ONLY raw JSON. No markdown.""".format(
         
     except Exception as e:
         print("Smart assistant error: {}".format(e))
+        import traceback
+        traceback.print_exc()
         return jsonify({
-            "response": "Sorry, I had trouble with that. Could you rephrase? - XO Assistant",
+            "response": "Sorry, I had a hiccup processing that. Could you say it differently? I'm here to help!",
             "action": "none",
             "params": {}
         }), 200
