@@ -486,3 +486,41 @@
         transform: translateY(0);
     }
 }
+
+/* ─── Review Table: Name Wrapping ─── */
+#results-tbody input[data-field="name"],
+#review-section input[data-field="name"] {
+    word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    min-width: 0;
+}
+
+#results-tbody td:first-child,
+#review-section td:first-child {
+    max-width: 200px;
+    word-break: break-word;
+}
+
+/* Score input stays compact */
+#results-tbody input[data-field="score"],
+#review-section input[data-field="score"] {
+    max-width: 80px;
+    min-width: 60px;
+    flex-shrink: 0;
+}
+
+/* Feedback info nested/collapsible on mobile */
+#analytics-section .absent-banner,
+#analytics-section .feedback-block {
+    max-height: 120px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Long name truncation with tooltip for very long names */
+.student-name-cell {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

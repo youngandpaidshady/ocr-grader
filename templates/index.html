@@ -798,7 +798,7 @@
         </div>
 
         <!-- Header -->
-        <header class="text-center mb-16 pt-6 reveal visible relative">
+        <header id="app-hero" class="text-center mb-16 pt-6 reveal visible relative">
             <div
                 class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-primary/20 blur-[60px] rounded-full -z-10">
             </div>
@@ -1175,12 +1175,20 @@
 
                 <!-- Header (Compact) -->
                 <div class="flex flex-col mb-4 relative z-10">
-                    <h2 class="text-xl font-heading font-bold text-white tracking-tight flex items-center mb-1">
-                        <span
-                            class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mr-3 border border-primary/20 shadow-glow"><i
-                                class="fa-solid fa-camera text-primary text-sm"></i></span>
-                        Capture Scripts
-                    </h2>
+                    <div class="flex items-center mb-1">
+                        <button
+                            onclick="document.getElementById('capture-section').classList.add('hidden'); document.getElementById('start-section').classList.remove('hidden'); document.getElementById('app-hero').classList.remove('hidden'); if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}"
+                            class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mr-3 text-white/50 hover:text-white hover:bg-white/10 transition-all"
+                            title="Back">
+                            <i class="fa-solid fa-arrow-left text-sm"></i>
+                        </button>
+                        <h2 class="text-xl font-heading font-bold text-white tracking-tight flex items-center">
+                            <span
+                                class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mr-3 border border-primary/20 shadow-glow"><i
+                                    class="fa-solid fa-camera text-primary text-sm"></i></span>
+                            Capture Scripts
+                        </h2>
+                    </div>
                     <p class="text-muted-foreground text-sm font-medium ml-11">Point your phone at each student's paper
                         and press Capture.</p>
                 </div>
@@ -1302,13 +1310,21 @@
                 <div
                     class="flex flex-col md:flex-row md:justify-between items-start md:items-center mb-10 gap-4 relative z-10">
                     <div class="flex flex-col">
-                        <h2
-                            class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight flex items-center mb-1">
-                            <span
-                                class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mr-3 border border-white/10 shadow-sm"><i
-                                    class="fa-solid fa-list-check text-white text-sm"></i></span>
-                            Review Grades
-                        </h2>
+                        <div class="flex items-center mb-1">
+                            <button
+                                onclick="document.getElementById('review-section').classList.add('hidden'); document.getElementById('capture-section').classList.remove('hidden'); document.getElementById('app-hero').classList.add('hidden'); if(typeof initCamera === 'function') initCamera();"
+                                class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mr-3 text-white/50 hover:text-white hover:bg-white/10 transition-all"
+                                title="Back to capture">
+                                <i class="fa-solid fa-arrow-left text-sm"></i>
+                            </button>
+                            <h2
+                                class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight flex items-center">
+                                <span
+                                    class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mr-3 border border-white/10 shadow-sm"><i
+                                        class="fa-solid fa-list-check text-white text-sm"></i></span>
+                                Review Grades
+                            </h2>
+                        </div>
                         <p class="text-muted-foreground text-sm font-medium ml-11">Check the AI's work. Fix any
                             mistakes, then
                             Save.</p>
@@ -2406,6 +2422,9 @@
 
                 captureSection.classList.add('hidden');
                 reviewSection.classList.remove('hidden');
+                // Hide hero on review page
+                const appHero = document.getElementById('app-hero');
+                if (appHero) appHero.classList.add('hidden');
 
                 // Initialize empty table and array OR prepare for appending
                 const isAppending = extractedData && extractedData.length > 0;
@@ -3553,7 +3572,7 @@
             } else if (context === 'excel_upload') {
                 msgEl.innerHTML = `Welcome back. I see students from your previous session.<br/><span class="text-white">Are we grading their next test?</span>`;
                 actionsEl.innerHTML = `
-                    <button onclick="document.getElementById('start-section').classList.add('hidden'); document.getElementById('review-section').classList.add('hidden'); document.getElementById('capture-section').classList.remove('hidden'); if(typeof initCamera === 'function') initCamera();"
+                    <button onclick="document.getElementById('start-section').classList.add('hidden'); document.getElementById('review-section').classList.add('hidden'); document.getElementById('capture-section').classList.remove('hidden'); var hero=document.getElementById('app-hero'); if(hero)hero.classList.add('hidden'); if(typeof initCamera === 'function') initCamera();"
                         class="bg-primary/20 hover:bg-primary/40 p-4 rounded-xl border border-primary/30 transition-all flex items-center justify-center gap-3 text-sm font-bold tracking-wide group shadow-glow text-white text-left h-full">
                         <i class="fa-solid fa-camera-retro text-primary group-hover:-translate-y-1 transition-transform text-xl block"></i>
                         <span>Yes, let's scan their new papers!</span>
