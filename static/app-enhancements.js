@@ -193,18 +193,21 @@ let selectedClasses = [];
 
 function initClassPicker() {
     const container = document.getElementById('class-picker-container');
-    if (!container) return;
+    if (!container) { console.warn('[QSI] class-picker-container not found'); return; }
 
     // Fetch classes from API
     fetch('/api/classes')
         .then(r => r.json())
         .then(classes => {
+            console.log('[QSI] Classes loaded:', classes);
             renderClassChips(container, classes);
         })
-        .catch(() => {
+        .catch((err) => {
+            console.error('[QSI] Failed to load classes:', err);
             container.innerHTML = '<p class="text-muted-foreground text-sm">Could not load classes.</p>';
         });
 }
+window.initClassPicker = initClassPicker;
 
 function renderClassChips(container, classes) {
     const chipGrid = container.querySelector('.chip-grid') || container;
