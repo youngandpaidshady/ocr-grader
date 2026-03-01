@@ -131,6 +131,32 @@ Use the following JSON schema:
 Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like ```json ... ```.
 """
 
+# Health check endpoint (used by self-ping to keep Render awake)
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "ok"}), 200
+
+# Self-ping to keep Render free tier awake (pings every 14 min)
+def _keep_alive():
+    """Background thread that pings the app to prevent Render free-tier spin-down."""
+    import urllib.request
+    render_url = os.getenv("RENDER_EXTERNAL_URL")  # Auto-set by Render
+    if not render_url:
+        print("RENDER_EXTERNAL_URL not set — self-ping disabled (local dev).")
+        return
+    ping_url = render_url.rstrip("/") + "/health"
+    print("Self-ping enabled: {} every 14 min".format(ping_url))
+    while True:
+        time.sleep(14 * 60)  # 14 minutes
+        try:
+            urllib.request.urlopen(ping_url, timeout=10)
+            print("Self-ping OK")
+        except Exception as e:
+            print("Self-ping failed: {}".format(e))
+
+_ping_thread = threading.Thread(target=_keep_alive, daemon=True)
+_ping_thread.start()
+
 @app.route('/')
 def index():
     # Attempt to bust cache so user sees the new loading overlay
