@@ -3349,7 +3349,7 @@
                 currentSubjectMode = 'elective';
                 btnSubjectElective.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 text-yellow-500 bg-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.2)]";
                 btnSubjectGeneral.className = "flex-1 py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 border-r border-white/10 text-muted-foreground hover:text-white";
-                document.getElementById('subject-type-desc').innerHTML = '<i class="fa-solid fa-circle-info mr-1 text-yellow-400/50"></i>Not everyone takes this — only scanned students will appear in results. Use <strong>Smart Mode</strong> if someone\'s name is missing.';
+                document.getElementById('subject-type-desc').innerHTML = '<i class="fa-solid fa-circle-info mr-1 text-yellow-400/50"></i>Not everyone takes this — only scanned students will appear in results. <a href="#" style="color:#818cf8;text-decoration:underline;font-weight:bold" onclick="event.preventDefault();var t=document.getElementById(\x27btn-toggle-smart-mode\x27);if(t){t.click();t.scrollIntoView({behavior:\x27smooth\x27,block:\x27center\x27})}">Use Smart Mode</a> if someone\'s name is missing.';
             });
         }
 
