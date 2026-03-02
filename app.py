@@ -239,7 +239,8 @@ def handle_classes():
             normalized_name = c.name.lower().replace(" ", "") # Modified as per instruction
             if normalized_name not in seen_names: # Modified as per instruction
                 seen_names.add(normalized_name) # Modified as per instruction
-                unique_classes.append({"id": c.id, "name": c.name})
+                student_count = StudentModel.query.filter_by(class_id=c.id).count()
+                unique_classes.append({"id": c.id, "name": c.name, "student_count": student_count})
         return jsonify(unique_classes), 200
         
     if request.method == 'POST':
@@ -391,6 +392,28 @@ def handle_students():
         db.session.commit()
         
         return jsonify({"message": "Student added successfully.", "student": {"id": s.id, "name": s.name}}), 201
+
+@app.route('/api/students/<int:student_id>', methods=['DELETE', 'PUT'])
+def manage_student(student_id):
+    student = StudentModel.query.get(student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+    
+    if request.method == 'DELETE':
+        name = student.name
+        db.session.delete(student)
+        db.session.commit()
+        return jsonify({"message": "Removed '{}'.".format(name)}), 200
+    
+    if request.method == 'PUT':
+        data = request.json
+        new_name = data.get('name', '').strip().title()
+        if not new_name:
+            return jsonify({"error": "Name is required"}), 400
+        old_name = student.name
+        student.name = new_name
+        db.session.commit()
+        return jsonify({"message": "Renamed '{}' to '{}'.".format(old_name, new_name), "student": {"id": student.id, "name": student.name}}), 200
 
 @app.route('/api/enrollments', methods=['GET', 'POST'])
 def handle_enrollments():

@@ -1060,8 +1060,178 @@ function executeAssistantAction(action, params) {
             break;
         case 'manage_enrollment':
         case 'update_roster':
-            hideModal();
-            document.getElementById('btn-open-paste-modal')?.click();
+            // Build inline roster editor in assistant chat
+            (async () => {
+                const chatEl = document.getElementById('assistant-chat');
+                if (!chatEl) return;
+
+                // Show loading
+                chatEl.innerHTML += `
+                    <div class="flex justify-start mb-3" id="roster-editor-area">
+                        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-3 w-full max-w-[95%]">
+                            <p class="text-sm text-white/60"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading classes...</p>
+                        </div>
+                    </div>
+                `;
+                chatEl.scrollTop = chatEl.scrollHeight;
+
+                try {
+                    const res = await fetch('/api/classes');
+                    const classes = await res.json();
+
+                    if (!classes.length) {
+                        document.getElementById('roster-editor-area').innerHTML = `
+                            <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-3 w-full">
+                                <p class="text-sm text-white/70">No classes found yet. Create a class first!</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    const classOptions = classes.map(c =>
+                        `<option value="${c.id}" data-name="${c.name}">${c.name} (${c.student_count || 0})</option>`
+                    ).join('');
+
+                    document.getElementById('roster-editor-area').innerHTML = `
+                        <div class="bg-white/5 border border-violet-500/20 rounded-2xl rounded-bl-md px-4 py-4 w-full">
+                            <h4 class="text-sm font-bold text-violet-300 mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-list-check"></i> Class Roster Editor
+                            </h4>
+                            <select id="roster-class-select" onchange="window._loadRosterStudents(this.value)"
+                                class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white mb-3 outline-none focus:border-violet-500/40">
+                                <option value="">Pick a class...</option>
+                                ${classOptions}
+                            </select>
+                            <div id="roster-student-list" class="space-y-1"></div>
+                            <div id="roster-add-area" class="hidden mt-3 flex gap-2">
+                                <input id="roster-new-name" type="text" placeholder="New student name..."
+                                    class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/40"
+                                    onkeydown="if(event.key==='Enter')window._addRosterStudent()">
+                                <button onclick="window._addRosterStudent()"
+                                    class="px-3 py-2 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-500/20 hover:bg-emerald-500/30 transition-colors">
+                                    <i class="fa-solid fa-plus mr-1"></i>Add
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    // Load students for a class
+                    window._loadRosterStudents = async function (classId) {
+                        const listEl = document.getElementById('roster-student-list');
+                        const addArea = document.getElementById('roster-add-area');
+                        if (!classId) { listEl.innerHTML = ''; addArea?.classList.add('hidden'); return; }
+
+                        listEl.innerHTML = '<p class="text-xs text-white/40"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>Loading...</p>';
+                        addArea?.classList.remove('hidden');
+
+                        const sRes = await fetch('/api/students?class_id=' + classId);
+                        const students = await sRes.json();
+
+                        if (!students.length) {
+                            listEl.innerHTML = '<p class="text-xs text-white/40 italic py-2">No students yet. Add some below!</p>';
+                            return;
+                        }
+
+                        listEl.innerHTML = `
+                            <p class="text-[10px] text-white/30 uppercase tracking-wider mb-1 font-bold">${students.length} students</p>
+                            ${students.map((s, i) => `
+                                <div class="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-white/5 group transition-colors" id="roster-row-${s.id}">
+                                    <span class="text-sm text-white/80 flex items-center gap-2">
+                                        <span class="text-[10px] text-white/20 w-5">${i + 1}.</span>
+                                        <span id="roster-name-${s.id}">${s.name}</span>
+                                    </span>
+                                    <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onclick="window._editRosterStudent(${s.id}, '${s.name.replace(/'/g, "\\'")}')" 
+                                            class="w-6 h-6 flex items-center justify-center rounded text-white/30 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Rename">
+                                            <i class="fa-solid fa-pen text-[10px]"></i>
+                                        </button>
+                                        <button onclick="window._removeRosterStudent(${s.id}, '${s.name.replace(/'/g, "\\'")}')" 
+                                            class="w-6 h-6 flex items-center justify-center rounded text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Remove">
+                                            <i class="fa-solid fa-xmark text-[10px]"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        `;
+                        chatEl.scrollTop = chatEl.scrollHeight;
+                    };
+
+                    // Add student
+                    window._addRosterStudent = async function () {
+                        const input = document.getElementById('roster-new-name');
+                        const classId = document.getElementById('roster-class-select').value;
+                        const name = input?.value?.trim();
+                        if (!name || !classId) return;
+                        input.value = '';
+
+                        const res = await fetch('/api/students', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name, class_id: parseInt(classId) })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            if (typeof showToast === 'function') showToast('Added ' + name, 'success');
+                            window._loadRosterStudents(classId);
+                        } else {
+                            if (typeof showToast === 'function') showToast(data.error || 'Failed to add', 'error');
+                        }
+                    };
+
+                    // Remove student
+                    window._removeRosterStudent = async function (id, name) {
+                        const row = document.getElementById('roster-row-' + id);
+                        if (row) row.style.opacity = '0.3';
+
+                        const res = await fetch('/api/students/' + id, { method: 'DELETE' });
+                        if (res.ok) {
+                            if (row) row.remove();
+                            if (typeof showToast === 'function') showToast('Removed ' + name, 'info');
+                            // Update count
+                            const classId = document.getElementById('roster-class-select').value;
+                            if (classId) window._loadRosterStudents(classId);
+                        } else {
+                            if (row) row.style.opacity = '1';
+                            if (typeof showToast === 'function') showToast('Failed to remove', 'error');
+                        }
+                    };
+
+                    // Edit/rename student
+                    window._editRosterStudent = function (id, currentName) {
+                        const nameEl = document.getElementById('roster-name-' + id);
+                        if (!nameEl) return;
+                        nameEl.innerHTML = `
+                            <input type="text" value="${currentName}" 
+                                class="bg-white/10 border border-blue-500/30 rounded px-2 py-0.5 text-sm text-white outline-none w-36"
+                                onkeydown="if(event.key==='Enter')window._saveRosterEdit(${id}, this.value);if(event.key==='Escape'){this.parentElement.textContent='${currentName.replace(/'/g, "\\'")}'}"
+                                onblur="window._saveRosterEdit(${id}, this.value)" autofocus>
+                        `;
+                        nameEl.querySelector('input').focus();
+                    };
+
+                    window._saveRosterEdit = async function (id, newName) {
+                        newName = newName?.trim();
+                        if (!newName) return;
+                        const res = await fetch('/api/students/' + id, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: newName })
+                        });
+                        if (res.ok) {
+                            if (typeof showToast === 'function') showToast('Renamed to ' + newName, 'success');
+                            const classId = document.getElementById('roster-class-select').value;
+                            if (classId) window._loadRosterStudents(classId);
+                        }
+                    };
+
+                } catch (err) {
+                    document.getElementById('roster-editor-area').innerHTML = `
+                        <div class="bg-white/5 border border-red-500/20 rounded-2xl rounded-bl-md px-4 py-3 w-full">
+                            <p class="text-sm text-red-400">Failed to load classes. Please try again.</p>
+                        </div>
+                    `;
+                }
+            })();
             break;
         case 'export_data':
             hideModal();
