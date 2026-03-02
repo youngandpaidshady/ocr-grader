@@ -1703,7 +1703,7 @@ async function handleAssistantFileUpload(input) {
         `;
         chatEl.scrollTop = chatEl.scrollHeight;
 
-        sendAssistantMessage(`[SYSTEM] Teacher just attached ${files.length} image(s) of a handwritten record sheet or table. Acknowledge this warmly, then ask them for the following info so you can extract the data accurately:\n1) WHICH CLASS is this for? (e.g. SS 1T, SS 2Q) — so you can match handwriting to the official roster\n2) WHAT SUBJECT? (e.g. Mathematics, English)\n3) WHAT COLUMNS to extract? (e.g. 1st CA, 2nd CA, Exam) — or they can say "extract everything"\n4) WHAT TERM? (e.g. 1st Term, 2nd Term) if relevant\nBe natural and friendly. If the image clearly shows a class name or term at the top, mention that you can see it and confirm.`);
+        sendAssistantMessage(`[SYSTEM] Teacher just attached ${files.length} image(s) of what looks like a handwritten record sheet. Acknowledge this warmly and ask just ONE question: Which class is this for? (e.g. SS 1T, SS 2Q). Default to extracting ALL columns you can see. Do NOT ask multiple questions at once — keep it simple and conversational. If the image header clearly shows a class name, mention it and confirm.`);
 
     } else if (isExcel) {
         const file = files[0]; // Only process the first excel
