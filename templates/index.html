@@ -1066,6 +1066,31 @@
                             </div>
                         </div>
 
+                        <!-- Term Selection -->
+                        <div id="term-selection-container"
+                            class="space-y-2 focus-within:z-20 relative mb-5 pt-4 border-t border-white/5 border-dashed">
+                            <label
+                                class="block text-[11px] font-bold text-muted-foreground uppercase tracking-widest pl-1"><i
+                                    class="fa-solid fa-calendar-days mr-1.5"></i>Term</label>
+                            <div class="flex gap-2 relative">
+                                <div
+                                    class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-1 relative rounded-xl">
+                                    <select id="grading-term"
+                                        class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-bold tracking-wide">
+                                        <option value="" disabled selected class="bg-card">-- Which term? --
+                                        </option>
+                                        <option value="1st Term" class="bg-card">1st Term</option>
+                                        <option value="2nd Term" class="bg-card">2nd Term</option>
+                                        <option value="3rd Term" class="bg-card">3rd Term</option>
+                                    </select>
+                                    <i
+                                        class="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-xs pointer-events-none z-10"></i>
+                                    <div class="input-focus-anim rounded-xl"></div>
+                                </div>
+                            </div>
+                            <p id="term-hint" class="text-[10px] text-primary/70 pl-1 hidden"><i
+                                    class="fa-solid fa-wand-magic-sparkles mr-1"></i><span></span></p>
+                        </div>
                         <!-- Subject Type: General or Elective -->
                         <div id="subject-type-section" class="pt-4 border-t border-white/5 border-dashed mb-5 hidden">
                             <label
@@ -1705,6 +1730,7 @@
                     if (at) at.selectedIndex = 0;
                     currentSubjectName = '';
                     finalAssessmentType = '';
+                    currentTerm = '';
                     window.showSetup(null);
                 });
             }
@@ -1943,6 +1969,7 @@
         let imageIdCounter = 0;
         let finalAssessmentType = '';
         let currentSubjectName = '';
+        let currentTerm = '';
 
         function updateActionBar() {
             const actionBar = document.getElementById('grading-action-bar');
@@ -2409,6 +2436,10 @@
                     : (assessmentTypeSelect ? assessmentTypeSelect.value : 'Score');
                 if (scoreTh) scoreTh.innerText = finalAssessmentType;
 
+                // Read selected term
+                const termSelect = document.getElementById('grading-term');
+                currentTerm = termSelect ? termSelect.value : '1st Term';
+
                 // Fix: Set currentSubjectName from the subject dropdown
                 const subjSelect = document.getElementById('subject-name');
                 if (subjSelect) {
@@ -2792,8 +2823,10 @@
                         results: extractedData,
                         assessmentType: finalAssessmentType,
                         subjectType: currentSubjectName,
+                        term: currentTerm,
                         subjectMode: typeof currentSubjectMode !== 'undefined' ? currentSubjectMode : 'general',
-                        classList: typeof sessionClasses !== 'undefined' ? Array.from(sessionClasses) : (typeof selectedClasses !== 'undefined' ? selectedClasses : [])
+                        classList: typeof sessionClasses !== 'undefined' ? Array.from(sessionClasses) : (typeof selectedClasses !== 'undefined' ? selectedClasses : []),
+                        existingRecords: window._excelRecords || null
                     })
                 });
 

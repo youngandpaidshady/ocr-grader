@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import base64
 import json
@@ -120,10 +121,9 @@ NIGERIAN_MARK_BOOK_CONFIG = {
     "ca_columns": {
         "1st CA":      {"max": 10, "can_be_20": False, "aliases": ["1st Test", "1st C.A", "CA1", "Test 1", "First CA"]},
         "2nd CA":      {"max": 10, "can_be_20": False, "aliases": ["2nd Test", "2nd C.A", "CA2", "Test 2", "Second CA"]},
-        "Open Day":    {"max": 10, "can_be_20": True,  "aliases": ["Open", "OD", "Open day"]},
+        "Open Day":    {"max": 20, "can_be_20": True,  "aliases": ["Open", "OD", "Open day"]},
         "Note Book":   {"max": 10, "can_be_20": True,  "aliases": ["Note", "NB", "Notebook", "Note book"]},
         "Assignment":  {"max": 10, "can_be_20": True,  "aliases": ["Ass", "Assig", "Assgn", "Assign"]},
-        "Attendance":  {"max": 10, "can_be_20": True,  "aliases": ["Attend", "Att", "Atten"]},
     },
     "ca_total_max": 30,       # Sum of CAs ÷ 2
     "ca_raw_max": 60,         # Sum before dividing
@@ -256,9 +256,9 @@ def compute_derived_scores(student_scores, config=None):
             except (ValueError, TypeError):
                 pass
 
-    # Compute Total CA = sum(CAs) ÷ 2
+    # Compute Total CA = sum(CAs) / 2
     if has_any_ca:
-        total_ca = round(ca_sum / 2, 1)
+        total_ca = round(ca_sum / 2.0, 1)
         if total_ca > config["ca_total_max"]:
             warnings.append("Total CA {} exceeds max {} — capped".format(total_ca, config["ca_total_max"]))
             total_ca = config["ca_total_max"]
@@ -811,7 +811,7 @@ def upload_batch():
 
         print("Received a batch of {} images for processing...".format(len(images_base64)))
         if smart_instruction:
-            print(f"Smart Instruction Applied: {smart_instruction}")
+            print("Smart Instruction Applied: {}".format(smart_instruction))
         
         # Build roster pool from ALL selected classes (3-Layer Routing)
         known_names_text = ""
@@ -842,7 +842,7 @@ def upload_batch():
         dynamic_prompt = SYSTEM_PROMPT + known_names_text
 
         if smart_instruction:
-            dynamic_prompt += f"\n\n--- TEACHER'S CUSTOM SMART INSTRUCTION ---\n{smart_instruction}\n--- END OF CUSTOM INSTRUCTION ---\nYou MUST strictly obey the above manual instruction given by the teacher when processing these images and finalizing the output JSON."
+            dynamic_prompt += "\n\n--- TEACHER'S CUSTOM SMART INSTRUCTION ---\n{}\n--- END OF CUSTOM INSTRUCTION ---\nYou MUST strictly obey the above manual instruction given by the teacher when processing these images and finalizing the output JSON.".format(smart_instruction)
         
         # Concurrent processing: split images into chunks and process in parallel
         CHUNK_SIZE = 5  # Increased from 3 - Gemini handles 5 images well, fewer API calls
@@ -1014,7 +1014,7 @@ def parse_class_level(class_name):
 
 @app.route('/export-excel', methods=['POST'])
 def export_excel():
-    """Generates Excel from scanned results. No scores saved to DB — only rosters are persisted."""
+    """Generates Excel from scanned results. Handles multi-term merge and standard formatting."""
     try:
         data = request.json
         if not data or 'results' not in data:
@@ -1023,6 +1023,9 @@ def export_excel():
         results = data['results']
         assessment_type = data.get('assessmentType', 'Score').strip()
         subject_name = data.get('subjectType', data.get('subjectName', '')).strip()
+        term = data.get('term', '1st Term').strip()  # 1st Term, 2nd Term, 3rd Term
+        existing_records = data.get('existingRecords', None)
+        
         if not assessment_type:
             assessment_type = 'Score'
         if not subject_name or subject_name.lower() == 'uncategorized':
@@ -1030,108 +1033,176 @@ def export_excel():
         if not subject_name:
             subject_name = 'General'
             
-        if not results:
+        if not results and not existing_records:
              return jsonify({"error": "No data to export"}), 400
 
         subject_mode = data.get('subjectMode', 'general').strip().lower()
              
         # === ROSTER-ONLY DB SYNC ===
         # Only update class rosters (student names), NOT scores
-
+        
+        # Merge new scanned names for roster sync
+        all_new_names = []
         for r in results:
             name = str(r.get('name', '')).strip().title()
-            if not name:
-                continue
-                
-            c_raw = str(r.get('class', '')).strip().upper()
+            if not name: continue
+            all_new_names.append((name, str(r.get('class', '')).strip().upper()))
+            
+        for name, c_raw in all_new_names:
             c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', c_raw)
             match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
             class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
             
-            # Ensure class exists
             c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
             if not c:
                 c = ClassModel(name=class_name)
                 db.session.add(c)
                 db.session.commit()
                 
-            # Ensure student exists in roster (fuzzy match)
             student = StudentModel.query.filter_by(class_id=c.id, name=name).first()
             if not student:
                 existing_students = StudentModel.query.filter_by(class_id=c.id).all()
                 existing_names = [s.name for s in existing_students]
                 if existing_names:
-                    best_match_tuple = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
-                    if best_match_tuple and best_match_tuple[1] >= 85:
-                        student = StudentModel.query.filter_by(class_id=c.id, name=best_match_tuple[0]).first()
+                    best = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
+                    if best and best[1] >= 85:
+                        student = StudentModel.query.filter_by(class_id=c.id, name=best[0]).first()
                 if not student:
                     student = StudentModel(class_id=c.id, name=name)
                     db.session.add(student)
                     db.session.commit()
             
-        # === BUILD EXCEL DIRECTLY FROM RESULTS (not from DB scores) ===
+        # === BUILD & MERGE EXCEL DATA ===
         
-        # Group results by class name
-        class_results = {}
+        # 1. Standardize and process new scanned results by class
+        new_scores_by_class = {}
         for r in results:
             name = str(r.get('name', '')).strip().title()
-            if not name:
-                continue
+            if not name: continue
+            
             c_raw = str(r.get('class', '')).strip().upper()
             c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', c_raw)
             match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
             class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
             
-            if class_name not in class_results:
-                class_results[class_name] = []
-            class_results[class_name].append({
-                'name': name,
-                'score': str(r.get('score', '')).strip(),
-                'class': class_name
-            })
+            if class_name not in new_scores_by_class:
+                new_scores_by_class[class_name] = {}
+            new_scores_by_class[class_name][name] = str(r.get('score', '')).strip()
+            
+        # 2. Add existing records and merge with new
+        merged_by_class = {} # {class_name: {name: {col: val}}}
         
-        # For general mode: include roster students who weren't scanned (blank, not 0)
+        if existing_records and isinstance(existing_records, list):
+            for r in existing_records:
+                # Expecting records like: {'Name': 'John', 'Class': 'SS 1A', '1st CA': 8, ...}
+                name = str(r.get('Name', '')).strip().title()
+                clsz = str(r.get('Class', '')).strip()
+                if not name or not clsz: continue
+                
+                if clsz not in merged_by_class:
+                    merged_by_class[clsz] = {}
+                
+                # Copy existing data exactly as is (ignoring computed columns which we'll recalculate)
+                row_data = {k: v for k, v in r.items() if k not in ["Position", "Rank"]}
+                # Make sure name and class are uniform
+                row_data["Name"] = name
+                row_data["Class"] = clsz
+                
+                merged_by_class[clsz][name] = row_data
+
+        # 3. Merge in the new scans
+        for class_name, students in new_scores_by_class.items():
+            if class_name not in merged_by_class:
+                merged_by_class[class_name] = {}
+                
+            for name, score in students.items():
+                if not score: continue
+                
+                # Fuzzy match name against existing merged records to prevent duplicates
+                existing_names = list(merged_by_class[class_name].keys())
+                target_name = name
+                if existing_names:
+                    best = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
+                    if best and best[1] >= 85:
+                        target_name = best[0]
+                
+                if target_name not in merged_by_class[class_name]:
+                    merged_by_class[class_name][target_name] = {"Name": target_name, "Class": class_name}
+                
+                # Update the new assessment column (this will overwrite previous session's value IF they regrade the SAME assessment)
+                merged_by_class[class_name][target_name][assessment_type] = score
+        
+        # 4. Fill in missing roster students (if general mode)
         class_filter = data.get('classList', [])
         if subject_mode == 'general' and class_filter:
             for class_name in class_filter:
                 c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
                 if c:
                     roster = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
-                    scanned_names = [r['name'].lower() for r in class_results.get(class_name, [])]
+                    if class_name not in merged_by_class:
+                        merged_by_class[class_name] = {}
+                        
+                    existing_names = list(merged_by_class[class_name].keys())
                     for s in roster:
-                        if s.name.lower() not in scanned_names:
-                            # Fuzzy check
-                            if scanned_names:
-                                best = process.extractOne(s.name, scanned_names, scorer=fuzz.token_set_ratio)
-                                if best and best[1] >= 85:
-                                    continue  # Already scanned under a slightly different name
-                            if class_name not in class_results:
-                                class_results[class_name] = []
-                            class_results[class_name].append({
-                                'name': s.name,
-                                'score': '',  # Blank, not 0
-                                'class': class_name
-                            })
-        
-        # === GROUP BY CLASS LEVEL ===
-        # SS 1Q + SS 1S → level SS1 (one file)
-        # SS 2A + SS 2B → level SS2 (separate file)
+                        found_name = s.name
+                        if existing_names:
+                            best = process.extractOne(s.name, existing_names, scorer=fuzz.token_set_ratio)
+                            if best and best[1] >= 85:
+                                found_name = best[0]
+                        
+                        if found_name not in merged_by_class[class_name]:
+                            merged_by_class[class_name][s.name] = {"Name": s.name, "Class": class_name}
+
+        # === COMPUTE & GROUP BY CLASS LEVEL ===
         level_groups = {}  # {level: {arm: [results]}}
-        class_to_level = {}  # {class_name: {"level": ..., "arm": ...}}
+        config = NIGERIAN_MARK_BOOK_CONFIG
         
-        for class_name, rows in class_results.items():
+        for class_name, students in merged_by_class.items():
             parsed = parse_class_level(class_name)
             level = parsed["level"]
             arm = parsed["arm"]
-            class_to_level[class_name] = parsed
             
             if level not in level_groups:
                 level_groups[level] = {}
             if class_name not in level_groups[level]:
                 level_groups[level][class_name] = []
-            level_groups[level][class_name].extend(rows)
-        
-        # === GENERATE EXCEL FILES (one per level) ===
+                
+            for name, row_data in students.items():
+                # Extract and clean ONLY the standard configured columns for computation
+                # Other columns (like 1st Term Total) just pass through
+                ca_scores = {}
+                for col in config["ca_columns"]:
+                    val = row_data.get(col)
+                    if val is not None and str(val).strip() != '' and str(val).upper() != 'ABS':
+                        try:
+                            # Handle potential fractions like "8/10"
+                            c_val = str(val).split('/')[0] if '/' in str(val) else val
+                            ca_scores[col] = float(c_val)
+                        except: pass
+                
+                if 'Exam' in row_data:
+                    val = row_data['Exam']
+                    if val is not None and str(val).strip() != '' and str(val).upper() != 'ABS':
+                        try:
+                            c_val = str(val).split('/')[0] if '/' in str(val) else val
+                            ca_scores['Exam'] = float(c_val)
+                        except: pass
+                
+                # Recompute Total CA, Grand Total, Grade, Remarks
+                if ca_scores:
+                    derived, _ = compute_derived_scores(ca_scores)
+                    for key in ['Total CA', 'Grand Total', 'Grade', 'Remarks']:
+                        if key in derived:
+                            row_data[key] = derived[key]
+                else:
+                    for key in ['Total CA', 'Grand Total', 'Grade', 'Remarks']:
+                        if key in row_data:
+                            del row_data[key] # clear out old computations if scores were removed
+                            
+                # Ensure it's in the group
+                level_groups[level][class_name].append(row_data)
+
+        # === GENERATE EXCEL FILES ===
         from openpyxl.styles import Font, Alignment, PatternFill
         from openpyxl.utils import get_column_letter
         
@@ -1139,103 +1210,88 @@ def export_excel():
         generated_files = {}  # {level: filepath}
         
         for level, classes_in_level in level_groups.items():
-            # File per level
             safe_subject = re_mod.sub(r'[^A-Za-z0-9 ]', '', subject_name).strip()
-            filename = "{}_{}.xlsx".format(safe_subject or "Scores", level)
+            # File named with term
+            safe_term = re_mod.sub(r'[^A-Za-z0-9 ]', '', term).strip()
+            filename = "{}_{}_{}.xlsx".format(safe_subject or "Scores", safe_term.replace(' ', ''), level)
             filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
             generated_files[level] = {"path": filepath, "filename": filename}
             
             sheets_dict = {}
             
             for class_name, rows in classes_in_level.items():
-                sheet_name = class_name[:31]
-                data_rows = []
+                all_terms = ["1st Term", "2nd Term", "3rd Term", "Annual"]
+                base_df = pd.DataFrame(rows)
+                standard_cols = ['Name', 'Class', '1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment', 'Total CA', 'Exam', 'Grand Total', 'Grade', 'Remarks']
                 
-                for r in rows:
-                    row = {
-                        'Name': r['name'],
-                        'Class': class_name
-                    }
-                    score_val = r.get('score', '')
-                    if score_val:
-                        row[assessment_type] = score_val
-                        # Auto tally
-                        try:
-                            val = str(score_val)
-                            if '/' in val: val = val.split('/')[0]
-                            row['Total Score'] = float(val)
-                        except:
-                            row['Total Score'] = ''
+                for t in all_terms:
+                    sheet_name = "{} - {}".format(class_name[:20], t[:10])
+                    
+                    if t == term:
+                        df = base_df.copy()
+                        rank_col = 'Grand Total' if 'Grand Total' in df.columns and len(df['Grand Total'].dropna()) > 0 else (
+                                   'Total CA' if 'Total CA' in df.columns and len(df['Total CA'].dropna()) > 0 else None)
+                        if rank_col:
+                            numeric_scores = pd.to_numeric(df[rank_col], errors='coerce')
+                            df['Rank'] = numeric_scores.rank(method='min', ascending=False)
+                            def format_position(rank):
+                                if pd.isna(rank): return ''
+                                r = int(rank)
+                                if 11 <= (r % 100) <= 13: return "{}th".format(r)
+                                suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+                                return "{}{}".format(r, suffix)
+                            df['Position'] = df['Rank'].apply(format_position)
+                            df = df.drop(columns=['Rank'])
+                        else:
+                            df['Position'] = ''
                     else:
-                        row['Total Score'] = ''
-                    data_rows.append(row)
-                
-                if not data_rows:
-                    continue
-                    
-                df = pd.DataFrame(data_rows)
-                
-                # Column ordering
-                pref_order = ['Name', 'Class', '1st CA', '2nd CA', 'Assignment', 'Open Day', 'Exam']
-                existing_cols = list(df.columns)
-                custom_cols = [col for col in existing_cols if col not in pref_order and col not in ['Total Score', 'Position', 'Rank']]
-                
-                final_cols = []
-                for col in pref_order:
-                    if col in existing_cols:
-                        final_cols.append(col)
-                final_cols.extend(custom_cols)
-                if 'Total Score' in existing_cols:
-                    final_cols.append('Total Score')
-                
-                df = df[final_cols]
-                
-                # Ranking — only rank rows with actual scores
-                if 'Total Score' in df.columns:
-                    numeric_scores = pd.to_numeric(df['Total Score'], errors='coerce')
-                    df['Rank'] = numeric_scores.rank(method='min', ascending=False)
-                    
-                    def format_position(rank):
-                        if pd.isna(rank): return ''
-                        r = int(rank)
-                        if 11 <= (r % 100) <= 13: return "{}th".format(r)
-                        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
-                        return "{}{}".format(r, suffix)
+                        empty_rows = [{"Name": r.get('Name'), "Class": r.get('Class')} for r in rows]
+                        df = pd.DataFrame(empty_rows)
+                        df['Position'] = ''
                         
-                    df['Position'] = df['Rank'].apply(format_position)
-                    df = df.drop(columns=['Rank'])
-                
-                sheets_dict[sheet_name] = df
-            
+                    past_term_cols = [c for c in list(df.columns) if "Term Total" in c or "Term Average" in c]
+                    final_cols = ['Name', 'Class'] + past_term_cols
+                    
+                    for col in standard_cols[2:]:
+                        final_cols.append(col)
+                        if col not in df.columns:
+                            df[col] = ''
+                            
+                    existing_custom = [c for c in df.columns if c not in final_cols and c not in ['Position', 'Rank']]
+                    final_cols.extend(existing_custom)
+                    
+                    if 'Position' not in final_cols:
+                        final_cols.append('Position')
+                        
+                    df = df[final_cols]
+                    df = df.fillna('')
+                    sheets_dict[sheet_name] = df
             if not sheets_dict:
                 continue
             
-            # Write Excel for this level
+            # Write out
             with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
                 for s_name, df_sheet in sheets_dict.items():
                     df_sheet.to_excel(writer, sheet_name=s_name, index=False, startrow=4)
                     worksheet = writer.sheets[s_name]
                     
-                    # Row 1: Title
-                    worksheet.merge_cells('A1:G1')
+                    worksheet.merge_cells('A1:K1')
                     title_cell = worksheet['A1']
-                    title_cell.value = "QSI SMART GRADER SCORESHEET"
+                    title_cell.value = "QSI SMART GRADER SCORESHEET - {}".format(term.upper())
                     title_cell.font = Font(bold=True, size=16)
                     title_cell.alignment = Alignment(horizontal='center', vertical='center')
                     
-                    # Row 2: Class
+                    target_class = s_name.split(' - ')[0]
                     worksheet.merge_cells('A2:E2')
                     class_cell = worksheet['A2']
-                    class_cell.value = "CLASS: {}".format(s_name)
+                    class_cell.value = "CLASS: {}".format(target_class)
                     class_cell.font = Font(bold=True, size=12)
                     
-                    # Row 3: Subject
                     worksheet.merge_cells('A3:E3')
                     subj_cell = worksheet['A3']
                     subj_cell.value = "SUBJECT: {}".format(subject_name)
                     subj_cell.font = Font(bold=True, size=12)
                     
-                    # Style headers (Row 5)
                     header_font = Font(bold=True)
                     header_fill = PatternFill(start_color="EAEAEA", end_color="EAEAEA", fill_type="solid")
                     for col_idx in range(1, len(df_sheet.columns) + 1):
@@ -1249,32 +1305,30 @@ def export_excel():
                         if column_header == 'Name':
                             worksheet.column_dimensions[col_letter].width = 30
                         elif column_header == 'Class':
+                            worksheet.column_dimensions[col_letter].width = 12
+                        elif column_header == 'Remarks':
                             worksheet.column_dimensions[col_letter].width = 15
                         else:
-                            worksheet.column_dimensions[col_letter].width = 12
+                            worksheet.column_dimensions[col_letter].width = 10
                             
-                    # Center data cells
                     for row in worksheet.iter_rows(min_row=6, max_row=worksheet.max_row, min_col=3, max_col=worksheet.max_column):
                         for cell in row:
                             cell.alignment = Alignment(horizontal='center')
             
-            # Build sheet summaries for this level
             for s_name, df_sheet in sheets_dict.items():
                 all_sheets_summary[s_name] = {
                     "columns": list(df_sheet.columns),
-                    "rows": df_sheet.fillna('').to_dict(orient='records'),
-                    "class": s_name,
+                    "rows": df_sheet.to_dict(orient='records'),
+                    "class": s_name.split(' - ')[0],
                     "subject": subject_name,
                     "level": level
                 }
         
-        # Also copy the first (or only) level file to WORKING_EXCEL_PATH for backward compat
         if generated_files:
             import shutil
             first_level = list(generated_files.keys())[0]
             shutil.copy2(generated_files[first_level]["path"], WORKING_EXCEL_PATH)
         
-        # Build download info
         downloads = []
         for level, info in generated_files.items():
             downloads.append({
@@ -1690,7 +1744,7 @@ def assistant_scan_to_excel():
                 students = StudentModel.query.filter_by(class_id=c.id).all()
                 if students:
                     roster_names = [s.name for s in students]
-                    roster_context = f"\n\nCRITICAL KNOWLEDGE: The teacher mentioned this image belongs to class '{class_name}'. The official database roster for this class is: {roster_names}. \nWHEN EXTRACTING NAMES, YOU MUST MATCH THEM STRICTLY TO THIS ROSTER, IGNORING TYPOS IN THE HANDWRITING. Fix any misspelled handwritten names to perfectly match the official database spelling."
+                    roster_context = "\n\nCRITICAL KNOWLEDGE: The teacher mentioned this image belongs to class '{}'. The official database roster for this class is: {}. \nWHEN EXTRACTING NAMES, YOU MUST MATCH THEM STRICTLY TO THIS ROSTER, IGNORING TYPOS IN THE HANDWRITING. Fix any misspelled handwritten names to perfectly match the official database spelling.".format(class_name, roster_names)
         
         prompt = """
 You are an expert OCR and data extraction AI specializing in Nigerian school record sheets. A teacher has uploaded image(s) of a handwritten document and given you specific instructions.
@@ -1749,7 +1803,8 @@ CRITICAL RULES:
                         )
                     )
                 )
-                response = model.generate_content([prompt, *image_parts])
+                query_parts = [prompt] + image_parts
+                response = model.generate_content(query_parts)
                 # Extract text — handle thinking mode responses (skip thought blocks)
                 raw_text = ''
                 if hasattr(response, 'candidates') and response.candidates:
@@ -2234,9 +2289,9 @@ CURRENT GRADING SESSION ANALYTICS:
                 )
         
         system_prompt = """You are the Smart Assistant for QSI Smart Grader, designed by XO.
-You are an intelligent, proactive teaching aide — not just a chatbot. You think ahead, analyze data, and help teachers work smarter.
+You are a highly capable AI teaching aide. You KNOW you can read handwriting, scan images, extract grades, merge them into Nigerian mark books, calculate totals, and identify anomalies.
 
-PERSONALITY: Warm, smart, helpful. Talk like a brilliant colleague who genuinely cares about the teacher's work. Use natural language — never robotic. Reference real data and names when possible.
+PERSONALITY: Fluid, natural, concise, and genuinely helpful. Never sound robotic, overly enthusiastic, or rigid. Don't act clueless or ask unnecessary confirmation questions. If a user asks you to do something you know how to do (like scanning a script), just execute the action immediately instead of asking for confirmation. Talk like a brilliant, no-nonsense colleague.
 
 CURRENT STATE:
 - Teacher is on the "{screen}" screen
