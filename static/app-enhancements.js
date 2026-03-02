@@ -1197,7 +1197,7 @@ async function executeAssistantAction(action, params) {
             if (typeof _assistantUploadedFiles !== 'undefined' && _assistantUploadedFiles.length > 0) {
                 const chatEl = document.getElementById('assistant-chat');
                 if (chatEl) {
-                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning complex table into Excel...</p></div></div>`;
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning ${_assistantUploadedFiles.length} image(s)... This may take a moment.</p></div></div>`;
                     chatEl.scrollTop = chatEl.scrollHeight;
                 }
                 const scanFormData = new FormData();
@@ -1212,7 +1212,45 @@ async function executeAssistantAction(action, params) {
                     const scanData = await scanResp.json();
                     chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
 
-                    if (scanData.success) {
+                    if (scanData.success && scanData.preview) {
+                        // Store preview data globally for editing
+                        window._assistantPreviewData = scanData.data;
+                        window._assistantPreviewMeta = {
+                            class_name: params?.class_name || '',
+                            subject_name: params?.subject_name || '',
+                            assessment_type: params?.assessment_type || ''
+                        };
+
+                        if (chatEl) {
+                            // Render the editable preview table
+                            const cols = scanData.columns || Object.keys(scanData.data[0] || {});
+                            let tableHTML = `<div id="preview-table-container" class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-3 py-3 max-w-[95%] overflow-x-auto">`;
+                            tableHTML += `<p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-table mr-1.5"></i>${scanData.message}</p>`;
+                            tableHTML += `<div class="overflow-x-auto max-h-[300px] overflow-y-auto"><table class="w-full text-[11px] border-collapse">`;
+                            tableHTML += `<thead><tr class="border-b border-white/20">`;
+                            cols.forEach(c => { tableHTML += `<th class="px-2 py-1 text-left text-white/70 font-bold sticky top-0 bg-[#1a1a2e]">${c}</th>`; });
+                            tableHTML += `<th class="px-1 py-1 sticky top-0 bg-[#1a1a2e]"></th></tr></thead><tbody>`;
+
+                            scanData.data.forEach((row, ri) => {
+                                tableHTML += `<tr class="border-b border-white/5 hover:bg-white/5" data-row="${ri}">`;
+                                cols.forEach(c => {
+                                    tableHTML += `<td class="px-2 py-1"><input type="text" value="${(row[c] || '').toString().replace(/"/g, '&quot;')}" data-row="${ri}" data-col="${c}" class="bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary focus:outline-none text-white text-[11px] w-full" onchange="updatePreviewCell(${ri},'${c.replace(/'/g, "\\'")}',this.value)"></td>`;
+                                });
+                                tableHTML += `<td class="px-1 py-1"><button onclick="deletePreviewRow(${ri})" class="text-red-400/50 hover:text-red-400 text-[10px]" title="Delete row"><i class="fa-solid fa-trash-can"></i></button></td>`;
+                                tableHTML += `</tr>`;
+                            });
+
+                            tableHTML += `</tbody></table></div>`;
+                            tableHTML += `<div class="flex gap-2 mt-3 flex-wrap">`;
+                            tableHTML += `<button onclick="addPreviewRow()" class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white/60 text-[11px] transition-all"><i class="fa-solid fa-plus mr-1"></i>Add Row</button>`;
+                            tableHTML += `<button onclick="buildExcelFromPreview()" class="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-primary hover:opacity-90 rounded-lg text-white text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down mr-1.5"></i>Looks Good — Build Excel</button>`;
+                            tableHTML += `</div></div>`;
+
+                            chatEl.innerHTML += `<div class="flex justify-start mb-3">${tableHTML}</div>`;
+                            chatEl.scrollTop = chatEl.scrollHeight;
+                        }
+                    } else if (scanData.success) {
+                        // Fallback: direct download (shouldn't happen with new backend)
                         if (chatEl) {
                             chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[90%]">
                                 <p class="text-sm text-emerald-400 font-bold mb-1"><i class="fa-solid fa-check-circle mr-1.5"></i>${scanData.message}</p>
@@ -1222,14 +1260,14 @@ async function executeAssistantAction(action, params) {
                         }
                     } else {
                         if (chatEl) {
-                            chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-amber-400">${scanData.error || 'Could not scan table.'}</p></div></div>`;
+                            chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-amber-400"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>${scanData.error || 'Could not scan table.'}</p><button onclick="retryScanToExcel()" class="mt-2 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 rounded-lg text-amber-400 text-[11px] font-bold"><i class="fa-solid fa-rotate-right mr-1"></i>Retry</button></div></div>`;
                             chatEl.scrollTop = chatEl.scrollHeight;
                         }
                     }
                 } catch (scanErr) {
                     chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
                     if (chatEl) {
-                        chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-destructive">Scan failed: ${scanErr.message}</p></div></div>`;
+                        chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-destructive"><i class="fa-solid fa-wifi mr-1.5"></i>Network error: ${scanErr.message}</p><button onclick="retryScanToExcel()" class="mt-2 px-3 py-1 bg-destructive/20 hover:bg-destructive/30 border border-destructive/30 rounded-lg text-destructive text-[11px] font-bold"><i class="fa-solid fa-rotate-right mr-1"></i>Retry</button></div></div>`;
                         chatEl.scrollTop = chatEl.scrollHeight;
                     }
                 }
@@ -1516,6 +1554,114 @@ async function safeAddStudentForce(studentName, className) {
         console.error('Force add error:', e);
     }
 }
+// === PREVIEW TABLE HELPERS ===
+function updatePreviewCell(rowIdx, colName, newValue) {
+    if (window._assistantPreviewData && window._assistantPreviewData[rowIdx]) {
+        window._assistantPreviewData[rowIdx][colName] = newValue;
+    }
+}
+
+function deletePreviewRow(rowIdx) {
+    if (window._assistantPreviewData) {
+        window._assistantPreviewData.splice(rowIdx, 1);
+        refreshPreviewTable();
+    }
+}
+
+function addPreviewRow() {
+    if (window._assistantPreviewData && window._assistantPreviewData.length > 0) {
+        const emptyRow = {};
+        Object.keys(window._assistantPreviewData[0]).forEach(k => emptyRow[k] = '');
+        window._assistantPreviewData.push(emptyRow);
+        refreshPreviewTable();
+    }
+}
+
+function refreshPreviewTable() {
+    const container = document.getElementById('preview-table-container');
+    if (!container || !window._assistantPreviewData) return;
+
+    const data = window._assistantPreviewData;
+    const cols = Object.keys(data[0] || {});
+
+    let tableHTML = `<p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-table mr-1.5"></i>${data.length} rows with columns: ${cols.join(', ')}. Edit anything below.</p>`;
+    tableHTML += `<div class="overflow-x-auto max-h-[300px] overflow-y-auto"><table class="w-full text-[11px] border-collapse">`;
+    tableHTML += `<thead><tr class="border-b border-white/20">`;
+    cols.forEach(c => { tableHTML += `<th class="px-2 py-1 text-left text-white/70 font-bold sticky top-0 bg-[#1a1a2e]">${c}</th>`; });
+    tableHTML += `<th class="px-1 py-1 sticky top-0 bg-[#1a1a2e]"></th></tr></thead><tbody>`;
+
+    data.forEach((row, ri) => {
+        tableHTML += `<tr class="border-b border-white/5 hover:bg-white/5" data-row="${ri}">`;
+        cols.forEach(c => {
+            tableHTML += `<td class="px-2 py-1"><input type="text" value="${(row[c] || '').toString().replace(/"/g, '&quot;')}" data-row="${ri}" data-col="${c}" class="bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary focus:outline-none text-white text-[11px] w-full" onchange="updatePreviewCell(${ri},'${c.replace(/'/g, "\\'")}',this.value)"></td>`;
+        });
+        tableHTML += `<td class="px-1 py-1"><button onclick="deletePreviewRow(${ri})" class="text-red-400/50 hover:text-red-400 text-[10px]" title="Delete row"><i class="fa-solid fa-trash-can"></i></button></td>`;
+        tableHTML += `</tr>`;
+    });
+
+    tableHTML += `</tbody></table></div>`;
+    tableHTML += `<div class="flex gap-2 mt-3 flex-wrap">`;
+    tableHTML += `<button onclick="addPreviewRow()" class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white/60 text-[11px] transition-all"><i class="fa-solid fa-plus mr-1"></i>Add Row</button>`;
+    tableHTML += `<button onclick="buildExcelFromPreview()" class="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-primary hover:opacity-90 rounded-lg text-white text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down mr-1.5"></i>Looks Good — Build Excel</button>`;
+    tableHTML += `</div>`;
+
+    container.innerHTML = tableHTML;
+}
+
+async function buildExcelFromPreview() {
+    if (!window._assistantPreviewData || window._assistantPreviewData.length === 0) return;
+
+    const chatEl = document.getElementById('assistant-chat');
+    const container = document.getElementById('preview-table-container');
+
+    // Replace the build button with a loading state
+    if (container) {
+        const btns = container.querySelector('.flex.gap-2');
+        if (btns) btns.innerHTML = `<p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Building your Excel file...</p>`;
+    }
+
+    try {
+        const resp = await fetch('/api/assistant-build-excel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                data: window._assistantPreviewData,
+                class_name: window._assistantPreviewMeta?.class_name || '',
+                subject_name: window._assistantPreviewMeta?.subject_name || '',
+                assessment_type: window._assistantPreviewMeta?.assessment_type || ''
+            })
+        });
+        const result = await resp.json();
+
+        if (result.success && chatEl) {
+            // Remove the preview table
+            container?.closest('.flex')?.remove();
+
+            chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[90%]">
+                <p class="text-sm text-emerald-400 font-bold mb-1"><i class="fa-solid fa-check-circle mr-1.5"></i>${result.message}</p>
+                <a href="${result.download_url}" class="inline-flex mt-2 items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500/20 to-primary/20 hover:from-emerald-500/30 hover:to-primary/30 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down"></i> Download Excel</a>
+                <p class="text-[10px] text-white/40 mt-2">You can upload this file using "I Have My Excel" to import it into the system.</p>
+            </div></div>`;
+            chatEl.scrollTop = chatEl.scrollHeight;
+        } else if (chatEl) {
+            if (container) {
+                const btns = container.querySelector('.flex.gap-2') || container.querySelector('p.text-blue-400')?.parentElement;
+                if (btns) btns.innerHTML = `<p class="text-sm text-destructive">${result.error || 'Failed to build Excel.'}</p><button onclick="buildExcelFromPreview()" class="mt-1 px-3 py-1 bg-destructive/20 hover:bg-destructive/30 rounded-lg text-destructive text-[11px] font-bold"><i class="fa-solid fa-rotate-right mr-1"></i>Retry</button>`;
+            }
+        }
+    } catch (err) {
+        if (container) {
+            const btns = container.querySelector('.flex.gap-2') || container.querySelector('p.text-blue-400')?.parentElement;
+            if (btns) btns.innerHTML = `<p class="text-sm text-destructive">Network error: ${err.message}</p><button onclick="buildExcelFromPreview()" class="mt-1 px-3 py-1 bg-destructive/20 hover:bg-destructive/30 rounded-lg text-destructive text-[11px] font-bold"><i class="fa-solid fa-rotate-right mr-1"></i>Retry</button>`;
+        }
+    }
+}
+
+function retryScanToExcel() {
+    // Re-trigger the last scan by sending a message
+    sendAssistantMessage('[SYSTEM] The teacher wants to retry the image scan. Please trigger scan_image_to_excel again with the same parameters.');
+}
+
 // === FILE UPLOAD IN ASSISTANT CHAT ===
 let _assistantUploadedFile = null; // Store reference to last uploaded file for follow-up edits
 let _assistantUploadedFiles = []; // Store multiple images
@@ -1557,7 +1703,7 @@ async function handleAssistantFileUpload(input) {
         `;
         chatEl.scrollTop = chatEl.scrollHeight;
 
-        sendAssistantMessage(`[SYSTEM] Teacher just attached ${files.length} image(s) of a document or table. Acknowledge this, and ask them two things: 1) What specific columns or data they want to extract into an Excel file, and 2) WHICH CLASS this is for, so you can perfectly match the messy handwriting against the official database roster.`);
+        sendAssistantMessage(`[SYSTEM] Teacher just attached ${files.length} image(s) of a handwritten record sheet or table. Acknowledge this warmly, then ask them for the following info so you can extract the data accurately:\n1) WHICH CLASS is this for? (e.g. SS 1T, SS 2Q) — so you can match handwriting to the official roster\n2) WHAT SUBJECT? (e.g. Mathematics, English)\n3) WHAT COLUMNS to extract? (e.g. 1st CA, 2nd CA, Exam) — or they can say "extract everything"\n4) WHAT TERM? (e.g. 1st Term, 2nd Term) if relevant\nBe natural and friendly. If the image clearly shows a class name or term at the top, mention that you can see it and confirm.`);
 
     } else if (isExcel) {
         const file = files[0]; // Only process the first excel

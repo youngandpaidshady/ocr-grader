@@ -1427,18 +1427,36 @@ def assistant_scan_to_excel():
                     roster_context = f"\n\nCRITICAL KNOWLEDGE: The teacher mentioned this image belongs to class '{class_name}'. The official database roster for this class is: {roster_names}. \nWHEN EXTRACTING NAMES, YOU MUST MATCH THEM STRICTLY TO THIS ROSTER, IGNORING TYPOS IN THE HANDWRITING. Fix any misspelled handwritten names to perfectly match the official database spelling."
         
         prompt = """
-You are an expert OCR and data extraction AI. A teacher has uploaded image(s) of a document (often handwritten) and given you specific instructions on how to parse it into a structured table.
+You are an expert OCR and data extraction AI specializing in Nigerian school record sheets. A teacher has uploaded image(s) of a handwritten document and given you specific instructions.
 
 TEACHER'S INSTRUCTION: "{instruction}"{roster_context}
 
-Your job is to read the images and generate ONE single JSON array of objects representing the rows of the table across all images. Every column requested by the teacher MUST be a key in every JSON object. 
+YOUR JOB: Read ALL the images and produce ONE combined JSON array of row objects representing the table data across every page/image.
 
-RULES:
-- Return ONLY a raw JSON array. Start with [ and end with ]. No markdown, no backticks, no explanations.
-- If the teacher asks to extract specific columns (e.g. 'Name', '1st CA', 'Note'), those exact names must be the keys in your JSON.
-- **CRITICAL COMPATIBILITY**: If the teacher asks for the student's name, ALWAYS name that column strictly "name". If the teacher asks for an assessment score, ALWAYS name that column strictly "score". (If they ask for MULTIPLE assessments, e.g., 1st CA and 2nd CA, you can name them "1st CA" and "2nd CA", but if they just say "score" or ask for a generic grade, use "score").
-- This ensures the downloaded Excel file can be seamlessly uploaded back into our system.
-- If a value is missing or unreadable, use an empty string "" for that key. Do not omit the key.
+CRITICAL RULES:
+1. **OUTPUT FORMAT**: Return ONLY a raw JSON array. Start with [ and end with ]. No markdown, no backticks, no explanations, no commentary.
+2. **COLUMN NAMING**: 
+   - The student name column MUST always be keyed as "name" (lowercase).
+   - If the teacher asks for a single generic score, use "score".
+   - If they ask for MULTIPLE assessment columns (e.g. 1st CA, 2nd CA, Exam), use those exact names as keys.
+   - If the teacher says "extract everything" or "all columns", auto-detect every column from the header row and use readable names.
+3. **COMPLEX COLUMN HEADERS**: School record sheets often have these handwritten column headers (detect them even if messy):
+   - "1st CA" or "1st Test" = First Continuous Assessment
+   - "2nd CA" or "2nd Test" = Second Continuous Assessment  
+   - "Open Day" or "Open" = Open Day score
+   - "Note" / "NB" / "Note Book" = Notebook score
+   - "Ass" / "Assig" / "Assignment" = Assignment score
+   - "Attend" / "Attendance" = Attendance score
+   - "Total" = Total/subtotal
+   - "Exam" = Examination score
+   - "Grand Total" / "Total (final)" = Final cumulative score
+4. **FRACTIONAL SCORES**: Convert handwritten fractions to decimals: 6½ → 6.5, 8½ → 8.5, 7½ → 7.5, 9½ → 9.5. If unsure, round to nearest 0.5.
+5. **OVERWRITTEN/CORRECTED VALUES**: If a number appears to be crossed out and rewritten, use the CORRECTED (newer) value.
+6. **MISSING/UNREADABLE VALUES**: Use empty string "" for any value you cannot read. NEVER skip the key.
+7. **MULTI-PART NAMES**: Combine first name, middle name, and surname into ONE "name" field. E.g. "Abass Aishat" or "Abdulazees Zainab Oyadamola".
+8. **PAGE CONTINUITY**: If multiple images show pages of the SAME class (continuing serial numbers), combine all rows into one array. Do NOT create separate arrays per image.
+9. **SERIAL NUMBERS**: Do NOT include the S/N or serial number column unless specifically asked.
+10. **AUTO-DETECT CLASS INFO**: If you can see a class name (e.g. "SS 1T", "SS2Q") or term (e.g. "1st Term", "2nd Term") written at the top of the sheet, note them but still focus on extracting the table data.
 """.format(instruction=instruction, roster_context=roster_context)
 
         # Call AI
@@ -1469,27 +1487,74 @@ RULES:
         
         if not isinstance(extracted_data, list) or len(extracted_data) == 0:
             return jsonify({"error": "No valid data or table found in the image based on your instructions."}), 400
+        
+        # Get column names from the first row
+        columns = list(extracted_data[0].keys()) if extracted_data else []
             
-        # Create Excel File
+        # Return preview data instead of creating Excel immediately
+        return jsonify({
+            "success": True,
+            "preview": True,
+            "data": extracted_data,
+            "columns": columns,
+            "row_count": len(extracted_data),
+            "message": "Found {} rows with columns: {}. Review the data below — you can edit anything before building the Excel file.".format(len(extracted_data), ', '.join(columns))
+        }), 200
+
+    except json.JSONDecodeError as e:
+        print("Assistant Image Scan JSON Error: {}".format(raw_text if raw_text else 'No response'))
+        return jsonify({"error": "AI had trouble reading the image. Try a clearer photo or simpler instructions."}), 400
+    except Exception as e:
+        print("Assistant Image Scan Error: {}".format(e))
+        return jsonify({"error": "Something went wrong: {}. Please try again.".format(str(e))}), 500
+
+
+@app.route('/api/assistant-build-excel', methods=['POST'])
+def assistant_build_excel():
+    """Takes confirmed/edited preview data and builds the final Excel file."""
+    try:
+        payload = request.json
+        if not payload or 'data' not in payload:
+            return jsonify({"error": "No data provided"}), 400
+        
+        extracted_data = payload['data']
+        class_name = payload.get('class_name', '').strip()
+        subject_name = payload.get('subject_name', '').strip()
+        assessment_type = payload.get('assessment_type', '').strip()
+        
+        if not isinstance(extracted_data, list) or len(extracted_data) == 0:
+            return jsonify({"error": "No data to build Excel from"}), 400
+        
         df = pd.DataFrame(extracted_data)
         
-        output_filename = "Extracted_Data_{}.xlsx".format(int(time.time()))
-        output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
+        # Build a descriptive filename
+        name_parts = []
+        if class_name:
+            safe_class = re_mod.sub(r'[^A-Za-z0-9 ]', '', class_name).strip()
+            name_parts.append(safe_class)
+        if subject_name:
+            safe_subject = re_mod.sub(r'[^A-Za-z0-9 ]', '', subject_name).strip()
+            name_parts.append(safe_subject)
+        if assessment_type:
+            safe_assessment = re_mod.sub(r'[^A-Za-z0-9 ]', '', assessment_type).strip()
+            name_parts.append(safe_assessment)
         
+        if name_parts:
+            output_filename = "{}_{}.xlsx".format('_'.join(name_parts), int(time.time()))
+        else:
+            output_filename = "Extracted_Data_{}.xlsx".format(int(time.time()))
+        
+        output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
         df.to_excel(output_path, index=False, engine='openpyxl')
         
         return jsonify({
             "success": True,
-            "message": "Successfully extracted {} rows based on your instructions.".format(len(df)),
-            "row_count": len(df),
+            "message": "Excel file ready! {} rows, {} columns.".format(len(df), len(df.columns)),
             "download_url": "/api/download-edited-excel?file={}".format(output_filename)
         }), 200
-
-    except json.JSONDecodeError as e:
-        print("Assistant Image Scan JSON Error: {}".format(raw_text))
-        return jsonify({"error": "AI misunderstood the instruction and didn't output valid table data. Try rephrasing."}), 400
+        
     except Exception as e:
-        print("Assistant Image Scan Error: {}".format(e))
+        print("Build Excel Error: {}".format(e))
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/assistant-edit-excel', methods=['POST'])
@@ -1872,6 +1937,9 @@ EXAMPLE INPUT→OUTPUT MAPPINGS (follow these patterns exactly):
 - "Add 5 points to everyone" / "Delete students below 40" → action: "edit_excel", params: {{instruction: "add 5 points to everyone"}}
 - "Scan this image and extract Name, 1st CA, and 2nd CA into an excel file" → action: "scan_image_to_excel", params: {{instruction: "extract Name, 1st CA, and 2nd CA"}}
 - "Scan this image for SS 1Q and extract Name, 1st CA, and 2nd CA" → action: "scan_image_to_excel", params: {{instruction: "extract Name, 1st CA, and 2nd CA", class_name: "SS 1Q"}}
+- "This is SS 1T Mathematics, extract everything" → action: "scan_image_to_excel", params: {{instruction: "extract all columns", class_name: "SS 1T", subject_name: "Mathematics"}}
+- "Extract all columns for 1st term" → action: "scan_image_to_excel", params: {{instruction: "extract all columns", assessment_type: "1st Term"}}
+- "Just scan it" → action: "none" (ASK: "What columns should I extract? Or shall I grab everything I can see?")
 - "Read this file" / "What is in this excel?" → action: "none" (Just read it and summarize conversationaly!)
 - "Where is the edited file?" / "Did you edit it?" → action: "none" (Answer the question conversationally, DO NOT use edit_excel!)
 - "Add Fatimah to SS 1Q" → action: "add_student", params: {{student_name: "Fatimah", class_name: "SS 1Q"}}
@@ -1896,6 +1964,15 @@ INTELLIGENCE RULES:
 10. ALWAYS return valid JSON with "response", "action" and "params". For general LLM tasks, use action "none" and put your full, rich answer in "response".
 11. READ VS EDIT EXCEL: If the teacher asks you to simply "read", "review", or "tell me what you found" about an uploaded Excel file, DO NOT use "edit_excel". Only use "edit_excel" if they explicitly ask you to MODIFY data (e.g. add, delete, rename). If they just want to read, use action "none" and summarize it in the response based on the "Context" I provided you about the upload.
 12. AVOID FALSE EDITS: If the teacher asks a question LIKE "where is the edited file?", they are asking a question, NOT giving an instruction to edit an Excel file. Use action "none".
+13. IMAGE SCAN INTELLIGENCE: When teacher uploads image(s), you MUST collect this info before triggering scan_image_to_excel:
+    a) WHICH CLASS is this for? → params.class_name (e.g. "SS 1T", "SS 2Q")
+    b) WHAT SUBJECT? → params.subject_name (e.g. "Mathematics", "English")
+    c) WHAT COLUMNS to extract? → params.instruction (e.g. "extract name, 1st CA, 2nd CA, Exam"). If teacher says "extract everything" or "all columns", pass instruction as "extract all columns".
+    d) WHAT ASSESSMENT TYPE? → params.assessment_type (e.g. "1st Term", "2nd Term") if visible on the sheet.
+    If the teacher provides some info upfront (e.g. "this is SS 1T Mathematics"), don't re-ask for what you already know. Only ask for MISSING info.
+14. SMART COLUMN GUESSING: Nigerian record sheets often have these columns: 1st CA, 2nd CA, Open Day, Note Book, Assignment, Attendance, Total, Exam, Grand Total. If teacher says "extract all columns" or "everything", use these standard names.
+15. AUTO-DETECT FROM IMAGE: If the teacher says "just scan it" without specifying columns, ask them: "I can see this looks like a record sheet. Want me to extract ALL the columns I can see, or just specific ones like 1st CA and 2nd CA?"
+16. MULTI-CLASS UPLOADS: If teacher uploads multiple images and says they're for DIFFERENT classes, ask which image is for which class. Do NOT assume all images are the same class.
 
 {conversation}
 
