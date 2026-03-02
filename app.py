@@ -1476,10 +1476,27 @@ Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like `js
         raw_text = None
         for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
             try:
-                model = genai.GenerativeModel('gemini-2.5-flash')
+                model = genai.GenerativeModel(
+                    'gemini-2.5-flash',
+                    generation_config=genai.GenerationConfig(
+                        thinking_config=genai.types.ThinkingConfig(
+                            thinking_budget=8192
+                        )
+                    )
+                )
                 contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
                 response = model.generate_content(contents)
-                raw_text = response.text.strip()
+                # Extract text — handle thinking mode responses where thoughts may be separate parts
+                raw_text = ''
+                if hasattr(response, 'candidates') and response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, 'thought') and part.thought:
+                            continue  # Skip thought blocks, we only want the final JSON
+                        if hasattr(part, 'text') and part.text:
+                            raw_text += part.text
+                if not raw_text:
+                    raw_text = response.text.strip()
+                raw_text = raw_text.strip()
                 break
             except Exception as model_err:
                 err_str = str(model_err).lower()
@@ -1716,16 +1733,34 @@ CRITICAL RULES:
    - The standard column order is: name, 1st CA, 2nd CA, Open Day, Note, Assignment, Total CA, Exam, Total
    - Output the RAW scores you read. Do NOT compute totals yourself — just extract what is written.
 12. **NUMERIC VALUES**: All score values should be numbers (integers or decimals), NOT strings. Use 0 for a zero score, "" for missing/unreadable.
+13. **THINK ROW BY ROW**: Before outputting JSON, carefully examine each row of the table. For each student, verify: Is the name legible? Are the scores in the correct columns? Do the numbers make sense (e.g., CAs should be 0-10 or 0-20, Exam 0-70)? If a value looks wrong, re-examine the image carefully.
 """.format(instruction=instruction, roster_context=roster_context)
 
         # Call AI
         raw_text = None
         for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
             try:
-                # Use Gemini 2.5 Flash for multimodal
-                model = genai.GenerativeModel('gemini-2.5-flash')
+                # Use Gemini 2.5 Flash with thinking mode for better accuracy on complex handwritten data
+                model = genai.GenerativeModel(
+                    'gemini-2.5-flash',
+                    generation_config=genai.GenerationConfig(
+                        thinking_config=genai.types.ThinkingConfig(
+                            thinking_budget=8192
+                        )
+                    )
+                )
                 response = model.generate_content([prompt, *image_parts])
-                raw_text = response.text.strip()
+                # Extract text — handle thinking mode responses (skip thought blocks)
+                raw_text = ''
+                if hasattr(response, 'candidates') and response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, 'thought') and part.thought:
+                            continue  # Skip thought blocks
+                        if hasattr(part, 'text') and part.text:
+                            raw_text += part.text
+                if not raw_text:
+                    raw_text = response.text.strip()
+                raw_text = raw_text.strip()
                 break
             except Exception as model_err:
                 err_str = str(model_err).lower()
