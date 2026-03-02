@@ -7,6 +7,7 @@ python-dotenv
 pillow
 flask-sqlalchemy
 thefuzz
-python-Levenshtein
+Levenshtein
 gunicorn
 psycopg2-binary
+werkzeug
