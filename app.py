@@ -1529,6 +1529,12 @@ Return ONLY raw JSON. Example:
         else:
             df.to_excel(output_path, index=False, engine='openpyxl')
         
+        if changes_made == 0:
+            return jsonify({
+                "success": False,
+                "error": summary or "I couldn't figure out how to apply those edits to this file format."
+            }), 200
+            
         return jsonify({
             "success": True,
             "summary": summary,
@@ -1724,6 +1730,7 @@ EXAMPLE INPUT→OUTPUT MAPPINGS (follow these patterns exactly):
 - "Adekunie should be 8" → action: "correct_score", params: {{student_name: "Adekunie", new_score: "8"}}
 - "Fix Tunde's score to 15" → action: "correct_score", params: {{student_name: "Tunde", new_score: "15"}}
 - "Add 5 points to everyone" / "Delete students below 40" → action: "edit_excel", params: {{instruction: "add 5 points to everyone"}}
+- "Read this file" / "What is in this excel?" → action: "none" (Just read it and summarize conversationaly!)
 - "Add Fatimah to SS 1Q" → action: "add_student", params: {{student_name: "Fatimah", class_name: "SS 1Q"}}
 - "Only one student" or "For a student..." → action: "add_student"
 - "Show results" / "See scores" → action: "view_standings"
@@ -1741,9 +1748,10 @@ INTELLIGENCE RULES:
 5. For "move_student": Include source class, student name, and destination class in params.
 6. BE PROACTIVE: Mention data insights naturally.
 7. Always reference real student names and data. Never make up data.
-8. RESPONSE LENGTH: Keep it SHORT (1-2 sentences) WHEN confirming an app action (e.g. "I've added Fatimah"). HOWEVER, if the teacher asks a general question, needs an email drafted, asks for a lesson plan, or wants pedagogical advice, act as a full LLM and write as much as needed! Format long responses nicely.
+8. RESPONSE LENGTH: Keep it SHORT (1-2 sentences) WHEN confirming an app action. HOWEVER, if the teacher asks a general question, wants to EXPLAIN A FILE, needs an email drafted, or asks for a lesson plan, act as a full LLM and write as much as needed! Format long responses nicely.
 9. CONVERSATION MEMORY: Use history context. "yes"/"ok"/"do it" = execute previous action.
 10. ALWAYS return valid JSON with "response", "action" and "params". For general LLM tasks, use action "none" and put your full, rich answer in "response".
+11. READ VS EDIT EXCEL: If the teacher asks you to simply "read", "review", or "tell me what you found" about an uploaded Excel file, DO NOT use "edit_excel". Only use "edit_excel" if they explicitly ask you to MODIFY data (e.g. add, delete, rename). If they just want to read, use action "none" and summarize it in the response based on the "Context" I provided you about the upload.
 
 {conversation}
 
