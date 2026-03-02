@@ -1194,14 +1194,14 @@ async function executeAssistantAction(action, params) {
             break;
         }
         case 'scan_image_to_excel': {
-            if (typeof _assistantUploadedFile !== 'undefined' && _assistantUploadedFile && _assistantUploadedFile.type.startsWith('image/')) {
+            if (typeof _assistantUploadedFiles !== 'undefined' && _assistantUploadedFiles.length > 0) {
                 const chatEl = document.getElementById('assistant-chat');
                 if (chatEl) {
                     chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning complex table into Excel...</p></div></div>`;
                     chatEl.scrollTop = chatEl.scrollHeight;
                 }
                 const scanFormData = new FormData();
-                scanFormData.append('image', _assistantUploadedFile);
+                _assistantUploadedFiles.forEach(f => scanFormData.append('images', f));
                 scanFormData.append('instruction', params?.instruction || message || '');
                 scanFormData.append('class_name', params?.class_name || '');
                 try {
@@ -1518,58 +1518,70 @@ async function safeAddStudentForce(studentName, className) {
 }
 // === FILE UPLOAD IN ASSISTANT CHAT ===
 let _assistantUploadedFile = null; // Store reference to last uploaded file for follow-up edits
+let _assistantUploadedFiles = []; // Store multiple images
+
 async function handleAssistantFileUpload(input) {
-    const file = input.files[0];
-    if (!file) return;
+    if (!input.files || input.files.length === 0) return;
+    const files = Array.from(input.files);
     input.value = ''; // Reset so same file can be re-uploaded
 
     const chatEl = document.getElementById('assistant-chat');
     if (!chatEl) return;
 
-    const isImage = file.type.startsWith('image/');
-    const isExcel = /\.(xlsx|xls|csv)$/i.test(file.name);
-    const icon = isImage ? 'fa-image' : 'fa-file-excel';
-    const color = isImage ? 'text-blue-400' : 'text-emerald-400';
+    const isImageBatch = files.every(f => f.type.startsWith('image/'));
+    const isExcel = /\.(xlsx|xls|csv)$/i.test(files[0].name);
 
-    // Show upload indicator
-    chatEl.innerHTML += `
-        <div class="flex justify-end mb-3">
-            <div class="bg-primary/10 border border-primary/20 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
-                <p class="text-sm text-white"><i class="fa-solid ${icon} ${color} mr-2"></i>${file.name}</p>
-                <p class="text-[10px] text-white/40 mt-1">${(file.size / 1024).toFixed(1)} KB</p>
-            </div>
-        </div>
-    `;
-    chatEl.innerHTML += `
-        <div id="upload-typing" class="flex justify-start mb-3">
-            <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
-                <p class="text-sm text-white/60"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Processing your file...</p>
-            </div>
-        </div>
-    `;
-    chatEl.scrollTop = chatEl.scrollHeight;
+    if (isImageBatch) {
+        _assistantUploadedFiles = files; // Store all images
 
-    try {
-        const formData = new FormData();
-
-        if (isImage) {
-            // Remove typing indicator immediately because we are deferring to the Assistant
-            document.getElementById('upload-typing')?.remove();
-
-            _assistantUploadedFile = file; // Store for follow-up edit instructions
-
-            chatEl.innerHTML += `
-                <div class="flex justify-start mb-3">
-                    <div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-                        <p class="text-sm text-blue-400 font-bold mb-1"><i class="fa-solid fa-check-circle mr-1.5"></i>Image attached!</p>
-                        <p class="text-[11px] text-white/50">I'm ready to analyze this over to you.</p>
-                    </div>
+        let fileDisplayHTML = '';
+        files.forEach(f => {
+            fileDisplayHTML += `
+                <div class="bg-primary/10 border border-primary/20 rounded-2xl rounded-br-md px-4 py-2 mt-2 w-fit ml-auto">
+                    <p class="text-sm text-white"><i class="fa-solid fa-image text-blue-400 mr-2"></i>${f.name}</p>
+                    <p class="text-[10px] text-white/40 mt-1">${(f.size / 1024).toFixed(1)} KB</p>
                 </div>
             `;
-            chatEl.scrollTop = chatEl.scrollHeight;
+        });
 
-            sendAssistantMessage(`[SYSTEM] Teacher just attached an image of a document or table. Acknowledge it, and ask them two things: 1) What specific columns or data they want to extract into an Excel file, and 2) WHICH CLASS this is for, so you can perfectly match the messy handwriting against the official database roster.`);
-        } else if (isExcel) {
+        chatEl.innerHTML += `
+            <div class="flex justify-end mb-3 flex-col items-end">
+                ${fileDisplayHTML}
+            </div>
+            <div class="flex justify-start mb-3">
+                <div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                    <p class="text-sm text-blue-400 font-bold mb-1"><i class="fa-solid fa-images mr-1.5"></i>${files.length} images attached!</p>
+                    <p class="text-[11px] text-white/50">I'm ready to analyze these. Over to you.</p>
+                </div>
+            </div>
+        `;
+        chatEl.scrollTop = chatEl.scrollHeight;
+
+        sendAssistantMessage(`[SYSTEM] Teacher just attached ${files.length} image(s) of a document or table. Acknowledge this, and ask them two things: 1) What specific columns or data they want to extract into an Excel file, and 2) WHICH CLASS this is for, so you can perfectly match the messy handwriting against the official database roster.`);
+
+    } else if (isExcel) {
+        const file = files[0]; // Only process the first excel
+
+        // Show upload indicator
+        chatEl.innerHTML += `
+            <div class="flex justify-end mb-3">
+                <div class="bg-primary/10 border border-primary/20 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
+                    <p class="text-sm text-white"><i class="fa-solid fa-file-excel text-emerald-400 mr-2"></i>${file.name}</p>
+                    <p class="text-[10px] text-white/40 mt-1">${(file.size / 1024).toFixed(1)} KB</p>
+                </div>
+            </div>
+        `;
+        chatEl.innerHTML += `
+            <div id="upload-typing" class="flex justify-start mb-3">
+                <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
+                    <p class="text-sm text-white/60"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Processing your file...</p>
+                </div>
+            </div>
+        `;
+        chatEl.scrollTop = chatEl.scrollHeight;
+
+        try {
+            const formData = new FormData();
             // Send Excel to upload endpoint
             formData.append('file', file);
             const response = await fetch('/api/upload-excel-scorelist', {

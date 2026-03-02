@@ -1399,8 +1399,8 @@ def move_student():
 def assistant_scan_to_excel():
     """Receives an image + instruction, uses Vision AI to extract a table, returns an Excel file."""
     try:
-        if 'image' not in request.files:
-            return jsonify({"error": "No image uploaded"}), 400
+        if 'images' not in request.files:
+            return jsonify({"error": "No images uploaded"}), 400
         
         instruction = request.form.get('instruction', '').strip()
         if not instruction:
@@ -1408,11 +1408,13 @@ def assistant_scan_to_excel():
             
         class_name = request.form.get('class_name', '').strip()
             
-        file = request.files['image']
+        files = request.files.getlist('images')
         
-        # Read image
-        img_bytes = file.read()
-        image_parts = [{"mime_type": file.content_type, "data": img_bytes}]
+        # Read multiple images
+        image_parts = []
+        for f in files:
+            img_bytes = f.read()
+            image_parts.append({"mime_type": f.content_type, "data": img_bytes})
         
         # Build optional roster context for smarter OCR
         roster_context = ""
@@ -1425,15 +1427,17 @@ def assistant_scan_to_excel():
                     roster_context = f"\n\nCRITICAL KNOWLEDGE: The teacher mentioned this image belongs to class '{class_name}'. The official database roster for this class is: {roster_names}. \nWHEN EXTRACTING NAMES, YOU MUST MATCH THEM STRICTLY TO THIS ROSTER, IGNORING TYPOS IN THE HANDWRITING. Fix any misspelled handwritten names to perfectly match the official database spelling."
         
         prompt = """
-You are an expert OCR and data extraction AI. A teacher has uploaded an image of a document (often handwritten) and given you specific instructions on how to parse it into a structured table.
+You are an expert OCR and data extraction AI. A teacher has uploaded image(s) of a document (often handwritten) and given you specific instructions on how to parse it into a structured table.
 
 TEACHER'S INSTRUCTION: "{instruction}"{roster_context}
 
-Your job is to read the image and generate a JSON array of objects representing the rows of the table. Every column requested by the teacher MUST be a key in every JSON object. 
+Your job is to read the images and generate ONE single JSON array of objects representing the rows of the table across all images. Every column requested by the teacher MUST be a key in every JSON object. 
 
 RULES:
 - Return ONLY a raw JSON array. Start with [ and end with ]. No markdown, no backticks, no explanations.
 - If the teacher asks to extract specific columns (e.g. 'Name', '1st CA', 'Note'), those exact names must be the keys in your JSON.
+- **CRITICAL COMPATIBILITY**: If the teacher asks for the student's name, ALWAYS name that column strictly "name". If the teacher asks for an assessment score, ALWAYS name that column strictly "score". (If they ask for MULTIPLE assessments, e.g., 1st CA and 2nd CA, you can name them "1st CA" and "2nd CA", but if they just say "score" or ask for a generic grade, use "score").
+- This ensures the downloaded Excel file can be seamlessly uploaded back into our system.
 - If a value is missing or unreadable, use an empty string "" for that key. Do not omit the key.
 """.format(instruction=instruction, roster_context=roster_context)
 
@@ -1443,7 +1447,7 @@ RULES:
             try:
                 # Use Gemini 2.5 Flash for multimodal
                 model = genai.GenerativeModel('gemini-2.5-flash')
-                response = model.generate_content([prompt, image_parts[0]])
+                response = model.generate_content([prompt, *image_parts])
                 raw_text = response.text.strip()
                 break
             except Exception as model_err:
