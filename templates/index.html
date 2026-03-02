@@ -1516,6 +1516,7 @@
                     Upload Score List
                 </h3>
                 <button id="btn-close-scoresheet-modal"
+                    onclick="(function(){var m=document.getElementById('upload-scoresheet-modal');if(m){m.classList.remove('flex');m.classList.add('hidden');}})()"
                     class="text-muted-foreground hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5 relative z-10">
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
@@ -1548,7 +1549,8 @@
 
     <!-- Modal: Upload Excel Score Sheet (Resume Grading) -->
     <div id="upload-xlsx-modal"
-        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm items-center justify-center p-4 transition-all duration-300 opacity-0 font-sans">
+        class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm items-center justify-center p-4 transition-all duration-300 opacity-0 font-sans"
+        onclick="if(event.target===this){this.classList.add('opacity-0');var self=this;setTimeout(function(){self.classList.remove('flex');self.classList.add('hidden');self.classList.remove('opacity-0');},300);}">
         <div
             class="bg-card w-full max-w-md rounded-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
             <div
@@ -1559,6 +1561,7 @@
                         class="fa-solid fa-file-excel text-emerald-400 mr-3 text-xl drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]"></i>
                     Update Score List</h3>
                 <button id="btn-close-xlsx-modal"
+                    onclick="(function(){var m=document.getElementById('upload-xlsx-modal');if(m){m.classList.add('opacity-0');setTimeout(function(){m.classList.remove('flex');m.classList.add('hidden');m.classList.remove('opacity-0');},300);}})()"
                     class="text-muted-foreground hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5 relative z-10"><i
                         class="fa-solid fa-xmark text-lg"></i></button>
             </div>
