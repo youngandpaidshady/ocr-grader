@@ -1039,14 +1039,15 @@
                                     class="input-wrapper border border-white/10 bg-black/40 hover:bg-black/60 transition-colors flex-[2] relative rounded-xl">
                                     <select id="assessment-type"
                                         class="w-full p-4 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none relative z-10 font-bold tracking-wide">
-                                        <option value="" disabled selected class="bg-card">-- Select Assessment Type
-                                            --
+                                        <option value="" disabled selected class="bg-card">-- What are you grading? --
                                         </option>
-                                        <option value="1st CA" class="bg-card">1st CA</option>
-                                        <option value="2nd CA" class="bg-card">2nd CA</option>
-                                        <option value="Exam" class="bg-card">Exam</option>
+                                        <option value="1st CA" class="bg-card">1st CA (out of 10)</option>
+                                        <option value="2nd CA" class="bg-card">2nd CA (out of 10)</option>
                                         <option value="Open Day" class="bg-card">Open Day</option>
+                                        <option value="Note Book" class="bg-card">Note Book</option>
                                         <option value="Assignment" class="bg-card">Assignment</option>
+                                        <option value="Attendance" class="bg-card">Attendance</option>
+                                        <option value="Exam" class="bg-card">Exam (out of 70)</option>
                                         <option value="custom" class="bg-card">-- Custom --</option>
                                     </select>
                                     <i
@@ -1745,7 +1746,7 @@
                         }
 
                         if (result.detected_assessments && result.detected_assessments.length > 0) {
-                            const order = ['1st CA', '2nd CA', 'Exam'];
+                            const order = ['1st CA', '2nd CA', 'Open Day', 'Note Book', 'Assignment', 'Attendance', 'Exam'];
                             let next = 'Score';
                             for (const a of order) { if (!result.detected_assessments.includes(a)) { next = a; break; } }
                             const at = document.getElementById('assessment-type');
@@ -1753,7 +1754,7 @@
                             const hint = document.getElementById('assessment-hint');
                             if (hint) {
                                 hint.classList.remove('hidden');
-                                hint.querySelector('span').textContent = `You have ${result.detected_assessments.join(', ')} scores. Suggesting ${next}.`;
+                                hint.querySelector('span').textContent = `You already have ${result.detected_assessments.join(', ')}. Next up: ${next}.`;
                             }
                         }
 
@@ -4200,7 +4201,7 @@
     </div>
 
     <!-- Enhancement Layer -->
-    <script src="/static/app-enhancements.js"></script>
+    <script src="/static/app-enhancements.js?v=2"></script>
 </body>
 
 </html>

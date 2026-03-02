@@ -93,26 +93,271 @@ class ScoreModel(db.Model):
     score_value = db.Column(db.String(50), nullable=False)
     assessment_type = db.Column(db.String(100), default='Score')
     subject_name = db.Column(db.String(100), default='Uncategorized', server_default='Uncategorized')
+    term = db.Column(db.String(20), default='1st Term', server_default='1st Term')
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
 
 from sqlalchemy import text
 with app.app_context():
     db.create_all()
+    # Migrate: add subject_name column if missing
     try:
         db.session.execute(text("ALTER TABLE scores ADD COLUMN subject_name VARCHAR(100) DEFAULT 'Uncategorized'"))
         db.session.commit()
     except Exception:
         db.session.rollback()
-        pass
+    # Migrate: add term column if missing
+    try:
+        db.session.execute(text("ALTER TABLE scores ADD COLUMN term VARCHAR(20) DEFAULT '1st Term'"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+# ═══════════════════════════════════════════════════════════════
+#  NIGERIAN MARK BOOK GRADING ENGINE
+#  Central config for Nigerian school record sheet structure
+# ═══════════════════════════════════════════════════════════════
+NIGERIAN_MARK_BOOK_CONFIG = {
+    "ca_columns": {
+        "1st CA":      {"max": 10, "can_be_20": False, "aliases": ["1st Test", "1st C.A", "CA1", "Test 1", "First CA"]},
+        "2nd CA":      {"max": 10, "can_be_20": False, "aliases": ["2nd Test", "2nd C.A", "CA2", "Test 2", "Second CA"]},
+        "Open Day":    {"max": 10, "can_be_20": True,  "aliases": ["Open", "OD", "Open day"]},
+        "Note Book":   {"max": 10, "can_be_20": True,  "aliases": ["Note", "NB", "Notebook", "Note book"]},
+        "Assignment":  {"max": 10, "can_be_20": True,  "aliases": ["Ass", "Assig", "Assgn", "Assign"]},
+        "Attendance":  {"max": 10, "can_be_20": True,  "aliases": ["Attend", "Att", "Atten"]},
+    },
+    "ca_total_max": 30,       # Sum of CAs ÷ 2
+    "ca_raw_max": 60,         # Sum before dividing
+    "exam_max": 70,
+    "grand_total_max": 100,
+    "absent_markers": ["AB", "ABS", "A", "-", "/", "NIL", "", "X", "ABSENT"],
+    "grade_map": [
+        (75, 100, "A1", "Excellent"),
+        (70, 74,  "B2", "Very Good"),
+        (65, 69,  "B3", "Good"),
+        (60, 64,  "C4", "Credit"),
+        (55, 59,  "C5", "Credit"),
+        (50, 54,  "C6", "Credit"),
+        (45, 49,  "D7", "Pass"),
+        (40, 44,  "E8", "Pass"),
+        (0,  39,  "F9", "Fail"),
+    ],
+    "assessment_order": [
+        "1st CA", "2nd CA", "Open Day", "Note Book",
+        "Assignment", "Attendance", "Total CA", "Exam", "Grand Total"
+    ],
+    "column_3_default": "Open Day",
+    "terms": ["1st Term", "2nd Term", "3rd Term"],
+}
+
+def normalize_column_name(col_name, config=None):
+    """Normalize a column name to its canonical form using aliases."""
+    if config is None:
+        config = NIGERIAN_MARK_BOOK_CONFIG
+    col_upper = str(col_name).strip().upper()
+    for canonical, info in config["ca_columns"].items():
+        if col_upper == canonical.upper():
+            return canonical
+        for alias in info.get("aliases", []):
+            if col_upper == alias.upper():
+                return canonical
+    # Check Exam
+    if col_upper in ["EXAM", "EXAMINATION", "FINAL EXAM", "EXAM SCORE"]:
+        return "Exam"
+    # Check totals
+    if col_upper in ["TOTAL CA", "CA TOTAL", "TOTAL C.A", "TOTAL"]:
+        return "Total CA"
+    if col_upper in ["GRAND TOTAL", "TOTAL SCORE", "FINAL TOTAL", "G.TOTAL", "OVERALL"]:
+        return "Grand Total"
+    return col_name.strip()
+
+def validate_and_cap_score(column_name, value, config=None):
+    """Validate a score against its column's maximum.
+    Returns (cleaned_value, warnings_list).
+    - Absent markers → ('ABS', [])
+    - Fractions (½) → converted to .5
+    - x/y format → numerator extracted
+    - Over-max → capped with warning
+    """
+    if config is None:
+        config = NIGERIAN_MARK_BOOK_CONFIG
+    warnings = []
+    val_str = str(value).strip()
+
+    # Check absent markers
+    if val_str.upper() in [m.upper() for m in config["absent_markers"]]:
+        return ("ABS", [])
+
+    # Handle fractions: 6½ → 6.5, 8½ → 8.5
+    val_str = val_str.replace('½', '.5').replace('¼', '.25').replace('¾', '.75')
+
+    # Handle x/y format: "8/10" → "8"
+    if '/' in val_str:
+        parts = val_str.split('/')
+        val_str = parts[0].strip()
+
+    # Try to parse as number
+    try:
+        numeric_val = float(val_str)
+    except (ValueError, TypeError):
+        return (val_str, ["Could not parse '{}' as a number for {}".format(value, column_name)])
+
+    # Determine the max for this column
+    col_normalized = normalize_column_name(column_name, config)
+    max_val = None
+
+    if col_normalized in config["ca_columns"]:
+        ca_info = config["ca_columns"][col_normalized]
+        # Use 20 if can_be_20 is True AND the value suggests it (>10)
+        if ca_info["can_be_20"] and numeric_val > 10:
+            max_val = 20
+        else:
+            max_val = ca_info["max"]
+    elif col_normalized == "Total CA":
+        max_val = config["ca_total_max"]
+    elif col_normalized == "Exam":
+        max_val = config["exam_max"]
+    elif col_normalized in ["Grand Total", "Total Score"]:
+        max_val = config["grand_total_max"]
+
+    if max_val is not None and numeric_val > max_val:
+        warnings.append("{} score {} exceeds max {} — capped".format(column_name, numeric_val, max_val))
+        numeric_val = max_val
+
+    if numeric_val < 0:
+        warnings.append("{} score {} is negative — set to 0".format(column_name, numeric_val))
+        numeric_val = 0
+
+    # Return as int if whole number, else float
+    if numeric_val == int(numeric_val):
+        return (int(numeric_val), warnings)
+    return (round(numeric_val, 1), warnings)
+
+def compute_derived_scores(student_scores, config=None):
+    """Given a dict of {column: value}, compute Total CA, Grand Total, Grade, Remarks.
+    Returns (derived_dict, warnings_list).
+    derived_dict adds: Total CA, Grand Total, Grade, Remarks
+    """
+    if config is None:
+        config = NIGERIAN_MARK_BOOK_CONFIG
+    warnings = []
+    result = dict(student_scores)  # Copy original
+
+    # Collect CA values
+    ca_sum = 0
+    ca_count = 0
+    has_any_ca = False
+    for ca_name in config["ca_columns"]:
+        val = student_scores.get(ca_name)
+        if val is not None and str(val).strip() != '' and str(val).upper() != 'ABS':
+            try:
+                ca_sum += float(val)
+                ca_count += 1
+                has_any_ca = True
+            except (ValueError, TypeError):
+                pass
+
+    # Compute Total CA = sum(CAs) ÷ 2
+    if has_any_ca:
+        total_ca = round(ca_sum / 2, 1)
+        if total_ca > config["ca_total_max"]:
+            warnings.append("Total CA {} exceeds max {} — capped".format(total_ca, config["ca_total_max"]))
+            total_ca = config["ca_total_max"]
+        result["Total CA"] = total_ca
+
+        # Check if AI-provided Total CA differs
+        ai_total_ca = student_scores.get("Total CA")
+        if ai_total_ca is not None and str(ai_total_ca).strip() != '' and str(ai_total_ca).upper() != 'ABS':
+            try:
+                ai_val = float(ai_total_ca)
+                if abs(ai_val - total_ca) > 0.5:
+                    warnings.append("AI Total CA ({}) differs from computed ({})".format(ai_val, total_ca))
+            except (ValueError, TypeError):
+                pass
+    else:
+        total_ca = None
+
+    # Get Exam score
+    exam_val = student_scores.get("Exam")
+    exam_numeric = None
+    if exam_val is not None and str(exam_val).strip() != '' and str(exam_val).upper() != 'ABS':
+        try:
+            exam_numeric = float(exam_val)
+        except (ValueError, TypeError):
+            pass
+
+    # Compute Grand Total = Total CA + Exam
+    if total_ca is not None and exam_numeric is not None:
+        grand_total = round(total_ca + exam_numeric, 1)
+        if grand_total > config["grand_total_max"]:
+            warnings.append("Grand Total {} exceeds max {} — capped".format(grand_total, config["grand_total_max"]))
+            grand_total = config["grand_total_max"]
+        result["Grand Total"] = grand_total
+
+        # Grade and Remarks
+        for low, high, grade, remark in config["grade_map"]:
+            if low <= grand_total <= high:
+                result["Grade"] = grade
+                result["Remarks"] = remark
+                break
+    elif total_ca is not None:
+        result["Grand Total"] = ""
+        result["Grade"] = ""
+        result["Remarks"] = ""
+
+    return (result, warnings)
+
+def compute_term_averages(term_totals, current_term):
+    """Compute cumulative term average.
+    term_totals: {"1st Term": 72, "2nd Term": 68, "3rd Term": 75}
+    current_term: "2nd Term" → (72 + 68) / 2 = 70
+    current_term: "3rd Term" → (72 + 68 + 75) / 3 = 71.67
+    Returns: (average, terms_included_count) or (None, 0) if no valid data
+    """
+    terms_order = ["1st Term", "2nd Term", "3rd Term"]
+    if current_term not in terms_order:
+        return (None, 0)
+    end_idx = terms_order.index(current_term) + 1
+    relevant_terms = terms_order[:end_idx]
+
+    valid_totals = []
+    for t in relevant_terms:
+        val = term_totals.get(t)
+        if val is not None and str(val).strip() != '' and str(val).upper() != 'ABS':
+            try:
+                valid_totals.append(float(val))
+            except (ValueError, TypeError):
+                pass
+
+    if not valid_totals:
+        return (None, 0)
+    return (round(sum(valid_totals) / len(valid_totals), 1), len(valid_totals))
+
+def get_grade_and_remark(score, config=None):
+    """Get grade and remark for a numeric score."""
+    if config is None:
+        config = NIGERIAN_MARK_BOOK_CONFIG
+    try:
+        val = float(score)
+    except (ValueError, TypeError):
+        return ("", "")
+    for low, high, grade, remark in config["grade_map"]:
+        if low <= val <= high:
+            return (grade, remark)
+    return ("", "")
 
 # The prompt instructions for the AI model
 SYSTEM_PROMPT = """
-You are an expert OCR Assistant helping a teacher grade test scripts.
+You are an expert OCR Assistant helping a Nigerian teacher grade test scripts.
 I will provide you with images of handwritten test scripts. 
 For EACH image, extract the following information:
-1. Student Name (usually found at the top, e.g., "Name: ..."). Names may be long and written in ALL CAPS block letters (e.g., "ALARE OLUWAPELUMI OPEYEMI").
+1. Student Name (usually found at the top, e.g., "Name: ..."). Names may be long and written in ALL CAPS block letters (e.g., "ALARE OLUWAPELUMI OPEYEMI"). Combine first name, middle name, and surname into one field.
 2. Student Class (usually found near the name, e.g., "Class: ..."). Classes might contain superscript letters (like SS1^Q or cursive); normalize this to standard text (e.g., "SS1Q").
-3. Score (This is typically handwritten in **red ink**, often as a fraction like "8/10". Look carefully at the left margin—the score might be written VERY LARGE, spanning multiple lines, or circled. Always combine the numerator and denominator if you find them spread out.)
+3. Score (This is typically handwritten in **red ink**, often as a fraction like "8/10". Look carefully at the left margin — the score might be written VERY LARGE, spanning multiple lines, or circled. Always combine numerator and denominator if spread out.)
+   - NIGERIAN MARK BOOK AWARENESS: Scores may be out of 10 (for CA tests) or 70 (for Exams). "8/10" means a CA score of 8. "52/70" means an Exam score of 52.
+   - Extract ONLY the numerator (the student's actual mark).
+   - If the score says "AB", "-", "/" or "NIL", this means ABSENT — return "ABS" as the score.
+   - Handle fractional scores: 6½ = 6.5, 8½ = 8.5
+   - If a number is crossed out and rewritten, use the CORRECTED (newer) value.
 4. Confidence (How confident you are that the extracted data is correct: "High", "Medium", or "Low". Use "Low" when handwriting is very messy or fields are partially obscured.)
 
 If an image is unreadable or you cannot find a specific field, return null for that field and set confidence to "Low".
@@ -222,12 +467,16 @@ def recent_sessions():
         return jsonify([]), 200
 
 def suggest_next_assessment(existing):
-    """Suggest the next logical assessment type based on what already exists."""
-    order = ["1st CA", "2nd CA", "Exam"]
-    for a in order:
+    """Suggest the next logical assessment type based on what already exists.
+    Uses the full Nigerian mark book assessment order.
+    """
+    order = NIGERIAN_MARK_BOOK_CONFIG["assessment_order"]
+    # Skip computed columns (Total CA, Grand Total) — those are auto-calculated
+    scannable = [a for a in order if a not in ["Total CA", "Grand Total"]]
+    for a in scannable:
         if a not in existing:
             return a
-    return "Score"
+    return "Complete ✓"
 
 @app.route('/api/classes', methods=['GET', 'POST'])
 def handle_classes():
@@ -1537,37 +1786,74 @@ def assistant_build_excel():
         
         df = pd.DataFrame(extracted_data)
         
-        # --- Auto-compute mark book columns if applicable ---
-        # Nigerian standard: CAs (cols 1-5) ÷ 2 = Total CA (30). Exam (70). Grand Total = Total CA + Exam (100)
-        ca_columns = [c for c in df.columns if c.lower() in ['1st ca', '2nd ca', 'open day', 'note', 'note book', 'assignment', 'attendance']]
-        has_exam = any(c.lower() == 'exam' for c in df.columns)
-        exam_col = next((c for c in df.columns if c.lower() == 'exam'), None)
+        # --- Normalize column names using grading engine ---
+        rename_map = {}
+        for col in df.columns:
+            normalized = normalize_column_name(col)
+            if normalized != col:
+                rename_map[col] = normalized
+        if rename_map:
+            df = df.rename(columns=rename_map)
         
-        if len(ca_columns) >= 2:
-            # Convert CA columns to numeric
-            for col in ca_columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-            # Auto-compute Total CA if not already present
-            if not any(c.lower() in ['total ca', 'total'] for c in df.columns):
-                df['Total CA'] = (df[ca_columns].sum(axis=1) / 2).round(1)
-            
-            # Auto-compute Grand Total if Exam column exists and Grand Total isn't already present
-            if has_exam and not any(c.lower() in ['grand total', 'total score'] for c in df.columns):
-                df[exam_col] = pd.to_numeric(df[exam_col], errors='coerce').fillna(0)
-                total_ca_col = 'Total CA' if 'Total CA' in df.columns else next((c for c in df.columns if c.lower() == 'total ca'), None)
-                if total_ca_col:
-                    df['Grand Total'] = (df[total_ca_col] + df[exam_col]).round(1)
+        # --- Validate and cap scores ---
+        config = NIGERIAN_MARK_BOOK_CONFIG
+        all_warnings = []
+        score_cols = [c for c in df.columns if c in config["ca_columns"] or c in ["Exam", "Total CA", "Grand Total"]]
+        for col in score_cols:
+            for idx in df.index:
+                val = df.at[idx, col]
+                if val is not None and str(val).strip() != '':
+                    cleaned, warns = validate_and_cap_score(col, val)
+                    df.at[idx, col] = cleaned
+                    all_warnings.extend(warns)
         
-        # Reorder columns: name first, then CAs, then Total CA, Exam, Grand Total
-        desired_order = ['name'] + ca_columns
-        if 'Total CA' in df.columns:
-            desired_order.append('Total CA')
-        if exam_col and exam_col in df.columns:
-            desired_order.append(exam_col)
+        # --- Auto-compute derived columns using grading engine ---
+        ca_columns = [c for c in df.columns if c in config["ca_columns"]]
+        has_enough_data = len(ca_columns) >= 2
+        
+        if has_enough_data:
+            for idx in df.index:
+                row_scores = {}
+                for col in ca_columns:
+                    val = df.at[idx, col]
+                    if val is not None and str(val).strip() != '' and str(val).upper() != 'ABS':
+                        try:
+                            row_scores[col] = float(val)
+                        except (ValueError, TypeError):
+                            pass
+                # Include Exam if present
+                if 'Exam' in df.columns:
+                    exam_val = df.at[idx, 'Exam']
+                    if exam_val is not None and str(exam_val).strip() != '' and str(exam_val).upper() != 'ABS':
+                        try:
+                            row_scores['Exam'] = float(exam_val)
+                        except (ValueError, TypeError):
+                            pass
+                
+                if row_scores:
+                    derived, warns = compute_derived_scores(row_scores)
+                    all_warnings.extend(warns)
+                    for key in ['Total CA', 'Grand Total', 'Grade', 'Remarks']:
+                        if key in derived:
+                            df.at[idx, key] = derived[key]
+        
+        # --- Add Position (ranking) ---
         if 'Grand Total' in df.columns:
-            desired_order.append('Grand Total')
-        # Add any remaining columns not yet included
+            numeric_gt = pd.to_numeric(df['Grand Total'], errors='coerce')
+            df['Position'] = numeric_gt.rank(method='min', ascending=False)
+            def format_pos(rank):
+                if pd.isna(rank): return ''
+                r = int(rank)
+                if 11 <= (r % 100) <= 13: return "{}th".format(r)
+                suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+                return "{}{}".format(r, suffix)
+            df['Position'] = df['Position'].apply(format_pos)
+        
+        # --- Reorder columns: name → CAs → Total CA → Exam → Grand Total → Grade → Remarks → Position ---
+        desired_order = ['name'] + ca_columns
+        for extra in ['Total CA', 'Exam', 'Grand Total', 'Grade', 'Remarks', 'Position']:
+            if extra in df.columns:
+                desired_order.append(extra)
         remaining = [c for c in df.columns if c not in desired_order]
         final_order = [c for c in desired_order if c in df.columns] + remaining
         df = df[final_order]
