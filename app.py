@@ -1457,6 +1457,16 @@ CRITICAL RULES:
 8. **PAGE CONTINUITY**: If multiple images show pages of the SAME class (continuing serial numbers), combine all rows into one array. Do NOT create separate arrays per image.
 9. **SERIAL NUMBERS**: Do NOT include the S/N or serial number column unless specifically asked.
 10. **AUTO-DETECT CLASS INFO**: If you can see a class name (e.g. "SS 1T", "SS2Q") or term (e.g. "1st Term", "2nd Term") written at the top of the sheet, note them but still focus on extracting the table data.
+11. **NIGERIAN MARK BOOK STRUCTURE**: The standard record sheet follows this grading system:
+   - Columns 1-5 are Continuous Assessments: 1st CA, 2nd CA, Open Day, Note Book, Assignment/Attendance
+   - EACH column is out of 10, EXCEPT one column (usually Open Day or the combined one) which can be out of 20
+   - Columns 1-5 are summed and DIVIDED BY 2 to get "Total CA" (max 30)
+   - "Exam" column is out of 70
+   - "Grand Total" = Total CA + Exam (max 100)
+   - For MULTI-TERM sheets: 2nd Term Grand Total averages current + 1st Term total (÷ 2). 3rd Term averages all three (÷ 3).
+   - The standard column order is: name, 1st CA, 2nd CA, Open Day, Note, Assignment, Total CA, Exam, Total
+   - Output the RAW scores you read. Do NOT compute totals yourself — just extract what is written.
+12. **NUMERIC VALUES**: All score values should be numbers (integers or decimals), NOT strings. Use 0 for a zero score, "" for missing/unreadable.
 """.format(instruction=instruction, roster_context=roster_context)
 
         # Call AI
@@ -1526,6 +1536,41 @@ def assistant_build_excel():
             return jsonify({"error": "No data to build Excel from"}), 400
         
         df = pd.DataFrame(extracted_data)
+        
+        # --- Auto-compute mark book columns if applicable ---
+        # Nigerian standard: CAs (cols 1-5) ÷ 2 = Total CA (30). Exam (70). Grand Total = Total CA + Exam (100)
+        ca_columns = [c for c in df.columns if c.lower() in ['1st ca', '2nd ca', 'open day', 'note', 'note book', 'assignment', 'attendance']]
+        has_exam = any(c.lower() == 'exam' for c in df.columns)
+        exam_col = next((c for c in df.columns if c.lower() == 'exam'), None)
+        
+        if len(ca_columns) >= 2:
+            # Convert CA columns to numeric
+            for col in ca_columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+            # Auto-compute Total CA if not already present
+            if not any(c.lower() in ['total ca', 'total'] for c in df.columns):
+                df['Total CA'] = (df[ca_columns].sum(axis=1) / 2).round(1)
+            
+            # Auto-compute Grand Total if Exam column exists and Grand Total isn't already present
+            if has_exam and not any(c.lower() in ['grand total', 'total score'] for c in df.columns):
+                df[exam_col] = pd.to_numeric(df[exam_col], errors='coerce').fillna(0)
+                total_ca_col = 'Total CA' if 'Total CA' in df.columns else next((c for c in df.columns if c.lower() == 'total ca'), None)
+                if total_ca_col:
+                    df['Grand Total'] = (df[total_ca_col] + df[exam_col]).round(1)
+        
+        # Reorder columns: name first, then CAs, then Total CA, Exam, Grand Total
+        desired_order = ['name'] + ca_columns
+        if 'Total CA' in df.columns:
+            desired_order.append('Total CA')
+        if exam_col and exam_col in df.columns:
+            desired_order.append(exam_col)
+        if 'Grand Total' in df.columns:
+            desired_order.append('Grand Total')
+        # Add any remaining columns not yet included
+        remaining = [c for c in df.columns if c not in desired_order]
+        final_order = [c for c in desired_order if c in df.columns] + remaining
+        df = df[final_order]
         
         # Build a descriptive filename
         name_parts = []
