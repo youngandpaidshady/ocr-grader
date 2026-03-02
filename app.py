@@ -2266,6 +2266,7 @@ EXAMPLE INPUT→OUTPUT MAPPINGS (follow these patterns exactly):
 - "Adekunie should be 8" → action: "correct_score", params: {{student_name: "Adekunie", new_score: "8"}}
 - "Fix Tunde's score to 15" → action: "correct_score", params: {{student_name: "Tunde", new_score: "15"}}
 - "Add 5 points to everyone" / "Delete students below 40" → action: "edit_excel", params: {{instruction: "add 5 points to everyone"}}
+- "Make the excel our standard format" / "Convert to standard format" / "Make it mark book format" → action: "edit_excel", params: {{instruction: "Restructure this Excel into the Nigerian school mark book standard format. The standard column order is: name, 1st CA, 2nd CA, Open Day, Note, Assignment, Total CA (sum of CAs ÷ 2, max 30), Exam (max 70), Grand Total (Total CA + Exam, max 100). Rename any detected score/assessment columns to match. Compute Total CA and Grand Total if raw CA and Exam scores exist. Keep the name column as-is."}}
 - "Scan this image and extract Name, 1st CA, and 2nd CA into an excel file" → action: "scan_image_to_excel", params: {{instruction: "extract Name, 1st CA, and 2nd CA"}}
 - "Scan this image for SS 1Q and extract Name, 1st CA, and 2nd CA" → action: "scan_image_to_excel", params: {{instruction: "extract Name, 1st CA, and 2nd CA", class_name: "SS 1Q"}}
 - "This is SS 1T Mathematics, extract everything" → action: "scan_image_to_excel", params: {{instruction: "extract all columns", class_name: "SS 1T", subject_name: "Mathematics"}}
@@ -2304,6 +2305,10 @@ INTELLIGENCE RULES:
 14. SMART COLUMN GUESSING: Nigerian record sheets often have these columns: 1st CA, 2nd CA, Open Day, Note Book, Assignment, Attendance, Total, Exam, Grand Total. If teacher says "extract all columns" or "everything", use these standard names.
 15. AUTO-DETECT FROM IMAGE: If the teacher says "just scan it" without specifying columns, ask them: "I can see this looks like a record sheet. Want me to extract ALL the columns I can see, or just specific ones like 1st CA and 2nd CA?"
 16. MULTI-CLASS UPLOADS: If teacher uploads multiple images and says they're for DIFFERENT classes, ask which image is for which class. Do NOT assume all images are the same class.
+17. STANDARD FORMAT: When teacher says "standard format", "our format", "mark book format", or "convert to standard" — they want the Nigerian school mark book structure:
+    - Column order: name, 1st CA (10), 2nd CA (10), Open Day (10-20), Note (10), Assignment (10), Total CA (CAs÷2, max 30), Exam (70), Grand Total (100)
+    - Use action "edit_excel" with a detailed instruction to restructure the columns. The instruction should tell the AI editor to rename score columns to standard names, compute Total CA = sum(CAs)/2, and Grand Total = Total CA + Exam.
+    - If the uploaded Excel only has "name" and "score" (one column), ask the teacher: "Which assessment is this score for? (1st CA, 2nd CA, Exam, etc.)"
 
 {conversation}
 
