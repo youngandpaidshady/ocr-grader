@@ -1772,18 +1772,18 @@ async function handleAssistantFileUpload(input) {
                     </div>
                 `;
             }
-        }
-    } catch (err) {
-        document.getElementById('upload-typing')?.remove();
-        chatEl.innerHTML += `
-            <div class="flex justify-start mb-3">
-                <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
-                    <p class="text-sm text-destructive">Upload failed: ${err.message}</p>
+        } catch (err) {
+            document.getElementById('upload-typing')?.remove();
+            chatEl.innerHTML += `
+                <div class="flex justify-start mb-3">
+                    <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
+                        <p class="text-sm text-destructive">Upload failed: ${err.message}</p>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
+        chatEl.scrollTop = chatEl.scrollHeight;
     }
-    chatEl.scrollTop = chatEl.scrollHeight;
 }
 
 function fileToBase64(file) {
