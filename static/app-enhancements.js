@@ -1193,6 +1193,54 @@ async function executeAssistantAction(action, params) {
             }
             break;
         }
+        case 'scan_image_to_excel': {
+            if (typeof _assistantUploadedFile !== 'undefined' && _assistantUploadedFile && _assistantUploadedFile.type.startsWith('image/')) {
+                const chatEl = document.getElementById('assistant-chat');
+                if (chatEl) {
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning complex table into Excel...</p></div></div>`;
+                    chatEl.scrollTop = chatEl.scrollHeight;
+                }
+                const scanFormData = new FormData();
+                scanFormData.append('image', _assistantUploadedFile);
+                scanFormData.append('instruction', params?.instruction || message || '');
+                try {
+                    const scanResp = await fetch('/api/assistant-scan-to-excel', {
+                        method: 'POST',
+                        body: scanFormData
+                    });
+                    const scanData = await scanResp.json();
+                    chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
+
+                    if (scanData.success) {
+                        if (chatEl) {
+                            chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[90%]">
+                                <p class="text-sm text-emerald-400 font-bold mb-1"><i class="fa-solid fa-check-circle mr-1.5"></i>${scanData.message}</p>
+                                <a href="${scanData.download_url}" class="inline-flex mt-2 items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down"></i> Download Excel File</a>
+                            </div></div>`;
+                            chatEl.scrollTop = chatEl.scrollHeight;
+                        }
+                    } else {
+                        if (chatEl) {
+                            chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-amber-400">${scanData.error || 'Could not scan table.'}</p></div></div>`;
+                            chatEl.scrollTop = chatEl.scrollHeight;
+                        }
+                    }
+                } catch (scanErr) {
+                    chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
+                    if (chatEl) {
+                        chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-destructive">Scan failed: ${scanErr.message}</p></div></div>`;
+                        chatEl.scrollTop = chatEl.scrollHeight;
+                    }
+                }
+            } else {
+                const chatEl = document.getElementById('assistant-chat');
+                if (chatEl) {
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-amber-400 font-bold"><i class="fa-solid fa-image mr-1.5"></i>Please upload an image of the table first using the 📎 button.</p></div></div>`;
+                    chatEl.scrollTop = chatEl.scrollHeight;
+                }
+            }
+            break;
+        }
         case 'add_class':
             hideModal();
             document.getElementById('btn-open-paste-modal')?.click();

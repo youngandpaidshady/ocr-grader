@@ -1395,7 +1395,86 @@ def move_student():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+@app.route('/api/assistant-scan-to-excel', methods=['POST'])
+def assistant_scan_to_excel():
+    """Receives an image + instruction, uses Vision AI to extract a table, returns an Excel file."""
+    try:
+        if 'image' not in request.files:
+            return jsonify({"error": "No image uploaded"}), 400
+        
+        instruction = request.form.get('instruction', '').strip()
+        if not instruction:
+            return jsonify({"error": "No instruction provided"}), 400
+            
+        file = request.files['image']
+        
+        # Read image
+        img_bytes = file.read()
+        image_parts = [{"mime_type": file.content_type, "data": img_bytes}]
+        
+        prompt = """
+You are an expert OCR and data extraction AI. A teacher has uploaded an image of a document (often handwritten) and given you specific instructions on how to parse it into a structured table.
 
+TEACHER'S INSTRUCTION: "{instruction}"
+
+Your job is to read the image and generate a JSON array of objects representing the rows of the table. Every column requested by the teacher MUST be a key in every JSON object. 
+
+RULES:
+- Return ONLY a raw JSON array. Start with [ and end with ]. No markdown, no backticks, no explanations.
+- If the teacher asks to extract specific columns (e.g. 'Name', '1st CA', 'Note'), those exact names must be the keys in your JSON.
+- If a value is missing or unreadable, use an empty string "" for that key. Do not omit the key.
+""".format(instruction=instruction)
+
+        # Call AI
+        raw_text = None
+        for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
+            try:
+                # Use Gemini 2.5 Flash for multimodal
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                response = model.generate_content([prompt, image_parts[0]])
+                raw_text = response.text.strip()
+                break
+            except Exception as model_err:
+                err_str = str(model_err).lower()
+                if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                    if 'rotate_api_key' in globals():
+                        rotate_api_key()
+                    continue
+                raise model_err
+                
+        if not raw_text:
+            return jsonify({"error": "AI service busy. Please try again."}), 503
+            
+        # Parse JSON
+        raw_text = re_mod.sub(r'```json\n?', '', raw_text)
+        raw_text = re_mod.sub(r'```\n?', '', raw_text)
+        
+        extracted_data = json.loads(raw_text)
+        
+        if not isinstance(extracted_data, list) or len(extracted_data) == 0:
+            return jsonify({"error": "No valid data or table found in the image based on your instructions."}), 400
+            
+        # Create Excel File
+        df = pd.DataFrame(extracted_data)
+        
+        output_filename = "Extracted_Data_{}.xlsx".format(int(time.time()))
+        output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
+        
+        df.to_excel(output_path, index=False, engine='openpyxl')
+        
+        return jsonify({
+            "success": True,
+            "message": "Successfully extracted {} rows based on your instructions.".format(len(df)),
+            "row_count": len(df),
+            "download_url": "/api/download-edited-excel?file={}".format(output_filename)
+        }), 200
+
+    except json.JSONDecodeError as e:
+        print("Assistant Image Scan JSON Error: {}".format(raw_text))
+        return jsonify({"error": "AI misunderstood the instruction and didn't output valid table data. Try rephrasing."}), 400
+    except Exception as e:
+        print("Assistant Image Scan Error: {}".format(e))
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/assistant-edit-excel', methods=['POST'])
 def assistant_edit_excel():
@@ -1743,6 +1822,7 @@ ACTIONS YOU CAN TAKE (pick the best one):
         "find_at_risk" - List students who are failing or at risk
         "generate_report" - Create a formatted summary for admin/principal
         "edit_excel" - Edit an uploaded Excel file based on instructions (e.g. "add 5 marks to everyone")
+        "scan_image_to_excel" - Extract requested columns from an uploaded image specifically into an Excel file.
         "none" - Just a conversational answer, no action needed
     "params": {{
         "class_name": "...",
@@ -1774,6 +1854,7 @@ EXAMPLE INPUT→OUTPUT MAPPINGS (follow these patterns exactly):
 - "Adekunie should be 8" → action: "correct_score", params: {{student_name: "Adekunie", new_score: "8"}}
 - "Fix Tunde's score to 15" → action: "correct_score", params: {{student_name: "Tunde", new_score: "15"}}
 - "Add 5 points to everyone" / "Delete students below 40" → action: "edit_excel", params: {{instruction: "add 5 points to everyone"}}
+- "Scan this image and extract Name, 1st CA, and 2nd CA into an excel file" → action: "scan_image_to_excel", params: {{instruction: "extract Name, 1st CA, and 2nd CA"}}
 - "Read this file" / "What is in this excel?" → action: "none" (Just read it and summarize conversationaly!)
 - "Where is the edited file?" / "Did you edit it?" → action: "none" (Answer the question conversationally, DO NOT use edit_excel!)
 - "Add Fatimah to SS 1Q" → action: "add_student", params: {{student_name: "Fatimah", class_name: "SS 1Q"}}
