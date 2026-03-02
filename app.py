@@ -1437,9 +1437,10 @@ You must return a JSON object with an "edits" array. Each edit is one of:
 3. {{"type": "delete_rows", "condition_column": "Score", "condition": "< 40"}} — delete rows matching a condition
 4. {{"type": "add_row", "data": {{"Name": "John", "Score": 80}}}} — add a new row
 5. {{"type": "rename_column", "old_name": "Marks", "new_name": "Score"}} — rename a column
+6. {{"type": "add_column", "column": "Assignment", "default_value": "0"}} - add a new column (if the user asks to modify a column that doesn't exist, you MUST add it first!)
 
 RULES:
-- If a teacher says "add 5 to [Column Name]", use "update_column" with expression "x + 5" for that specific column.
+- If a teacher says "add 5 to [Column Name]", use "update_column" with expression "x + 5" for that specific column. BUT if that column does NOT exist in the Current Columns list above, you MUST return TWO edits: first "add_column" to create it with default_value 0, then "update_column" to add 5 to it.
 - x represents the current cell value. The math expression must use ONLY `x` (e.g. `x + 5`, `x * 10`).
 
 Return ONLY raw JSON. Example:
@@ -1486,6 +1487,17 @@ Return ONLY raw JSON. Example:
                 col = edit.get('column', '')
                 if col in df.columns and 0 <= row < len(df):
                     df.at[row, col] = edit.get('value')
+                    changes_made += 1
+                    
+            elif edit_type == 'add_column':
+                col = edit.get('column', '')
+                default_val = edit.get('default_value', '')
+                if col and col not in df.columns:
+                    # check if default_val is numeric string
+                    if str(default_val).replace('.','',1).replace('-','',1).isdigit():
+                        df[col] = float(default_val)
+                    else:
+                        df[col] = default_val
                     changes_made += 1
                     
             elif edit_type == 'update_column':
@@ -1736,6 +1748,7 @@ EXAMPLE INPUT→OUTPUT MAPPINGS (follow these patterns exactly):
 - "Fix Tunde's score to 15" → action: "correct_score", params: {{student_name: "Tunde", new_score: "15"}}
 - "Add 5 points to everyone" / "Delete students below 40" → action: "edit_excel", params: {{instruction: "add 5 points to everyone"}}
 - "Read this file" / "What is in this excel?" → action: "none" (Just read it and summarize conversationaly!)
+- "Where is the edited file?" / "Did you edit it?" → action: "none" (Answer the question conversationally, DO NOT use edit_excel!)
 - "Add Fatimah to SS 1Q" → action: "add_student", params: {{student_name: "Fatimah", class_name: "SS 1Q"}}
 - "Only one student" or "For a student..." → action: "add_student"
 - "Show results" / "See scores" → action: "view_standings"
@@ -1757,6 +1770,7 @@ INTELLIGENCE RULES:
 9. CONVERSATION MEMORY: Use history context. "yes"/"ok"/"do it" = execute previous action.
 10. ALWAYS return valid JSON with "response", "action" and "params". For general LLM tasks, use action "none" and put your full, rich answer in "response".
 11. READ VS EDIT EXCEL: If the teacher asks you to simply "read", "review", or "tell me what you found" about an uploaded Excel file, DO NOT use "edit_excel". Only use "edit_excel" if they explicitly ask you to MODIFY data (e.g. add, delete, rename). If they just want to read, use action "none" and summarize it in the response based on the "Context" I provided you about the upload.
+12. AVOID FALSE EDITS: If the teacher asks a question LIKE "where is the edited file?", they are asking a question, NOT giving an instruction to edit an Excel file. Use action "none".
 
 {conversation}
 
