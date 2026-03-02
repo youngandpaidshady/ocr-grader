@@ -1132,26 +1132,9 @@ def export_excel():
                 # Update the new assessment column (this will overwrite previous session's value IF they regrade the SAME assessment)
                 merged_by_class[class_name][target_name][assessment_type] = score
         
-        # 4. Fill in missing roster students (if general mode)
-        class_filter = data.get('classList', [])
-        if subject_mode == 'general' and class_filter:
-            for class_name in class_filter:
-                c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
-                if c:
-                    roster = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
-                    if class_name not in merged_by_class:
-                        merged_by_class[class_name] = {}
-                        
-                    existing_names = list(merged_by_class[class_name].keys())
-                    for s in roster:
-                        found_name = s.name
-                        if existing_names:
-                            best = process.extractOne(s.name, existing_names, scorer=fuzz.token_set_ratio)
-                            if best and best[1] >= 85:
-                                found_name = best[0]
-                        
-                        if found_name not in merged_by_class[class_name]:
-                            merged_by_class[class_name][s.name] = {"Name": s.name, "Class": class_name}
+        # NOTE: DB stores only student names + class (roster).
+        # Excel output contains ONLY scanned students + existingRecords. 
+        # We do NOT pad with the full roster — only what the teacher has data for.
 
         # === COMPUTE & GROUP BY CLASS LEVEL ===
         level_groups = {}  # {level: {arm: [results]}}
@@ -1220,17 +1203,150 @@ def export_excel():
             sheets_dict = {}
             
             for class_name, rows in classes_in_level.items():
-                all_terms = ["1st Term", "2nd Term", "3rd Term", "Annual"]
+                # Exactly 3 terms as per physical mark book — NO Annual tab
+                all_terms = ["1st Term", "2nd Term", "3rd Term"]
                 base_df = pd.DataFrame(rows)
-                standard_cols = ['Name', 'Class', '1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment', 'Total CA', 'Exam', 'Grand Total', 'Grade', 'Remarks']
+                standard_ca_cols = ['1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment']
+                
+                # Build a lookup of previous term Grand Totals from existingRecords
+                prev_term_totals = {}  # {student_name: {"1st Term": total, "2nd Term": total}}
+                if existing_records and isinstance(existing_records, list):
+                    for rec in existing_records:
+                        rname = str(rec.get('Name', '')).strip().title()
+                        if not rname:
+                            continue
+                        if rname not in prev_term_totals:
+                            prev_term_totals[rname] = {}
+                        # Check for previous term total columns
+                        for prev_key in ['1st Term Total', '2nd Term Total', '3rd Term Total']:
+                            val = rec.get(prev_key)
+                            if val is not None and str(val).strip() != '':
+                                try:
+                                    prev_term_totals[rname][prev_key] = float(val)
+                                except (ValueError, TypeError):
+                                    pass
+                        # Also check Grand Total as a fallback for the term
+                        gt = rec.get('Grand Total')
+                        if gt is not None and str(gt).strip() != '':
+                            try:
+                                prev_term_totals[rname]['_grand_total'] = float(gt)
+                            except (ValueError, TypeError):
+                                pass
                 
                 for t in all_terms:
                     sheet_name = "{} - {}".format(class_name[:20], t[:10])
                     
                     if t == term:
+                        # Active term — use the populated data
                         df = base_df.copy()
-                        rank_col = 'Grand Total' if 'Grand Total' in df.columns and len(df['Grand Total'].dropna()) > 0 else (
-                                   'Total CA' if 'Total CA' in df.columns and len(df['Total CA'].dropna()) > 0 else None)
+                    else:
+                        # Inactive term — blank template with student names
+                        empty_rows = [{"Name": r.get('Name'), "Class": r.get('Class')} for r in rows]
+                        df = pd.DataFrame(empty_rows)
+                    
+                    # Build standard columns: CA1-5, Total CA, Exam, Grand Total, Grade, Remarks
+                    for col in standard_ca_cols + ['Total CA', 'Exam', 'Grand Total', 'Grade', 'Remarks']:
+                        if col not in df.columns:
+                            df[col] = ''
+                    
+                    # === CUMULATIVE COLUMNS based on term ===
+                    if t == "2nd Term":
+                        # Add "1st Term Total" column pulled from previous data
+                        first_totals = []
+                        for _, row in df.iterrows():
+                            sname = str(row.get('Name', '')).strip().title()
+                            pt = prev_term_totals.get(sname, {})
+                            val = pt.get('1st Term Total', pt.get('_grand_total', ''))
+                            first_totals.append(val)
+                        df['1st Term Total'] = first_totals
+                        
+                        # "1st & 2nd" = 1st Term Total + 2nd Term Grand Total
+                        cumulative = []
+                        for _, row in df.iterrows():
+                            t1 = row.get('1st Term Total', '')
+                            t2 = row.get('Grand Total', '')
+                            try:
+                                t1_val = float(t1) if t1 != '' else None
+                                t2_val = float(t2) if t2 != '' else None
+                                if t1_val is not None and t2_val is not None:
+                                    cumulative.append(round(t1_val + t2_val, 1))
+                                else:
+                                    cumulative.append('')
+                            except (ValueError, TypeError):
+                                cumulative.append('')
+                        df['1st & 2nd'] = cumulative
+                        
+                    elif t == "3rd Term":
+                        # Add "1st Term Total" and "2nd Term Total" columns
+                        first_totals = []
+                        second_totals = []
+                        for _, row in df.iterrows():
+                            sname = str(row.get('Name', '')).strip().title()
+                            pt = prev_term_totals.get(sname, {})
+                            first_totals.append(pt.get('1st Term Total', ''))
+                            second_totals.append(pt.get('2nd Term Total', ''))
+                        df['1st Term Total'] = first_totals
+                        df['2nd Term Total'] = second_totals
+                        
+                        # "1st 2nd & 3rd" = sum of all 3 Grand Totals
+                        cumulative = []
+                        averages = []
+                        for _, row in df.iterrows():
+                            t1 = row.get('1st Term Total', '')
+                            t2 = row.get('2nd Term Total', '')
+                            t3 = row.get('Grand Total', '')
+                            vals = []
+                            for v in [t1, t2, t3]:
+                                try:
+                                    if v != '' and v is not None:
+                                        vals.append(float(v))
+                                except (ValueError, TypeError):
+                                    pass
+                            if vals:
+                                total = round(sum(vals), 1)
+                                avg = round(total / 3.0, 1)
+                                cumulative.append(total)
+                                averages.append(avg)
+                            else:
+                                cumulative.append('')
+                                averages.append('')
+                        df['1st 2nd & 3rd'] = cumulative
+                        df['Average'] = averages
+                    
+                    # === BUILD FINAL COLUMN ORDER ===
+                    final_cols = ['Name', 'Class']
+                    for col in standard_ca_cols:
+                        final_cols.append(col)
+                    final_cols.extend(['Total CA', 'Exam', 'Grand Total'])
+                    
+                    # Add cumulative columns in the right position
+                    if t == "2nd Term":
+                        final_cols.extend(['1st Term Total', '1st & 2nd'])
+                    elif t == "3rd Term":
+                        final_cols.extend(['1st Term Total', '2nd Term Total', '1st 2nd & 3rd', 'Average'])
+                    
+                    final_cols.extend(['Grade', 'Remarks'])
+                    
+                    # === RANKING ===
+                    if t == "3rd Term" and 'Average' in df.columns:
+                        # 3rd term: rank by Average
+                        numeric_avg = pd.to_numeric(df['Average'], errors='coerce')
+                        if numeric_avg.dropna().shape[0] > 0:
+                            df['Rank'] = numeric_avg.rank(method='min', ascending=False)
+                            def format_position(rank):
+                                if pd.isna(rank): return ''
+                                r = int(rank)
+                                if 11 <= (r % 100) <= 13: return "{}th".format(r)
+                                suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+                                return "{}{}".format(r, suffix)
+                            df['Position'] = df['Rank'].apply(format_position)
+                            df = df.drop(columns=['Rank'])
+                        else:
+                            df['Position'] = ''
+                    elif t == term:
+                        # Active term: rank by Grand Total or Total CA
+                        rank_col = 'Grand Total' if 'Grand Total' in df.columns and df['Grand Total'].replace('', None).dropna().shape[0] > 0 else (
+                                   'Total CA' if 'Total CA' in df.columns and df['Total CA'].replace('', None).dropna().shape[0] > 0 else None)
                         if rank_col:
                             numeric_scores = pd.to_numeric(df[rank_col], errors='coerce')
                             df['Rank'] = numeric_scores.rank(method='min', ascending=False)
@@ -1245,24 +1361,15 @@ def export_excel():
                         else:
                             df['Position'] = ''
                     else:
-                        empty_rows = [{"Name": r.get('Name'), "Class": r.get('Class')} for r in rows]
-                        df = pd.DataFrame(empty_rows)
                         df['Position'] = ''
-                        
-                    past_term_cols = [c for c in list(df.columns) if "Term Total" in c or "Term Average" in c]
-                    final_cols = ['Name', 'Class'] + past_term_cols
                     
-                    for col in standard_cols[2:]:
-                        final_cols.append(col)
+                    final_cols.append('Position')
+                    
+                    # Ensure all columns exist
+                    for col in final_cols:
                         if col not in df.columns:
                             df[col] = ''
-                            
-                    existing_custom = [c for c in df.columns if c not in final_cols and c not in ['Position', 'Rank']]
-                    final_cols.extend(existing_custom)
                     
-                    if 'Position' not in final_cols:
-                        final_cols.append('Position')
-                        
                     df = df[final_cols]
                     df = df.fillna('')
                     sheets_dict[sheet_name] = df
@@ -1277,7 +1384,9 @@ def export_excel():
                     
                     worksheet.merge_cells('A1:K1')
                     title_cell = worksheet['A1']
-                    title_cell.value = "QSI SMART GRADER SCORESHEET - {}".format(term.upper())
+                    # Parse the term from the sheet name (e.g. "SS 1Q - 1st Term" -> "1st Term")
+                    sheet_term = s_name.split(' - ')[-1] if ' - ' in s_name else term
+                    title_cell.value = "QSI SMART GRADER SCORESHEET - {}".format(sheet_term.upper())
                     title_cell.font = Font(bold=True, size=16)
                     title_cell.alignment = Alignment(horizontal='center', vertical='center')
                     
@@ -1399,7 +1508,7 @@ def download_sheet():
 
 @app.route('/api/upload-excel-scorelist', methods=['POST'])
 def upload_excel_scorelist():
-    """Smart parser for Excel scorelists to allow teachers to resume grading or bulk upload."""
+    """Smart parser for Excel scorelists. Reads ALL term sheets for cumulative grading."""
     try:
         file = request.files.get('file')
         if not file:
@@ -1410,83 +1519,114 @@ def upload_excel_scorelist():
 
         # Read Excel/CSV
         if file.filename.lower().endswith('.csv'):
-            df = pd.read_csv(file)
+            all_sheets = {"Sheet1": pd.read_csv(file)}
         else:
-            df = pd.read_excel(file)
+            # Read ALL sheets for multi-term support
+            xf = pd.ExcelFile(file)
+            all_sheets = {}
+            for sn in xf.sheet_names:
+                all_sheets[sn] = pd.read_excel(file, sheet_name=sn, skiprows=4)
 
-        # --- Smart Detection Logic ---
-        
-        # 1. Detect Name Column
-        name_col = None
-        for col in df.columns:
-            if 'name' in str(col).lower():
-                name_col = col
-                break
-        if not name_col and not df.empty:
-            name_col = df.columns[0] # Fallback to first column
-        
-        if not name_col:
-            return jsonify({"error": "Could not identify a 'Name' column in the sheet."}), 400
+        all_records = []
+        term_data = {}  # {term: [{student records}]}
+        detected_class = None
+        detected_subject = None
+        assessment_types = []
 
-        # 2. Detect Class and Subject Columns
-        class_col = None
-        subj_col = None
-        for col in df.columns:
-            c_low = str(col).lower()
-            if 'class' in c_low: class_col = col
-            if 'subject' in c_low: subj_col = col
+        for sheet_name, df in all_sheets.items():
+            # Parse term from sheet name (e.g. "SS 1Q - 1st Term" -> "1st Term")
+            sheet_term = None
+            if ' - ' in sheet_name:
+                parts = sheet_name.split(' - ')
+                possible_term = parts[-1].strip()
+                if 'term' in possible_term.lower():
+                    sheet_term = possible_term
 
-        # 3. Detect Assessment types (any column that isn't name, class, subject, total, or pos)
-        exclude = [name_col, class_col, subj_col, 'Total Score', 'Position', 'Rank', 'Total']
-        assessment_types = [col for col in df.columns if col not in exclude and not str(col).startswith('Unnamed')]
-
-        # 4. Extract data
-        records = []
-        detected_class = str(df[class_col].iloc[0]) if class_col and not df.empty else None
-        detected_subject = str(df[subj_col].iloc[0]) if subj_col and not df.empty else None
-
-        for _, row in df.iterrows():
-            name = str(row[name_col]).strip().title()
-            if not name or name.lower() in ['nan', 'none']: 
+            # Detect Name Column
+            name_col = None
+            for col in df.columns:
+                if 'name' in str(col).lower():
+                    name_col = col
+                    break
+            if not name_col and not df.empty:
+                name_col = df.columns[0]
+            if not name_col:
                 continue
-            
-            scores = {}
-            for atype in assessment_types:
-                val = str(row[atype]).strip()
-                if val and val.lower() not in ['nan', 'none']:
-                    scores[atype] = val
-                    
-            r = {
-                "name": name,
-                "scores": scores,
-                "class": str(row[class_col]).strip() if class_col else detected_class,
-                "subject": str(row[subj_col]).strip() if subj_col else detected_subject
-            }
-            records.append(r)
 
-        # 5. Magic Catch DB Sync: Ensure known names exist for future camera scans
+            # Detect Class and Subject Columns
+            class_col = None
+            subj_col = None
+            for col in df.columns:
+                c_low = str(col).lower()
+                if 'class' in c_low: class_col = col
+                if 'subject' in c_low: subj_col = col
+
+            # Detect Assessment types
+            exclude = [name_col, class_col, subj_col, 'Total Score', 'Position', 'Rank', 'Total']
+            sheet_assessments = [col for col in df.columns if col not in exclude and not str(col).startswith('Unnamed')]
+            for a in sheet_assessments:
+                if a not in assessment_types:
+                    assessment_types.append(a)
+
+            if not detected_class and class_col and not df.empty:
+                detected_class = str(df[class_col].iloc[0])
+            if not detected_subject and subj_col and not df.empty:
+                detected_subject = str(df[subj_col].iloc[0])
+
+            # Extract data from this sheet
+            sheet_records = []
+            for _, row in df.iterrows():
+                name = str(row[name_col]).strip().title()
+                if not name or name.lower() in ['nan', 'none']:
+                    continue
+
+                scores = {}
+                for atype in sheet_assessments:
+                    val = str(row[atype]).strip()
+                    if val and val.lower() not in ['nan', 'none', '']:
+                        scores[atype] = val
+
+                # Skip rows with no scores at all (blank term sheets)
+                if not scores:
+                    continue
+
+                r = {
+                    "name": name,
+                    "scores": scores,
+                    "class": str(row[class_col]).strip() if class_col else detected_class,
+                    "subject": str(row[subj_col]).strip() if subj_col else detected_subject,
+                    "term": sheet_term
+                }
+                sheet_records.append(r)
+                all_records.append(r)
+
+            if sheet_term and sheet_records:
+                term_data[sheet_term] = sheet_records
+
+        # DB Sync: Ensure student names + class exist in roster (names only, no scores)
         if detected_class:
             c = ClassModel.query.filter(func.lower(ClassModel.name) == detected_class.lower()).first()
             if not c:
                 c = ClassModel(name=detected_class.title())
                 db.session.add(c)
                 db.session.commit()
-            
+
             existing_student_names = [s.name.lower() for s in StudentModel.query.filter_by(class_id=c.id).all()]
-            for r in records:
+            for r in all_records:
                 s_name = r['name'].strip()
                 if s_name.lower() not in existing_student_names:
                     new_student = StudentModel(name=s_name.title(), class_id=c.id)
                     db.session.add(new_student)
                     existing_student_names.append(s_name.lower())
-            
+
             db.session.commit()
 
         return jsonify({
             "success": True,
-            "total_students": len(records),
+            "total_students": len(all_records),
             "assessment_types_found": assessment_types,
-            "records": records,
+            "records": all_records,
+            "term_data": term_data,
             "detected_class": detected_class,
             "detected_subject": detected_subject,
             "filename": file.filename
@@ -2292,6 +2432,17 @@ CURRENT GRADING SESSION ANALYTICS:
 You are a highly capable AI teaching aide. You KNOW you can read handwriting, scan images, extract grades, merge them into Nigerian mark books, calculate totals, and identify anomalies.
 
 PERSONALITY: Fluid, natural, concise, and genuinely helpful. Never sound robotic, overly enthusiastic, or rigid. Don't act clueless or ask unnecessary confirmation questions. If a user asks you to do something you know how to do (like scanning a script), just execute the action immediately instead of asking for confirmation. Talk like a brilliant, no-nonsense colleague.
+
+NIGERIAN MARK BOOK RULES (you MUST know these):
+- Columns 1-5 are CAs: 1st CA (10), 2nd CA (10), then 3 flexible columns from [Open Day, Note Book, Assignment, Attendance]
+- 4 items fill 3 slots, so ONE column combines two items and is worth 20 (e.g., "Open Day/Attendance")
+- 1st CA and 2nd CA can NEVER be the 20-point column
+- Column 6 = Total CA = sum(columns 1-5) / 2 = max 30
+- Column 7 = Exam = max 70
+- Column 8 = Grand Total = Total CA + Exam = max 100
+- 2nd Term: includes "1st Term Total" + "1st & 2nd" (sum of both Grand Totals)
+- 3rd Term: includes "1st Term Total" + "2nd Term Total" + "1st 2nd & 3rd" (sum of all 3) + "Average" (sum / 3) + "Position"
+- There is NO separate "Annual" sheet. The 3rd Term IS the annual summary.
 
 CURRENT STATE:
 - Teacher is on the "{screen}" screen
