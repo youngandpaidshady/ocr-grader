@@ -4191,16 +4191,16 @@
                             <p>Scan new scripts for a class</p>
                         </div>
                     </button>
-                    <button class="assistant-action-btn" onclick="executeAssistantAction('edit_scores')">
-                        <i class="fa-solid fa-pen-to-square text-amber-400 bg-amber-500/15"></i>
-                        <div><span>Fix a Score</span>
-                            <p>Correct a mistake in the results</p>
+                    <button class="assistant-action-btn" onclick="executeAssistantAction('upload_score_photo')">
+                        <i class="fa-solid fa-file-image text-amber-400 bg-amber-500/15"></i>
+                        <div><span>Upload Score Photo</span>
+                            <p>Snap or upload a handwritten score list</p>
                         </div>
                     </button>
-                    <button class="assistant-action-btn" onclick="executeAssistantAction('view_standings')">
-                        <i class="fa-solid fa-ranking-star text-emerald-400 bg-emerald-500/15"></i>
-                        <div><span>See Results</span>
-                            <p>Check rankings and download Excel</p>
+                    <button class="assistant-action-btn" onclick="executeAssistantAction('upload_excel')">
+                        <i class="fa-solid fa-file-excel text-emerald-400 bg-emerald-500/15"></i>
+                        <div><span>I Have My Excel</span>
+                            <p>Upload an existing scoresheet file</p>
                         </div>
                     </button>
                     <button class="assistant-action-btn" onclick="executeAssistantAction('add_student')">
@@ -4209,11 +4209,10 @@
                             <p>Someone missing from the list?</p>
                         </div>
                     </button>
-                    <button class="assistant-action-btn"
-                        onclick="sendAssistantMessage('Analyze my current scores and flag anything unusual')">
-                        <i class="fa-solid fa-chart-line text-cyan-400 bg-cyan-500/15"></i>
-                        <div><span>Analyze Scores</span>
-                            <p>Get insights and spot anomalies</p>
+                    <button class="assistant-action-btn" onclick="executeAssistantAction('download_results')">
+                        <i class="fa-solid fa-file-arrow-down text-cyan-400 bg-cyan-500/15"></i>
+                        <div><span>Download Results</span>
+                            <p>Save and download your Excel file</p>
                         </div>
                     </button>
                     <button class="assistant-action-btn" onclick="executeAssistantAction('update_roster')">

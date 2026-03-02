@@ -827,7 +827,7 @@ async function sendAssistantMessage(message) {
             'setup_session', 'correct_score', 'add_student', 'add_students_batch',
             'move_student', 'export_data', 'scan_papers', 'edit_scores',
             'view_standings', 'add_class', 'update_roster', 'manage_enrollment',
-            'edit_excel'
+            'edit_excel', 'upload_score_photo', 'upload_excel', 'download_results'
         ];
         if (data.action && data.action !== 'none') {
             if (autoExecActions.includes(data.action)) {
@@ -995,6 +995,52 @@ async function executeAssistantAction(action, params) {
 
             if (typeof showToast === 'function') {
                 showToast('Pick your class, subject, and assessment — then start scanning!', 'info', 4000);
+            }
+            break;
+        }
+        case 'upload_score_photo': {
+            hideModal();
+            const scoreModal = document.getElementById('upload-scoresheet-modal');
+            if (scoreModal) {
+                scoreModal.classList.remove('hidden');
+                scoreModal.classList.add('flex');
+                setTimeout(() => scoreModal.classList.remove('opacity-0'), 10);
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('Score photo upload is not available right now.', 'warning');
+                }
+            }
+            break;
+        }
+        case 'upload_excel': {
+            hideModal();
+            const xlsxModal = document.getElementById('upload-xlsx-modal');
+            if (xlsxModal) {
+                xlsxModal.classList.remove('hidden');
+                xlsxModal.classList.add('flex');
+                setTimeout(() => xlsxModal.classList.remove('opacity-0'), 10);
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('Excel upload is not available right now.', 'warning');
+                }
+            }
+            break;
+        }
+        case 'download_results': {
+            hideModal();
+            if (typeof extractedData !== 'undefined' && extractedData && extractedData.length > 0) {
+                const exportBtn = document.getElementById('btn-export');
+                if (exportBtn) {
+                    exportBtn.click();
+                } else {
+                    if (typeof showToast === 'function') {
+                        showToast('Export button not found. Try from the results screen.', 'warning');
+                    }
+                }
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('No scores to download yet — grade some scripts first!', 'warning', 4000);
+                }
             }
             break;
         }
