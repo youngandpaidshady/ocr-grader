@@ -822,28 +822,37 @@ async function sendAssistantMessage(message) {
 
         // Add assistant response
         let actionBtn = '';
+        // Auto-execute direct actions immediately instead of showing a button
+        const autoExecActions = [
+            'setup_session', 'correct_score', 'add_student', 'add_students_batch',
+            'move_student', 'export_data', 'scan_papers', 'edit_scores',
+            'view_standings', 'add_class', 'update_roster', 'manage_enrollment',
+            'edit_excel'
+        ];
         if (data.action && data.action !== 'none') {
-            const actionLabels = {
-                'setup_session': '🎯 Set it up',
-                'correct_score': '✏️ Fix it',
-                'add_student': '➕ Add them',
-                'add_students_batch': '➕ Add all',
-                'move_student': '🔀 Move them',
-                'analyze_scores': '📊 Show analysis',
-                'compare_classes': '⚖️ Compare',
-                'flag_anomalies': '🔍 Show issues',
-                'find_at_risk': '⚠️ Show at-risk',
-                'generate_report': '📋 Generate',
-                'export_data': '💾 Download',
-                'view_standings': '🏆 View standings'
-            };
-            const label = actionLabels[data.action] || '▶ Do this';
-            actionBtn = `
-                <button onclick="executeAssistantAction('${data.action}', ${JSON.stringify(data.params || {}).replace(/"/g, '&quot;')})"
-                    class="mt-2 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-bold rounded-lg transition-all border border-primary/30 inline-flex items-center gap-1.5">
-                    ${label}
-                </button>
-            `;
+            if (autoExecActions.includes(data.action)) {
+                // Auto-execute after a small delay so the response text renders first
+                setTimeout(() => {
+                    executeAssistantAction(data.action, data.params || {});
+                }, 600);
+            } else {
+                // Show a button for analysis/insight actions
+                const actionLabels = {
+                    'analyze_scores': '📊 Show analysis',
+                    'compare_classes': '⚖️ Compare',
+                    'compare_assessments': '📊 Compare assessments',
+                    'flag_anomalies': '🔍 Show issues',
+                    'find_at_risk': '⚠️ Show at-risk',
+                    'generate_report': '📋 Generate',
+                };
+                const label = actionLabels[data.action] || '▶ Do this';
+                actionBtn = `
+                    <button onclick="executeAssistantAction('${data.action}', ${JSON.stringify(data.params || {}).replace(/"/g, '&quot;')})"
+                        class="mt-2 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-bold rounded-lg transition-all border border-primary/30 inline-flex items-center gap-1.5">
+                        ${label}
+                    </button>
+                `;
+            }
         }
 
         // Render rich insight cards if the action returns them
@@ -870,7 +879,7 @@ async function sendAssistantMessage(message) {
         chatEl.innerHTML += `
             <div class="flex justify-start mb-3">
                 <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-                    <p class="text-sm text-white leading-relaxed">${data.response || 'I\'m not sure how to help with that.'}</p>
+                    <p class="text-sm text-white leading-relaxed whitespace-pre-wrap">${data.response || 'I\'m not sure how to help with that.'}</p>
                     ${insightsHTML}
                     ${actionBtn}
                 </div>
@@ -890,7 +899,7 @@ async function sendAssistantMessage(message) {
     }
 }
 
-function executeAssistantAction(action, params) {
+async function executeAssistantAction(action, params) {
     const modal = document.getElementById('smart-assistant-modal');
     const fab = document.getElementById('smart-assistant-fab');
     const hideModal = () => {
@@ -964,29 +973,83 @@ function executeAssistantAction(action, params) {
             break;
         }
         case 'scan_papers': {
-            const existingAssessments = assistantContext.assessments || [];
-            const classes = assistantContext.classes || [];
-            let prompt = '';
-            if (existingAssessments.length > 0) {
-                prompt = `I want to grade the next test.I already have ${existingAssessments.join(', ')} scores for ${classes.join(', ')}.What should I grade next ? `;
-            } else {
-                prompt = `I want to start grading tests for ${classes.length > 0 ? classes.join(', ') : 'my class'}.Help me set up.`;
+            // Navigate directly to setup phase so user can pick class + subject + start camera
+            hideModal();
+
+            // Show setup phase, hide others
+            const landing = document.getElementById('landing-phase');
+            const setup = document.getElementById('setup-phase');
+            const captureEl = document.getElementById('capture-section');
+            const reviewEl = document.getElementById('review-section');
+            const analyticsEl = document.getElementById('analytics-section');
+            const heroEl = document.getElementById('app-hero');
+
+            if (landing) landing.classList.add('hidden');
+            if (setup) setup.classList.remove('hidden');
+            if (captureEl) captureEl.classList.add('hidden');
+            if (reviewEl) reviewEl.classList.add('hidden');
+            if (analyticsEl) analyticsEl.classList.add('hidden');
+
+            // Init class picker if available
+            if (typeof initClassPicker === 'function') initClassPicker();
+
+            if (typeof showToast === 'function') {
+                showToast('Pick your class, subject, and assessment — then start scanning!', 'info', 4000);
             }
-            sendAssistantMessage(prompt);
             break;
         }
         case 'edit_scores': {
-            const classes = assistantContext.classes || [];
-            sendAssistantMessage(`I need to edit some scores for ${classes.length > 0 ? classes.join(', ') : 'my students'}.How do I do that ? `);
+            // Navigate directly to review section if it has data, otherwise prompt
+            hideModal();
+
+            const reviewScores = document.getElementById('review-section');
+            const captureScore = document.getElementById('capture-section');
+            const analyticsScore = document.getElementById('analytics-section');
+            const startScore = document.getElementById('start-section');
+
+            if (typeof extractedData !== 'undefined' && extractedData && extractedData.length > 0) {
+                // We have scanned data — show the review section
+                if (reviewScores) reviewScores.classList.remove('hidden');
+                if (captureScore) captureScore.classList.add('hidden');
+                if (analyticsScore) analyticsScore.classList.add('hidden');
+                if (startScore) startScore.classList.add('hidden');
+                const heroFix = document.getElementById('app-hero');
+                if (heroFix) heroFix.classList.add('hidden');
+                if (typeof showToast === 'function') {
+                    showToast('Tap any name or score to edit it.', 'info', 3000);
+                }
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('No scores to fix yet — scan some scripts first!', 'warning', 4000);
+                }
+            }
             break;
         }
         case 'view_standings': {
-            const classes = assistantContext.classes || [];
-            if (classes.length > 0) {
-                sendAssistantMessage(`Show me the current standings for ${classes.join(', ')}.`);
+            hideModal();
+
+            const analyticsView = document.getElementById('analytics-section');
+            const reviewView = document.getElementById('review-section');
+            const captureView = document.getElementById('capture-section');
+            const startView = document.getElementById('start-section');
+
+            if (analyticsView && !analyticsView.innerHTML.trim().includes('No data')) {
+                // Show analytics/results section
+                if (analyticsView) analyticsView.classList.remove('hidden');
+                if (reviewView) reviewView.classList.add('hidden');
+                if (captureView) captureView.classList.add('hidden');
+                if (startView) startView.classList.add('hidden');
+                const heroView = document.getElementById('app-hero');
+                if (heroView) heroView.classList.add('hidden');
             } else {
-                hideModal();
-                document.getElementById('btn-export')?.click();
+                // No results yet — try clicking export if we have data
+                if (typeof extractedData !== 'undefined' && extractedData && extractedData.length > 0) {
+                    document.getElementById('btn-export')?.click();
+                } else {
+                    if (typeof showToast === 'function') {
+                        showToast('No results yet — grade some scripts first!', 'warning', 4000);
+                    }
+                }
             }
             break;
         }
@@ -994,7 +1057,8 @@ function executeAssistantAction(action, params) {
             if (params?.student_name && params?.class_name) {
                 safeAddStudent(params.student_name, params.class_name);
             } else {
-                sendAssistantMessage('I want to add a new student to one of my class rosters.');
+                // Open inline roster editor directly instead of sending a chat message
+                executeAssistantAction('update_roster', params);
             }
             break;
         }
@@ -1005,25 +1069,38 @@ function executeAssistantAction(action, params) {
             break;
         }
         case 'correct_score': {
-            if (params?.student_name && params?.new_score !== undefined && typeof extractedData !== 'undefined') {
-                const targetName = params.student_name.toLowerCase();
+            if (params?.student_name && params?.new_score !== undefined) {
+                // Update in-memory extractedData + DOM (instant visual feedback)
                 let found = false;
-                for (let i = 0; i < extractedData.length; i++) {
-                    if ((extractedData[i].name || '').toLowerCase().includes(targetName)) {
-                        extractedData[i].score = params.new_score;
-                        const scoreInput = document.querySelector(`input[data-index="${i}"][data-field="score"]`);
-                        if (scoreInput) {
-                            scoreInput.value = params.new_score;
-                            scoreInput.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-500/20');
-                            setTimeout(() => scoreInput.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-500/20'), 2000);
+                if (typeof extractedData !== 'undefined') {
+                    const targetName = params.student_name.toLowerCase();
+                    for (let i = 0; i < extractedData.length; i++) {
+                        if ((extractedData[i].name || '').toLowerCase().includes(targetName)) {
+                            extractedData[i].score = params.new_score;
+                            const scoreInput = document.querySelector(`input[data-index="${i}"][data-field="score"]`);
+                            if (scoreInput) {
+                                scoreInput.value = params.new_score;
+                                scoreInput.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-500/20');
+                                setTimeout(() => scoreInput.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-500/20'), 2000);
+                            }
+                            found = true;
+                            break;
                         }
-                        found = true;
-                        break;
                     }
                 }
+
+                // Show result in chat with re-export button
                 const chatEl = document.getElementById('assistant-chat');
                 if (chatEl) {
-                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-check-circle mr-1.5"></i>${found ? 'Score updated!' : 'Could not find that student.'}</p></div></div>`;
+                    if (found) {
+                        chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[90%]">
+                            <p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-check-circle mr-1.5"></i> ${params.student_name}'s score updated to ${params.new_score}</p>
+                            <p class="text-[11px] text-white/40 mb-2">Changed in the current session. Hit save to keep it.</p>
+                            <button onclick="document.getElementById('btn-export')?.click()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down"></i> Save & Download Now</button>
+                        </div></div>`;
+                    } else {
+                        chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-amber-400 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Couldn't find "${params.student_name}" in the current grades. Make sure you've scanned their paper first.</p></div></div>`;
+                    }
                     chatEl.scrollTop = chatEl.scrollHeight;
                 }
             }
@@ -1054,6 +1131,56 @@ function executeAssistantAction(action, params) {
         case 'generate_report':
             // These actions return data in params — already rendered via insightsHTML above
             break;
+        case 'edit_excel': {
+            // Teacher asked to edit the uploaded Excel — send file + instruction to backend
+            if (typeof _assistantUploadedFile !== 'undefined' && _assistantUploadedFile) {
+                const chatEl = document.getElementById('assistant-chat');
+                if (chatEl) {
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-white/60"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Editing your Excel...</p></div></div>`;
+                    chatEl.scrollTop = chatEl.scrollHeight;
+                }
+                const editFormData = new FormData();
+                editFormData.append('file', _assistantUploadedFile);
+                editFormData.append('instruction', params?.instruction || message || '');
+                try {
+                    const editResp = await fetch('/api/assistant-edit-excel', {
+                        method: 'POST',
+                        body: editFormData
+                    });
+                    const editData = await editResp.json();
+                    // Remove editing indicator
+                    chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
+                    if (editData.success) {
+                        if (chatEl) {
+                            chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[90%]">
+                                <p class="text-sm text-emerald-400 font-bold mb-1"><i class="fa-solid fa-check-circle mr-1.5"></i>${editData.summary}</p>
+                                <p class="text-[11px] text-white/40 mb-2">${editData.changes_made} change(s) across ${editData.row_count} rows</p>
+                                <a href="${editData.download_url}" class="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down"></i> Download Edited File</a>
+                            </div></div>`;
+                            chatEl.scrollTop = chatEl.scrollHeight;
+                        }
+                    } else {
+                        if (chatEl) {
+                            chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-amber-400">${editData.error || 'Could not apply edits.'}</p></div></div>`;
+                            chatEl.scrollTop = chatEl.scrollHeight;
+                        }
+                    }
+                } catch (editErr) {
+                    chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
+                    if (chatEl) {
+                        chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-destructive">Edit failed: ${editErr.message}</p></div></div>`;
+                        chatEl.scrollTop = chatEl.scrollHeight;
+                    }
+                }
+            } else {
+                const chatEl = document.getElementById('assistant-chat');
+                if (chatEl) {
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-amber-400 font-bold"><i class="fa-solid fa-paperclip mr-1.5"></i>Upload an Excel file first using the 📎 button, then tell me what to change.</p></div></div>`;
+                    chatEl.scrollTop = chatEl.scrollHeight;
+                }
+            }
+            break;
+        }
         case 'add_class':
             hideModal();
             document.getElementById('btn-open-paste-modal')?.click();
@@ -1329,6 +1456,7 @@ async function safeAddStudentForce(studentName, className) {
     }
 }
 // === FILE UPLOAD IN ASSISTANT CHAT ===
+let _assistantUploadedFile = null; // Store reference to last uploaded file for follow-up edits
 async function handleAssistantFileUpload(input) {
     const file = input.files[0];
     if (!file) return;
@@ -1381,12 +1509,46 @@ async function handleAssistantFileUpload(input) {
                 }),
                 headers: { 'Content-Type': 'application/json' }
             });
-            const data = await response.json();
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedResults = [];
+            let buffer = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.replace('data: ', '').trim();
+                        if (dataStr === '[DONE]') continue;
+                        try {
+                            const parsed = JSON.parse(dataStr);
+                            if (parsed.result) accumulatedResults.push(parsed.result);
+                        } catch (e) {
+                            console.error('SSE parsing error', e);
+                        }
+                    }
+                }
+            }
+            const data = { results: accumulatedResults };
 
             // Remove typing indicator
             document.getElementById('upload-typing')?.remove();
 
             if (data.results && data.results.length > 0) {
+                // Push to global extractedData so btn-export can build the Excel file
+                if (typeof extractedData !== 'undefined') {
+                    if (!extractedData || extractedData.length === 0) {
+                        extractedData = data.results;
+                    } else {
+                        data.results.forEach(item => extractedData.push(item));
+                    }
+                }
+
                 let resultHTML = data.results.map(r =>
                     `<div class="flex justify-between text-xs py-1 border-b border-white/5"><span>${r.name || 'Unknown'}</span><span class="font-bold text-primary">${r.score || '?'}</span></div>`
                 ).join('');
@@ -1394,7 +1556,8 @@ async function handleAssistantFileUpload(input) {
                     <div class="flex justify-start mb-3">
                         <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
                             <p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-check-circle mr-1.5"></i>Found ${data.results.length} scores!</p>
-                            <div class="max-h-40 overflow-y-auto">${resultHTML}</div>
+                            <div class="max-h-40 overflow-y-auto mb-3">${resultHTML}</div>
+                            <button onclick="document.getElementById('btn-export')?.click()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down"></i> Save & Download Excel</button>
                         </div>
                     </div>
                 `;
@@ -1434,7 +1597,8 @@ async function handleAssistantFileUpload(input) {
                     </div>
                 `;
                 // Now ask assistant to analyze it
-                sendAssistantMessage(`[SYSTEM] Teacher just uploaded ${file.name}. ${summary}. Suggest what to do next.`);
+                _assistantUploadedFile = file; // Store for follow-up edit instructions
+                sendAssistantMessage(`[SYSTEM] Teacher just uploaded ${file.name}. ${summary}. They might want to edit it — ask what they'd like to do with it.`);
             } else {
                 chatEl.innerHTML += `
                     <div class="flex justify-start mb-3">

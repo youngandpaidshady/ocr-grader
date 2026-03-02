@@ -12,6 +12,7 @@ from sqlalchemy import func
 
 # Load environment variables
 import time
+import re as re_mod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 load_dotenv()
 
@@ -263,7 +264,6 @@ def handle_classes():
             return jsonify({"error": "Class name is required"}), 400
 
         # Normalize class name: uppercase, split letters from digits, add space (e.g. 'ss1q' -> 'SS 1Q')
-        import re as re_mod
         c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', raw_name.upper())
         match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
         normalized_name = "{} {}".format(match.group(1), match.group(2)) if match else raw_name.strip().upper()
@@ -514,12 +514,24 @@ Use the following JSON schema:
 Return ONLY the raw JSON object. DO NOT wrap it in markdown block quotes like ```json ... ```.
 """.format(roster_context)
 
-        # Process with AI model
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
-        
-        response = model.generate_content(contents)
-        raw_text = response.text.strip()
+        # Process with AI model — with retry + key rotation for rate limits
+        raw_text = None
+        for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
+            try:
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
+                response = model.generate_content(contents)
+                raw_text = response.text.strip()
+                break
+            except Exception as model_err:
+                err_str = str(model_err).lower()
+                if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                    rotate_api_key()
+                    time.sleep(min(3 * (attempt + 1), 10))
+                else:
+                    raise
+        if not raw_text:
+            raise Exception('All API keys exhausted')
         
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
@@ -585,7 +597,6 @@ def upload_batch():
         
         # Concurrent processing: split images into chunks and process in parallel
         CHUNK_SIZE = 5  # Increased from 3 - Gemini handles 5 images well, fewer API calls
-        model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Attach global index to each image
         indexed_images = list(enumerate(images_base64))
@@ -606,21 +617,29 @@ def upload_batch():
                     "data": img_b64
                 })
             # Retry with key rotation on rate limit
+            # Scale retries to number of keys (at least 3, up to keys * 2)
+            max_retries = max(3, len(API_KEYS) * 2) if API_KEYS else 3
+            backoff_times = [3, 5, 8, 12, 15]
             response = None
-            for attempt in range(3):
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            for attempt in range(max_retries):
                 try:
                     response = model.generate_content(contents)
                     break
                 except Exception as retry_err:
                     err_str = str(retry_err).lower()
                     if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                        print("Rate limit hit on attempt {} — rotating key...".format(attempt + 1))
                         rotate_api_key()
-                        if attempt < 2:
-                            time.sleep([3, 8][attempt])
+                        # Re-create model with the newly configured key
+                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        if attempt < max_retries - 1:
+                            wait = backoff_times[min(attempt, len(backoff_times) - 1)]
+                            time.sleep(wait)
                     else:
                         raise retry_err
             if not response:
-                raise Exception("All API keys exhausted for this chunk")
+                raise Exception("All API keys exhausted for this chunk after {} retries".format(max_retries))
             response_text = response.text.strip()
             if response_text.startswith("```json"):
                 response_text = response_text[7:]
@@ -648,7 +667,6 @@ def upload_batch():
                     
                     # === 3-LAYER CLASS ROUTING ===
                     # Layer 1: OCR - try to match AI-extracted class
-                    import re as re_mod
                     extracted_class = str(res.get('class', '')).strip().upper()
                     matched_class = None
                     
@@ -708,6 +726,7 @@ def upload_batch():
                             yield "data: {}\n\n".format(json.dumps(r))
                     except Exception as exc:
                         print('Chunk generated an exception: {}'.format(exc))
+                        yield "data: {}\n\n".format(json.dumps({"error": str(exc)}))
             yield "data: [DONE]\n\n"
         
         return Response(generate(), mimetype='text/event-stream')
@@ -722,7 +741,6 @@ def parse_class_level(class_name):
     Handles: SS 1Q, JSS2A, ss1q, S.S 1 Q, J.S.S. 1B, SSS 3 Gold, Primary 4A, etc.
     Returns: {"level": "SS1", "arm": "Q", "normalized": "SS 1Q"}
     """
-    import re as re_mod
     raw = str(class_name).strip()
     # Step 1: Remove dots and extra whitespace, uppercase
     cleaned = re_mod.sub(r'\.', '', raw).upper().strip()
@@ -770,15 +788,15 @@ def export_excel():
              
         # === ROSTER-ONLY DB SYNC ===
         # Only update class rosters (student names), NOT scores
-        import re
+
         for r in results:
             name = str(r.get('name', '')).strip().title()
             if not name:
                 continue
                 
             c_raw = str(r.get('class', '')).strip().upper()
-            c_cleaned = re.sub(r'[^A-Z0-9]', '', c_raw)
-            match = re.match(r'([A-Z]+)(\d+.*)', c_cleaned)
+            c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', c_raw)
+            match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
             class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
             
             # Ensure class exists
@@ -811,8 +829,8 @@ def export_excel():
             if not name:
                 continue
             c_raw = str(r.get('class', '')).strip().upper()
-            c_cleaned = re.sub(r'[^A-Z0-9]', '', c_raw)
-            match = re.match(r'([A-Z]+)(\d+.*)', c_cleaned)
+            c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', c_raw)
+            match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
             class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
             
             if class_name not in class_results:
@@ -1037,7 +1055,6 @@ def download_sheet():
     
     if level:
         # Look for level-specific file
-        import re as re_mod
         safe_subject = re_mod.sub(r'[^A-Za-z0-9 ]', '', subject).strip() if subject else "Scores"
         filename = "{}_{}.xlsx".format(safe_subject or "Scores", level)
         filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
@@ -1175,6 +1192,7 @@ def upload_excel_scorelist():
         print("Excel scorelist upload error: {}".format(e))
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/api/extract-names', methods=['POST'])
 def extract_names():
     try:
@@ -1204,11 +1222,24 @@ Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like `js
         if known_names:
             system_prompt += "\nCRITICAL CONTEXT: Here is the authoritative list of known students in this class: {}. You MUST map the extracted handwritten names to exactly match a name from this list whenever visually possible.".format(known_names)
             
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
-        
-        response = model.generate_content(contents)
-        raw_text = response.text.strip()
+        # Process with AI model — with retry + key rotation for rate limits
+        raw_text = None
+        for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
+            try:
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
+                response = model.generate_content(contents)
+                raw_text = response.text.strip()
+                break
+            except Exception as model_err:
+                err_str = str(model_err).lower()
+                if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                    rotate_api_key()
+                    time.sleep(min(3 * (attempt + 1), 10))
+                else:
+                    raise
+        if not raw_text:
+            raise Exception('All API keys exhausted')
         
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
@@ -1280,9 +1311,23 @@ Return JSON: {{"friendly_message": "...", "suggestion": "...", "can_retry": true
         prompt = template.format(**context) if context else template
         prompt += "\n\nReturn ONLY raw JSON. Do NOT wrap in markdown."
         
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
-        raw_text = response.text.strip()
+        # Process with AI — retry + rotate on rate limits
+        raw_text = None
+        for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
+            try:
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                response = model.generate_content(prompt)
+                raw_text = response.text.strip()
+                break
+            except Exception as model_err:
+                err_str = str(model_err).lower()
+                if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                    rotate_api_key()
+                    time.sleep(min(3 * (attempt + 1), 10))
+                else:
+                    raise
+        if not raw_text:
+            raise Exception('All API keys exhausted')
         
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
@@ -1349,6 +1394,163 @@ def move_student():
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/assistant-edit-excel', methods=['POST'])
+def assistant_edit_excel():
+    """Receives an Excel file + natural language instruction, uses AI to apply edits, returns the modified file."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+        
+        instruction = request.form.get('instruction', '').strip()
+        if not instruction:
+            return jsonify({"error": "No instruction provided"}), 400
+        
+        file = request.files['file']
+        
+        # Read the Excel into pandas
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+        
+        # Build context for AI
+        columns = list(df.columns)
+        sample = df.head(5).to_string(index=False)
+        row_count = len(df)
+        
+        prompt = """You are an Excel editing assistant. A teacher has uploaded a spreadsheet and wants you to edit it.
+
+SPREADSHEET INFO:
+- Columns: {columns}
+- Total rows: {rows}
+- First 5 rows:
+{sample}
+
+TEACHER'S INSTRUCTION: "{instruction}"
+
+You must return a JSON object with an "edits" array. Each edit is one of:
+1. {{"type": "update_cell", "row": 0, "column": "Score", "value": 85}} — update a specific cell (row is 0-indexed)
+2. {{"type": "update_column", "column": "Score", "expression": "x + 5"}} — apply a math expression to an entire column (x = current value)
+3. {{"type": "delete_rows", "condition_column": "Score", "condition": "< 40"}} — delete rows matching a condition
+4. {{"type": "add_row", "data": {{"Name": "John", "Score": 80}}}} — add a new row
+5. {{"type": "rename_column", "old_name": "Marks", "new_name": "Score"}} — rename a column
+
+Return ONLY raw JSON. Example:
+{{"edits": [{{"type": "update_column", "column": "Score", "expression": "x + 5"}}], "summary": "Added 5 marks to all scores"}}
+""".format(columns=columns, rows=row_count, sample=sample, instruction=instruction)
+        
+        # Call AI with retry
+        raw_text = None
+        for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
+            try:
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                response = model.generate_content(prompt)
+                raw_text = response.text.strip()
+                break
+            except Exception as model_err:
+                err_str = str(model_err).lower()
+                if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                    rotate_api_key()
+                    time.sleep(min(3 * (attempt + 1), 10))
+                else:
+                    raise
+        if not raw_text:
+            raise Exception('All API keys exhausted')
+        
+        # Parse AI response
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.startswith("```"):
+            raw_text = raw_text[3:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        
+        ai_result = json.loads(raw_text.strip())
+        edits = ai_result.get('edits', [])
+        summary = ai_result.get('summary', 'Edits applied')
+        
+        # Apply edits to dataframe
+        changes_made = 0
+        for edit in edits:
+            edit_type = edit.get('type', '')
+            
+            if edit_type == 'update_cell':
+                row = edit.get('row', 0)
+                col = edit.get('column', '')
+                if col in df.columns and 0 <= row < len(df):
+                    df.at[row, col] = edit.get('value')
+                    changes_made += 1
+                    
+            elif edit_type == 'update_column':
+                col = edit.get('column', '')
+                expr = edit.get('expression', '')
+                if col in df.columns and expr:
+                    try:
+                        df[col] = df[col].apply(lambda x: eval(expr, {"__builtins__": {}}, {"x": float(x) if str(x).replace('.','',1).replace('-','',1).isdigit() else 0}) if pd.notna(x) else x)
+                        changes_made += len(df)
+                    except Exception as eval_err:
+                        print("Expression eval error: {}".format(eval_err))
+                        
+            elif edit_type == 'delete_rows':
+                col = edit.get('condition_column', '')
+                cond = edit.get('condition', '')
+                if col in df.columns and cond:
+                    try:
+                        before_count = len(df)
+                        mask = df[col].apply(lambda x: eval("x {}".format(cond), {"__builtins__": {}}, {"x": float(x) if str(x).replace('.','',1).replace('-','',1).isdigit() else 0}) if pd.notna(x) else False)
+                        df = df[~mask]
+                        changes_made += before_count - len(df)
+                    except Exception as eval_err:
+                        print("Delete condition error: {}".format(eval_err))
+                        
+            elif edit_type == 'add_row':
+                row_data = edit.get('data', {})
+                if row_data:
+                    df = pd.concat([df, pd.DataFrame([row_data])], ignore_index=True)
+                    changes_made += 1
+                    
+            elif edit_type == 'rename_column':
+                old = edit.get('old_name', '')
+                new = edit.get('new_name', '')
+                if old in df.columns:
+                    df = df.rename(columns={old: new})
+                    changes_made += 1
+        
+        # Save modified file
+        output_filename = "edited_{}".format(file.filename if file.filename else "output.xlsx")
+        if not output_filename.endswith(('.xlsx', '.xls', '.csv')):
+            output_filename += '.xlsx'
+        output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
+        
+        if output_filename.endswith('.csv'):
+            df.to_csv(output_path, index=False)
+        else:
+            df.to_excel(output_path, index=False, engine='openpyxl')
+        
+        return jsonify({
+            "success": True,
+            "summary": summary,
+            "changes_made": changes_made,
+            "row_count": len(df),
+            "download_url": "/api/download-edited-excel?file={}".format(output_filename)
+        }), 200
+        
+    except Exception as e:
+        print("Assistant edit Excel error: {}".format(e))
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download-edited-excel')
+def download_edited_excel():
+    """Download an edited Excel file."""
+    filename = request.args.get('file', '')
+    if not filename or '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({"error": "Invalid filename"}), 400
+    filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+    if not os.path.exists(filepath):
+        return jsonify({"error": "File not found"}), 404
+    return send_file(filepath, as_attachment=True, download_name=filename)
 
 
 @app.route('/api/smart-assistant', methods=['POST'])
@@ -1490,6 +1692,7 @@ ACTIONS YOU CAN TAKE (pick the best one):
         "flag_anomalies" - Highlight unusual scores that may be errors
         "find_at_risk" - List students who are failing or at risk
         "generate_report" - Create a formatted summary for admin/principal
+        "edit_excel" - Edit an uploaded Excel file based on instructions (e.g. "add 5 marks to everyone")
         "none" - Just a conversational answer, no action needed
     "params": {{
         "class_name": "...",
@@ -1498,6 +1701,7 @@ ACTIONS YOU CAN TAKE (pick the best one):
         "student_name": "...",
         "target_class": "...",
         "new_score": "...",
+        "instruction": "...",
         "students": ["name1", "name2"],
         "report_text": "...",
         "insights": [list of insight strings],
@@ -1506,22 +1710,40 @@ ACTIONS YOU CAN TAKE (pick the best one):
     }}
 }}
 
+CRITICAL ACTION SELECTION RULES:
+>>> NEVER return action "none" when the teacher is asking you to DO something. <<<
+>>> If the teacher wants to grade, scan, start a session, add a test → use "setup_session" <<<
+>>> If the teacher mentions a student name + score → use "correct_score" immediately <<<
+>>> If the teacher says "yes", "ok", "do it", "go ahead" → EXECUTE the action from the previous exchange, don't just talk about it <<<
+>>> ACTION FIRST, CHAT SECOND. Always pick an action. Only use "none" for pure questions like "what is this app?" <<<
+
+EXAMPLE INPUT→OUTPUT MAPPINGS (follow these patterns exactly):
+- "I want to add 2nd test" → action: "setup_session", params: {{assessment_type: "2nd CA"}}
+- "Grade next test" → action: "setup_session" with next logical assessment
+- "Add 2nd CA for SS 1Q" → action: "setup_session", params: {{class_name: "SS 1Q", assessment_type: "2nd CA"}}
+- "Adekunie should be 8" → action: "correct_score", params: {{student_name: "Adekunie", new_score: "8"}}
+- "Fix Tunde's score to 15" → action: "correct_score", params: {{student_name: "Tunde", new_score: "15"}}
+- "Add 5 points to everyone" / "Delete students below 40" → action: "edit_excel", params: {{instruction: "add 5 points to everyone"}}
+- "Add Fatimah to SS 1Q" → action: "add_student", params: {{student_name: "Fatimah", class_name: "SS 1Q"}}
+- "Only one student" or "For a student..." → action: "add_student"
+- "Show results" / "See scores" → action: "view_standings"
+- "Download" / "Get my Excel" → action: "export_data"
+- "Who is failing?" → action: "find_at_risk"
+- "Any issues with scores?" → action: "flag_anomalies"
+- "Compare SS 1Q and SS 1S" → action: "compare_classes"
+- "Set it up" / "yes" / "ok" / "do it" / "go ahead" → REPEAT the previous action with same params
+
 INTELLIGENCE RULES:
-1. For "setup_session": Figure out the NEXT logical assessment. If 1st CA exists, suggest 2nd CA. If both exist, suggest Exam.
-2. For "correct_score": The teacher says something like "Adekunie should be 8" — extract the name and new score.
-3. For "analyze_scores": Calculate and share meaningful insights from the analytics data above. Be specific with numbers.
-4. For "compare_classes": Compare averages, pass rates, top performers between classes.
-5. For "flag_anomalies": Look for scores that seem like typos (way too high or low vs class average).
-6. For "find_at_risk": Students scoring below 40% or consistently declining.
-7. For "generate_report": Write a brief, professional summary suitable for a school principal.
-8. For "add_students_batch": When teacher lists multiple names, extract all of them.
-9. For "move_student": Confirm source and destination classes.
-10. BE PROACTIVE: If you notice something interesting in the data, mention it! ("By the way, SS 1Q's average is 15 points higher than SS 1S — worth looking into?")
-11. Always reference real student names and real data. Never make up data.
-12. If the teacher's request is ambiguous, ask a smart clarifying question.
-13. Keep responses conversational and natural — like texting a smart colleague.
-14. CONVERSATION MEMORY: You have conversation history. Reference what was said earlier. If the teacher says things like "wait", "hold on", "never mind", "go back", "do it", "yes", "no" — these refer to the previous exchange. Maintain continuity.
-15. SHORT REPLIES for short messages. If teacher says "yes" or "ok", don't write a paragraph — just acknowledge and act.
+1. For "setup_session": Figure out the NEXT logical assessment. If 1st CA exists, suggest 2nd CA. If both exist, suggest Exam. ALWAYS include class_name and assessment_type in params.
+2. For "correct_score": Extract the student name and new score from the message. Match fuzzy names to the roster.
+3. For "analyze_scores": Share meaningful insights using the analytics data above.
+4. For "add_students_batch": When teacher lists multiple names, extract ALL of them.
+5. For "move_student": Include source class, student name, and destination class in params.
+6. BE PROACTIVE: Mention data insights naturally.
+7. Always reference real student names and data. Never make up data.
+8. RESPONSE LENGTH: Keep it SHORT (1-2 sentences) WHEN confirming an app action (e.g. "I've added Fatimah"). HOWEVER, if the teacher asks a general question, needs an email drafted, asks for a lesson plan, or wants pedagogical advice, act as a full LLM and write as much as needed! Format long responses nicely.
+9. CONVERSATION MEMORY: Use history context. "yes"/"ok"/"do it" = execute previous action.
+10. ALWAYS return valid JSON with "response", "action" and "params". For general LLM tasks, use action "none" and put your full, rich answer in "response".
 
 {conversation}
 
@@ -1553,6 +1775,7 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
                     # Only retry on rate limit errors, not on model-not-found etc.
                     if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
                         rotate_api_key()  # Switch to next API key
+                        model = genai.GenerativeModel(model_name)  # Re-create model with new key
                         if attempt < 2:
                             wait = [3, 8][attempt]
                             print("Rate limited, rotated key & waiting {}s...".format(wait))

@@ -1158,10 +1158,8 @@
                 <!-- Header (Compact) -->
                 <div class="flex flex-col mb-4 relative z-10">
                     <div class="flex items-center mb-1">
-                        <button
-                            onclick="document.getElementById('capture-section').classList.add('hidden'); document.getElementById('start-section').classList.remove('hidden'); document.getElementById('app-hero').classList.remove('hidden'); if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}"
-                            class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mr-3 text-white/50 hover:text-white hover:bg-white/10 transition-all"
-                            title="Back">
+                        <button onclick="window._captureGoBack && window._captureGoBack()" class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mr-3
+                    text-white/50 hover:text-white hover:bg-white/10 transition-all" title="Back">
                             <i class="fa-solid fa-arrow-left text-sm"></i>
                         </button>
                         <h2 class="text-xl font-heading font-bold text-white tracking-tight flex items-center">
@@ -1175,23 +1173,7 @@
                         and press Capture.</p>
                 </div>
 
-                <!-- Quick Heads Up (shown on capture screen) -->
-                <div id="notice-banner"
-                    class="mb-4 mx-1 border border-amber-500/20 bg-amber-500/[0.07] rounded-xl p-3 flex items-start gap-3 relative transition-opacity duration-300">
-                    <i class="fa-solid fa-lightbulb text-amber-500 mt-0.5 text-sm"></i>
-                    <div class="flex-1 pr-6">
-                        <p class="text-amber-200/70 text-xs font-medium leading-relaxed">
-                            When done, hit <strong class="text-amber-400">"Save"</strong> to lock in grades, then
-                            <strong class="text-amber-400">"Download"</strong> for your Excel. Don't close the page
-                            before saving!
-                        </p>
-                    </div>
-                    <button
-                        onclick="this.parentElement.classList.add('opacity-0', 'pointer-events-none'); setTimeout(() => this.parentElement.classList.add('hidden'), 300)"
-                        class="absolute top-2 right-2 text-amber-500/40 hover:text-amber-500 transition-colors p-1">
-                        <i class="fa-solid fa-xmark text-sm"></i>
-                    </button>
-                </div>
+
 
                 <!-- Video Feed with Overlays -->
                 <div id="video-container"
@@ -1320,18 +1302,20 @@
                             <h2
                                 class="text-xl md:text-2xl font-heading font-bold text-white tracking-tight flex items-center">
                                 <span
-                                    class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mr-3 border border-white/10 shadow-sm"><i
-                                        class="fa-solid fa-list-check text-white text-sm"></i></span>
-                                Review Grades
+                                    class="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center mr-3 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]"><i
+                                        class="fa-solid fa-clipboard-check text-emerald-400 text-sm"></i></span>
+                                Almost Done! 🎉
                             </h2>
                         </div>
-                        <p class="text-muted-foreground text-sm font-medium ml-11">Check the AI's work. Fix any
-                            mistakes, then
-                            Save.</p>
+                        <p class="text-muted-foreground text-sm font-medium ml-11 leading-relaxed">
+                            Here's what the AI read from the scripts. <strong class="text-white/70">Tap any name or
+                                score to fix it</strong>, then hit save when you're happy.
+                        </p>
                     </div>
                     <button id="btn-reset"
-                        class="text-xs font-bold tracking-widest uppercase text-muted-foreground hover:text-white transition-colors px-4 py-2 rounded-lg border border-white/5 hover:border-white/20 bg-black/40 hover:bg-black/60 flex items-center shadow-sm">
-                        <i class="fa-solid fa-rotate-left mr-2"></i> Delete these & Start Over
+                        class="text-xs font-semibold text-muted-foreground/70 hover:text-red-400 transition-colors px-4 py-2.5 rounded-xl border border-white/5 hover:border-red-500/30 bg-black/30 hover:bg-red-500/5 flex items-center gap-2 shadow-sm group">
+                        <i class="fa-solid fa-trash-can text-[10px] group-hover:text-red-400 transition-colors"></i>
+                        Clear all & rescan
                     </button>
                 </div>
 
@@ -1373,25 +1357,25 @@
 
                 <!-- Add Student Manually Button -->
                 <button id="btn-add-manual-row" type="button" onclick="addManualRow()"
-                    class="mb-6 w-full py-3 rounded-xl border-2 border-dashed border-white/10 hover:border-primary/40 text-muted-foreground hover:text-white bg-transparent hover:bg-primary/5 transition-all flex items-center justify-center gap-2 text-sm font-bold tracking-wide group relative z-10">
-                    <i class="fa-solid fa-plus text-primary group-hover:scale-110 transition-transform"></i>
-                    <span>Add Student Manually</span>
+                    class="mb-6 w-full py-3.5 rounded-xl border-2 border-dashed border-white/8 hover:border-primary/40 text-muted-foreground hover:text-white bg-transparent hover:bg-primary/5 transition-all flex items-center justify-center gap-2.5 text-sm font-semibold tracking-wide group relative z-10">
+                    <i
+                        class="fa-solid fa-user-plus text-primary/70 group-hover:text-primary group-hover:scale-110 transition-all"></i>
+                    <span>Add someone who's missing</span>
                 </button>
 
 
                 <button id="btn-export"
-                    class="magnetic holographic shadow-glow w-full bg-primary hover:bg-primary/90 text-white font-extrabold text-sm uppercase tracking-widest py-5 px-6 rounded-xl transition-all active:scale-95 flex justify-center items-center group relative z-10 border border-t-white/30 border-primary shadow-[0_4px_14px_0_rgba(var(--brand-rgb),0.39)]">
-                    <i class="fa-solid fa-download mr-2 group-hover:-translate-y-1 transition-transform"></i> Save &
-                    Download
+                    class="magnetic holographic shadow-glow w-full bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white font-extrabold text-base tracking-wide py-5 px-6 rounded-xl transition-all active:scale-95 flex justify-center items-center group relative z-10 border border-t-white/30 border-primary shadow-[0_4px_14px_0_rgba(var(--brand-rgb),0.39)]">
+                    <i class="fa-solid fa-check-circle mr-2.5 text-lg group-hover:scale-110 transition-transform"></i>
+                    Looks Good — Save & Download
                 </button>
                 <div id="export-msg" class="text-center mt-5 text-sm font-bold hidden relative z-10"></div>
 
                 <!-- Feedback / What's Next block -->
                 <div id="whats-next-block"
                     class="hidden mt-8 pt-8 border-t border-white/5 animate-fade-in-up relative z-10">
-                    <h3
-                        class="text-white font-bold text-[11px] uppercase tracking-widest mb-2 flex items-center gap-2 text-indigo-400">
-                        <i class="fa-solid fa-lightbulb"></i> What would you like to do next?
+                    <h3 class="text-white font-bold text-sm mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-primary"></i> What would you like to do next?
                     </h3>
 
                     <!-- Dynamic state messages will go here -->
@@ -1478,7 +1462,8 @@
                     Made with <span class="text-red-400 inline-block animate-pulse">❤️</span> for QSI
                 </p>
                 <p class="text-[9px] text-white/30 mt-1.5 tracking-widest">SMART GRADER v2.0 <span
-                        class="text-white/50">by XO</span></p>
+                        class="text-white/50">by
+                        XO</span></p>
             </div>
         </footer>
     </div>
@@ -1857,11 +1842,10 @@
         const startSection = document.getElementById('start-section');
         const btnStartCamera = document.getElementById('btn-start-camera');
 
-        // Target Class validation before scanning
+        // Target Class validation before scanning — use selectedClasses chip picker
         btnStartCamera.addEventListener('click', () => {
-            const classSelect = document.getElementById('target-class');
-            if (!classSelect.value) {
-                showToast('Please select a Target Class before starting.', 'warning');
+            if (typeof selectedClasses === 'undefined' || selectedClasses.length === 0) {
+                showToast('Please select at least one class before starting.', 'warning');
                 return;
             }
             const subjSelect = document.getElementById('subject-name');
@@ -1873,6 +1857,11 @@
             if (!assessmentSelect || !assessmentSelect.value || assessmentSelect.value === '') {
                 showToast('Please select an Assessment Type first.', 'warning');
                 return;
+            }
+
+            // Store original button content for reset
+            if (!btnStartCamera._origHTML) {
+                btnStartCamera._origHTML = btnStartCamera.innerHTML;
             }
 
             // Apply a loading state
@@ -1890,16 +1879,36 @@
             initCamera();
         });
 
+        // Back button handler for capture page — resets everything cleanly
+        window._captureGoBack = function () {
+            document.getElementById('capture-section').classList.add('hidden');
+            document.getElementById('start-section').classList.remove('hidden');
+            const hero = document.getElementById('app-hero');
+            if (hero) hero.classList.remove('hidden');
+            if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+            // Reset the Start Camera button
+            if (btnStartCamera) {
+                btnStartCamera.disabled = false;
+                if (btnStartCamera._origHTML) {
+                    btnStartCamera.innerHTML = btnStartCamera._origHTML;
+                }
+            }
+            // Stop auto-capture if running
+            if (typeof scanIntervalId !== 'undefined' && scanIntervalId) {
+                clearInterval(scanIntervalId);
+                scanIntervalId = null;
+            }
+        };
+
         // Config Elements
         const targetClassSelect = document.getElementById('target-class');
 
-        // Upload Scoresheet button handler
+        // Upload Scoresheet button handler — use selectedClasses chip picker
         const btnUploadSheet = document.getElementById('btn-upload-scoresheet');
         if (btnUploadSheet) {
             btnUploadSheet.addEventListener('click', () => {
-                const classSelect = document.getElementById('target-class');
-                if (!classSelect || !classSelect.value) {
-                    showToast('Please select a Target Class first.', 'warning');
+                if (typeof selectedClasses === 'undefined' || selectedClasses.length === 0) {
+                    showToast('Please select at least one class first.', 'warning');
                     return;
                 }
                 const modal = document.getElementById('upload-scoresheet-modal');
@@ -1949,26 +1958,7 @@
         }
 
 
-        async function initCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            loadingIndicator.classList.remove('hidden');
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
-                });
-                video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    loadingIndicator.classList.add('hidden');
-                };
-            } catch (err) {
-                console.error("Camera error:", err);
-                loadingIndicator.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-destructive text-3xl mb-3 block"></i><span class="text-sm font-bold text-destructive">Camera Access Denied</span>`;
-            }
-        }
+        // NOTE: Duplicate initCamera removed — the full version is defined below with torch check + fallback
 
         // Smart Image Compression: only downscale if > MAX_WIDTH, preserving quality for low-end cameras
         const COMPRESS_MAX_WIDTH = 1600;
@@ -2406,16 +2396,17 @@
                     } catch (e) { console.warn('Compression skipped:', e); }
                 }
 
-                const targetClassVal = document.getElementById('target-class').value.trim();
+                const targetClassEl = document.getElementById('target-class');
+                const targetClassVal = targetClassEl ? targetClassEl.value.trim() : (typeof selectedClasses !== 'undefined' && selectedClasses.length > 0 ? selectedClasses[0] : '');
                 // Track class in session
                 if (typeof addToSessionClasses === 'function' && targetClassVal) {
                     addToSessionClasses(targetClassVal);
                 }
 
-                finalAssessmentType = assessmentTypeSelect.value === 'custom'
-                    ? (customAssessmentInput.value.trim() || 'Score')
-                    : assessmentTypeSelect.value;
-                scoreTh.innerText = finalAssessmentType;
+                finalAssessmentType = (assessmentTypeSelect && assessmentTypeSelect.value === 'custom')
+                    ? ((customAssessmentInput && customAssessmentInput.value.trim()) || 'Score')
+                    : (assessmentTypeSelect ? assessmentTypeSelect.value : 'Score');
+                if (scoreTh) scoreTh.innerText = finalAssessmentType;
 
                 // Fix: Set currentSubjectName from the subject dropdown
                 const subjSelect = document.getElementById('subject-name');
@@ -2444,7 +2435,7 @@
                 // Check Smart Mode
                 const smartSwitchBg = document.getElementById('smart-mode-switch-bg');
                 const isSmartMode = smartSwitchBg && smartSwitchBg.classList.contains('bg-indigo-500');
-                const smartInstruction = isSmartMode ? document.getElementById('smart-instruction-input').value.trim() : "";
+                const smartInstruction = isSmartMode ? (document.getElementById('smart-instruction-input')?.value?.trim() || '') : "";
 
                 const response = await fetch('/upload-batch', {
                     method: 'POST',
@@ -2480,7 +2471,11 @@
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) {
-                        // All chunks received, show "What's Next"
+                        // All chunks received, clean up any unpopulated items that failed
+                        // These occur if the backend hits rate-limits and drops a chunk
+                        if (extractedData) {
+                            extractedData = extractedData.filter(item => item && Object.keys(item).length > 0);
+                        }
                         const nextBlock = document.getElementById('whats-next-block');
                         if (nextBlock) nextBlock.classList.remove('hidden');
                         break;
@@ -2494,12 +2489,19 @@
                         if (line.startsWith('data: ')) {
                             const dataStr = line.replace('data: ', '').trim();
                             if (dataStr === '[DONE]') {
+                                if (extractedData) {
+                                    extractedData = extractedData.filter(item => item && Object.keys(item).length > 0);
+                                }
                                 const nextBlock = document.getElementById('whats-next-block');
                                 if (nextBlock) nextBlock.classList.remove('hidden');
                                 continue;
                             }
                             try {
                                 const parsed = JSON.parse(dataStr);
+                                if (parsed.error) {
+                                    showToast(`Scanning error: ${parsed.error}`, 'error', 8000);
+                                    continue;
+                                }
                                 const idx = parsed.index;
                                 const item = parsed.result;
 
@@ -2649,7 +2651,7 @@
         // ═══════════════════════════════════════════════
         function addManualRow() {
             const targetClass = document.getElementById('target-class');
-            const classVal = targetClass ? targetClass.value : '';
+            const classVal = targetClass ? targetClass.value : (typeof selectedClasses !== 'undefined' && selectedClasses.length > 0 ? selectedClasses[0] : '');
             const newIdx = extractedData.length;
             const newItem = {
                 name: '',
@@ -2676,8 +2678,11 @@
             showToast('New row added. Type the student name and score.', 'info', 3000);
         }
 
+        let _deleteInProgress = false;
         function deleteManualRow(index, btn) {
+            if (_deleteInProgress) return; // Guard against rapid double-clicks
             if (index >= 0 && index < extractedData.length) {
+                _deleteInProgress = true;
                 extractedData.splice(index, 1);
                 const row = btn.closest('tr');
                 if (row) {
@@ -2685,9 +2690,9 @@
                     row.style.transform = 'translateX(50px)';
                     setTimeout(() => row.remove(), 300);
                 }
-                // Re-index remaining rows
+                // Re-index remaining rows after animation completes
                 setTimeout(() => {
-                    const rows = document.querySelectorAll('#results-body tr, #review-section tbody tr');
+                    const rows = document.querySelectorAll('#results-tbody tr');
                     rows.forEach((tr, i) => {
                         tr.querySelectorAll('input[data-index]').forEach(input => {
                             input.setAttribute('data-index', i);
@@ -2696,7 +2701,8 @@
                             btn.setAttribute('onclick', `deleteManualRow(${i}, this)`);
                         });
                     });
-                }, 350);
+                    _deleteInProgress = false;
+                }, 400);
                 showToast('Row removed.', 'info', 2000);
             }
         }
@@ -2786,7 +2792,7 @@
                         assessmentType: finalAssessmentType,
                         subjectType: currentSubjectName,
                         subjectMode: typeof currentSubjectMode !== 'undefined' ? currentSubjectMode : 'general',
-                        classList: typeof sessionClasses !== 'undefined' ? Array.from(sessionClasses) : []
+                        classList: typeof sessionClasses !== 'undefined' ? Array.from(sessionClasses) : (typeof selectedClasses !== 'undefined' ? selectedClasses : [])
                     })
                 });
 
@@ -2921,7 +2927,7 @@
                 exportMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> Error: ${err.message}`;
             } finally {
                 btnExport.disabled = false;
-                btnExport.innerHTML = `<i class="fa-solid fa-download mr-2 group-hover:-translate-y-1 transition-transform"></i> Save & Download`;
+                btnExport.innerHTML = `<i class="fa-solid fa-check-circle mr-2.5 text-lg group-hover:scale-110 transition-transform"></i> Looks Good — Save & Download`;
             }
         });
 
@@ -3400,10 +3406,11 @@
                 }
 
                 const file = scoresheetFile.files[0];
-                const targetClass = document.getElementById('target-class').value;
+                const tcEl = document.getElementById('target-class');
+                const targetClass = tcEl ? tcEl.value : (typeof selectedClasses !== 'undefined' && selectedClasses.length > 0 ? selectedClasses[0] : '');
 
                 if (!targetClass) {
-                    showToast("Please select a target class before uploading.", "warning");
+                    showToast("Please select a class before uploading a scoresheet.", "warning");
                     return;
                 }
 
