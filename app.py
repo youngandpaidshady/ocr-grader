@@ -1181,6 +1181,7 @@ def upload_excel_scorelist():
 
         return jsonify({
             "success": True,
+            "total_students": len(records),
             "assessment_types_found": assessment_types,
             "records": records,
             "detected_class": detected_class,
@@ -1437,8 +1438,12 @@ You must return a JSON object with an "edits" array. Each edit is one of:
 4. {{"type": "add_row", "data": {{"Name": "John", "Score": 80}}}} — add a new row
 5. {{"type": "rename_column", "old_name": "Marks", "new_name": "Score"}} — rename a column
 
+RULES:
+- If a teacher says "add 5 to [Column Name]", use "update_column" with expression "x + 5" for that specific column.
+- x represents the current cell value. The math expression must use ONLY `x` (e.g. `x + 5`, `x * 10`).
+
 Return ONLY raw JSON. Example:
-{{"edits": [{{"type": "update_column", "column": "Score", "expression": "x + 5"}}], "summary": "Added 5 marks to all scores"}}
+{{"edits": [{{"type": "update_column", "column": "Assignment", "expression": "x + 5"}}], "summary": "Added 5 marks to Assignment column"}}
 """.format(columns=columns, rows=row_count, sample=sample, instruction=instruction)
         
         # Call AI with retry
