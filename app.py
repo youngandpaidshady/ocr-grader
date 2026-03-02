@@ -1406,16 +1406,28 @@ def assistant_scan_to_excel():
         if not instruction:
             return jsonify({"error": "No instruction provided"}), 400
             
+        class_name = request.form.get('class_name', '').strip()
+            
         file = request.files['image']
         
         # Read image
         img_bytes = file.read()
         image_parts = [{"mime_type": file.content_type, "data": img_bytes}]
         
+        # Build optional roster context for smarter OCR
+        roster_context = ""
+        if class_name:
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if c:
+                students = StudentModel.query.filter_by(class_id=c.id).all()
+                if students:
+                    roster_names = [s.name for s in students]
+                    roster_context = f"\n\nCRITICAL KNOWLEDGE: The teacher mentioned this image belongs to class '{class_name}'. The official database roster for this class is: {roster_names}. \nWHEN EXTRACTING NAMES, YOU MUST MATCH THEM STRICTLY TO THIS ROSTER, IGNORING TYPOS IN THE HANDWRITING. Fix any misspelled handwritten names to perfectly match the official database spelling."
+        
         prompt = """
 You are an expert OCR and data extraction AI. A teacher has uploaded an image of a document (often handwritten) and given you specific instructions on how to parse it into a structured table.
 
-TEACHER'S INSTRUCTION: "{instruction}"
+TEACHER'S INSTRUCTION: "{instruction}"{roster_context}
 
 Your job is to read the image and generate a JSON array of objects representing the rows of the table. Every column requested by the teacher MUST be a key in every JSON object. 
 
@@ -1423,7 +1435,7 @@ RULES:
 - Return ONLY a raw JSON array. Start with [ and end with ]. No markdown, no backticks, no explanations.
 - If the teacher asks to extract specific columns (e.g. 'Name', '1st CA', 'Note'), those exact names must be the keys in your JSON.
 - If a value is missing or unreadable, use an empty string "" for that key. Do not omit the key.
-""".format(instruction=instruction)
+""".format(instruction=instruction, roster_context=roster_context)
 
         # Call AI
         raw_text = None
@@ -1855,6 +1867,7 @@ EXAMPLE INPUT→OUTPUT MAPPINGS (follow these patterns exactly):
 - "Fix Tunde's score to 15" → action: "correct_score", params: {{student_name: "Tunde", new_score: "15"}}
 - "Add 5 points to everyone" / "Delete students below 40" → action: "edit_excel", params: {{instruction: "add 5 points to everyone"}}
 - "Scan this image and extract Name, 1st CA, and 2nd CA into an excel file" → action: "scan_image_to_excel", params: {{instruction: "extract Name, 1st CA, and 2nd CA"}}
+- "Scan this image for SS 1Q and extract Name, 1st CA, and 2nd CA" → action: "scan_image_to_excel", params: {{instruction: "extract Name, 1st CA, and 2nd CA", class_name: "SS 1Q"}}
 - "Read this file" / "What is in this excel?" → action: "none" (Just read it and summarize conversationaly!)
 - "Where is the edited file?" / "Did you edit it?" → action: "none" (Answer the question conversationally, DO NOT use edit_excel!)
 - "Add Fatimah to SS 1Q" → action: "add_student", params: {{student_name: "Fatimah", class_name: "SS 1Q"}}

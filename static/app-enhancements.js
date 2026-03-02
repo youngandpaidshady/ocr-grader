@@ -1203,6 +1203,7 @@ async function executeAssistantAction(action, params) {
                 const scanFormData = new FormData();
                 scanFormData.append('image', _assistantUploadedFile);
                 scanFormData.append('instruction', params?.instruction || message || '');
+                scanFormData.append('class_name', params?.class_name || '');
                 try {
                     const scanResp = await fetch('/api/assistant-scan-to-excel', {
                         method: 'POST',
@@ -1552,84 +1553,22 @@ async function handleAssistantFileUpload(input) {
         const formData = new FormData();
 
         if (isImage) {
-            // Send image to OCR endpoint
-            formData.append('images', file);
-            const targetClass = document.getElementById('target-class')?.value || '';
-            formData.append('targetClass', targetClass);
-            formData.append('assessmentType', 'Score');
-            formData.append('subjectType', document.getElementById('subject-name')?.value || '');
-
-            const response = await fetch('/upload-batch', {
-                method: 'POST',
-                body: JSON.stringify({
-                    images: [await fileToBase64(file)],
-                    targetClass: targetClass,
-                    assessmentType: 'Score',
-                    subjectType: document.getElementById('subject-name')?.value || ''
-                }),
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let accumulatedResults = [];
-            let buffer = '';
-
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const dataStr = line.replace('data: ', '').trim();
-                        if (dataStr === '[DONE]') continue;
-                        try {
-                            const parsed = JSON.parse(dataStr);
-                            if (parsed.result) accumulatedResults.push(parsed.result);
-                        } catch (e) {
-                            console.error('SSE parsing error', e);
-                        }
-                    }
-                }
-            }
-            const data = { results: accumulatedResults };
-
-            // Remove typing indicator
+            // Remove typing indicator immediately because we are deferring to the Assistant
             document.getElementById('upload-typing')?.remove();
 
-            if (data.results && data.results.length > 0) {
-                // Push to global extractedData so btn-export can build the Excel file
-                if (typeof extractedData !== 'undefined') {
-                    if (!extractedData || extractedData.length === 0) {
-                        extractedData = data.results;
-                    } else {
-                        data.results.forEach(item => extractedData.push(item));
-                    }
-                }
+            _assistantUploadedFile = file; // Store for follow-up edit instructions
 
-                let resultHTML = data.results.map(r =>
-                    `<div class="flex justify-between text-xs py-1 border-b border-white/5"><span>${r.name || 'Unknown'}</span><span class="font-bold text-primary">${r.score || '?'}</span></div>`
-                ).join('');
-                chatEl.innerHTML += `
-                    <div class="flex justify-start mb-3">
-                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-                            <p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-check-circle mr-1.5"></i>Found ${data.results.length} scores!</p>
-                            <div class="max-h-40 overflow-y-auto mb-3">${resultHTML}</div>
-                            <button onclick="document.getElementById('btn-export')?.click()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down"></i> Save & Download Excel</button>
-                        </div>
+            chatEl.innerHTML += `
+                <div class="flex justify-start mb-3">
+                    <div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                        <p class="text-sm text-blue-400 font-bold mb-1"><i class="fa-solid fa-check-circle mr-1.5"></i>Image attached!</p>
+                        <p class="text-[11px] text-white/50">I'm ready to analyze this over to you.</p>
                     </div>
-                `;
-            } else {
-                chatEl.innerHTML += `
-                    <div class="flex justify-start mb-3">
-                        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2">
-                            <p class="text-sm text-white">${data.error || "I couldn't read any scores from that image. Try a clearer photo."}</p>
-                        </div>
-                    </div>
-                `;
-            }
+                </div>
+            `;
+            chatEl.scrollTop = chatEl.scrollHeight;
+
+            sendAssistantMessage(`[SYSTEM] Teacher just attached an image of a document or table. Acknowledge it, and ask them two things: 1) What specific columns or data they want to extract into an Excel file, and 2) WHICH CLASS this is for, so you can perfectly match the messy handwriting against the official database roster.`);
         } else if (isExcel) {
             // Send Excel to upload endpoint
             formData.append('file', file);
