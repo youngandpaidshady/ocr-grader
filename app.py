@@ -891,7 +891,7 @@ def export_excel():
         
         for level, classes_in_level in level_groups.items():
             # File per level
-            safe_subject = re.sub(r'[^A-Za-z0-9 ]', '', subject_name).strip()
+            safe_subject = re_mod.sub(r'[^A-Za-z0-9 ]', '', subject_name).strip()
             filename = "{}_{}.xlsx".format(safe_subject or "Scores", level)
             filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
             generated_files[level] = {"path": filepath, "filename": filename}
@@ -1437,10 +1437,13 @@ You must return a JSON object with an "edits" array. Each edit is one of:
 3. {{"type": "delete_rows", "condition_column": "Score", "condition": "< 40"}} — delete rows matching a condition
 4. {{"type": "add_row", "data": {{"Name": "John", "Score": 80}}}} — add a new row
 5. {{"type": "rename_column", "old_name": "Marks", "new_name": "Score"}} — rename a column
-6. {{"type": "add_column", "column": "Assignment", "default_value": "0"}} - add a new column (if the user asks to modify a column that doesn't exist, you MUST add it first!)
+6. {{"type": "add_column", "column": "Assignment", "default_value": "0"}} - add a new column
+7. {{"type": "confirm_column", "suspected_column": "Ass", "original_instruction": "{instruction}"}} — ASK FOR CONFIRMATION IF UNSURE.
 
 RULES:
-- If a teacher says "add 5 to [Column Name]", use "update_column" with expression "x + 5" for that specific column. BUT if that column does NOT exist in the Current Columns list above, you MUST return TWO edits: first "add_column" to create it with default_value 0, then "update_column" to add 5 to it.
+- If a teacher says "add 5 to [Column Name]", use "update_column" with expression "x + 5" for that specific column. 
+- **CRITICAL SMARTNESS**: If that column does NOT exist, look at the Current Columns list. Is there a column with a very similar name or obvious abbreviation (e.g. they asked for "Assignment" but the column is "Ass" or "1st CA")? If YES, you MUST return ONLY ONE edit: "confirm_column" with your best guess. Do not proceed with adding columns or updating.
+- If there is NO similar column, you MUST return TWO edits: first "add_column" to create it with default_value 0, then "update_column" to add 5 to it.
 - x represents the current cell value. The math expression must use ONLY `x` (e.g. `x + 5`, `x * 10`).
 
 Return ONLY raw JSON. Example:
@@ -1479,10 +1482,19 @@ Return ONLY raw JSON. Example:
         
         # Apply edits to dataframe
         changes_made = 0
+        needs_confirmation = None
+        
         for edit in edits:
             edit_type = edit.get('type', '')
             
-            if edit_type == 'update_cell':
+            if edit_type == 'confirm_column':
+                needs_confirmation = {
+                    "guess": edit.get('suspected_column'),
+                    "original_instruction": edit.get('original_instruction')
+                }
+                break # Stop processing other edits if we need confirmation
+                
+            elif edit_type == 'update_cell':
                 row = edit.get('row', 0)
                 col = edit.get('column', '')
                 if col in df.columns and 0 <= row < len(df):
@@ -1546,20 +1558,35 @@ Return ONLY raw JSON. Example:
         else:
             df.to_excel(output_path, index=False, engine='openpyxl')
         
-        if changes_made == 0:
+        
+        if needs_confirmation:
             return jsonify({
-                "success": False,
-                "error": summary or "I couldn't figure out how to apply those edits to this file format."
+                "success": True,
+                "needs_confirmation": True,
+                "guess": needs_confirmation["guess"],
+                "original_instruction": needs_confirmation["original_instruction"],
+                "message": "Did you mean the '{}' column?".format(needs_confirmation["guess"])
             }), 200
             
-        return jsonify({
-            "success": True,
-            "summary": summary,
-            "changes_made": changes_made,
-            "row_count": len(df),
-            "download_url": "/api/download-edited-excel?file={}".format(output_filename)
-        }), 200
-        
+        if changes_made > 0:
+            # Assuming WORKING_EXCEL_PATH is defined elsewhere, or we should use output_path
+            # For now, using output_path as a placeholder if WORKING_EXCEL_PATH is not defined
+            # If WORKING_EXCEL_PATH is meant to be a global variable, it should be defined.
+            # For this edit, I'll assume it's a typo and should be output_path, or it's defined globally.
+            # Given the context, it's likely a persistent working file.
+            # If not defined, this line will cause an error. I'll keep it as is, assuming it's defined.
+            # df.to_excel(WORKING_EXCEL_PATH, index=False) # Commented out as WORKING_EXCEL_PATH is not in provided context
+            return jsonify({
+                "success": True,
+                "message": summary,
+                "download_url": "/api/download-edited-excel?file={}".format(output_filename) # Changed to use output_filename
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": "I understood the instruction, but it didn't result in any actual changes to the data."
+            }), 200
+            
     except Exception as e:
         print("Assistant edit Excel error: {}".format(e))
         return jsonify({"error": str(e)}), 500

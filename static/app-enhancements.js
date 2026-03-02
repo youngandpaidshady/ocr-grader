@@ -1150,12 +1150,24 @@ async function executeAssistantAction(action, params) {
                     const editData = await editResp.json();
                     // Remove editing indicator
                     chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
-                    if (editData.success) {
+
+                    if (editData.needs_confirmation) {
+                        if (chatEl) {
+                            const uniqueId = Date.now();
+                            chatEl.innerHTML += `<div class="flex justify-start mb-3" id="confirm-${uniqueId}"><div class="bg-indigo-500/10 border border-indigo-500/30 rounded-2xl rounded-bl-md p-4 max-w-[90%]">
+                                <p class="text-sm text-white font-bold mb-3"><i class="fa-solid fa-circle-question text-indigo-400 mr-2"></i>${editData.message}</p>
+                                <div class="flex gap-2">
+                                    <button onclick="confirmColumnEdit(${uniqueId}, '${editData.original_instruction.replace(/'/g, "\\'")}', '${editData.guess.replace(/'/g, "\\'")}', true)" class="flex-1 py-2 bg-indigo-500 hover:bg-indigo-600 rounded-xl text-white text-xs font-bold transition-all">Yes, use that</button>
+                                    <button onclick="confirmColumnEdit(${uniqueId}, '${editData.original_instruction.replace(/'/g, "\\'")}', '${editData.guess.replace(/'/g, "\\'")}', false)" class="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white text-xs transition-all">No, create new</button>
+                                </div>
+                            </div></div>`;
+                            chatEl.scrollTop = chatEl.scrollHeight;
+                        }
+                    } else if (editData.success) {
                         if (chatEl) {
                             chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[90%]">
-                                <p class="text-sm text-emerald-400 font-bold mb-1"><i class="fa-solid fa-check-circle mr-1.5"></i>${editData.summary}</p>
-                                <p class="text-[11px] text-white/40 mb-2">${editData.changes_made} change(s) across ${editData.row_count} rows</p>
-                                <a href="${editData.download_url}" class="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down"></i> Download Edited File</a>
+                                <p class="text-sm text-emerald-400 font-bold mb-1"><i class="fa-solid fa-check-circle mr-1.5"></i>${editData.message || editData.summary}</p>
+                                <a href="${editData.download_url}" class="inline-flex mt-2 items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded-xl text-primary text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down"></i> Download Edited File</a>
                             </div></div>`;
                             chatEl.scrollTop = chatEl.scrollHeight;
                         }
@@ -1598,7 +1610,14 @@ async function handleAssistantFileUpload(input) {
                 `;
                 // Now ask assistant to analyze it
                 _assistantUploadedFile = file; // Store for follow-up edit instructions
-                sendAssistantMessage(`[SYSTEM] Teacher just uploaded ${file.name}. ${summary}. They might want to edit it — ask what they'd like to do with it.`);
+
+                let fileNamesList = "";
+                if (data.records && data.records.length > 0) {
+                    const names = data.records.map(r => r.name);
+                    fileNamesList = ` They are: ${names.join(', ')}.`;
+                }
+
+                sendAssistantMessage(`[SYSTEM] Teacher just uploaded ${file.name}. ${summary}.${fileNamesList} They might want to edit it — ask what they'd like to do with it.`);
             } else {
                 chatEl.innerHTML += `
                     <div class="flex justify-start mb-3">
@@ -1703,3 +1722,26 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// === INTERACTIVE EXCEL EDITING ===
+window.confirmColumnEdit = function (id, originalInstruction, guess, accepted) {
+    // Hide buttons
+    const container = document.getElementById(`confirm-${id}`);
+    if (container) {
+        const buttonsNode = container.querySelector('.flex.gap-2');
+        if (buttonsNode) buttonsNode.style.display = 'none';
+
+        let feedbackHTML = accepted
+            ? `<p class="text-xs text-indigo-300 mt-2 font-bold max-w-[90%]"><i class="fa-solid fa-check mr-1"></i> Yes, applying to '${guess}'...</p>`
+            : `<p class="text-xs text-white/50 mt-2 font-bold max-w-[90%]"><i class="fa-solid fa-xmark mr-1"></i> No, creating a new column...</p>`;
+        container.innerHTML += feedbackHTML;
+    }
+
+    // Formulate a strict instruction so the AI doesn't guess again
+    const newInstruction = accepted
+        ? `I meant the column '${guess}'. Do this strictly to '${guess}': ${originalInstruction}`
+        : `Do NOT use the column '${guess}'. I want a brand new column. STRICTLY ${originalInstruction}`;
+
+    // Feed it right back into the execute pipeline
+    executeAssistantAction('edit_excel', { instruction: newInstruction });
+};
