@@ -1961,6 +1961,20 @@ RULES FOR NAME MATCHING:
 - If you truly cannot determine which roster name a row belongs to, use your BEST GUESS from the roster — a wrong guess from the roster is better than an empty name or an invented name.
 ====================================""".format(class_name=c.name, count=len(roster_names), numbered_roster=numbered_roster)
         
+        # No-roster fallback: class not in DB or no students yet
+        if not roster_names and not roster_context:
+            roster_context = """
+
+===== NAME EXTRACTION (NO ROSTER AVAILABLE) =====
+No class roster was provided for matching. You must read names directly from the handwriting.
+RULES:
+- Read EVERY name carefully, character by character. Nigerian names are often multi-part (e.g. "Abdulkareem Ihtimod Oyewumi").
+- NEVER leave a name blank. Every row with scores MUST have a name.
+- NEVER invent or guess names. Only write what you can actually SEE in the handwriting.
+- If a name is partially readable, write the readable parts and use "?" for unclear characters.
+- Pay attention to common Nigerian name patterns: Abdul-, Ade-, Ola-, Ayo-, Oba-, etc.
+=================================================="""
+        
         prompt = """
 You are an expert OCR and data extraction AI specializing in Nigerian school record sheets. A teacher has uploaded image(s) of a handwritten document.
 
@@ -2612,12 +2626,13 @@ INTELLIGENCE RULES:
 10. ALWAYS return valid JSON with "response", "action" and "params". For general LLM tasks, use action "none" and put your full, rich answer in "response".
 11. READ VS EDIT EXCEL: If the teacher asks you to simply "read", "review", or "tell me what you found" about an uploaded Excel file, DO NOT use "edit_excel". Only use "edit_excel" if they explicitly ask you to MODIFY data (e.g. add, delete, rename). If they just want to read, use action "none" and summarize it in the response based on the "Context" I provided you about the upload.
 12. AVOID FALSE EDITS: If the teacher asks a question LIKE "where is the edited file?", they are asking a question, NOT giving an instruction to edit an Excel file. Use action "none".
-13. IMAGE SCAN INTELLIGENCE: When teacher uploads image(s), you MUST collect this info before triggering scan_image_to_excel:
-    a) WHICH CLASS is this for? → params.class_name (e.g. "SS 1T", "SS 2Q")
-    b) WHAT SUBJECT? → params.subject_name (e.g. "Mathematics", "English")
-    c) WHAT COLUMNS to extract? → params.instruction (e.g. "extract name, 1st CA, 2nd CA, Exam"). If teacher says "extract everything" or "all columns", pass instruction as "extract all columns".
-    d) WHAT ASSESSMENT TYPE? → params.assessment_type (e.g. "1st Term", "2nd Term") if visible on the sheet.
-    If the teacher provides some info upfront (e.g. "this is SS 1T Mathematics"), don't re-ask for what you already know. Only ask for MISSING info.
+13. IMAGE SCAN INTELLIGENCE: When teacher uploads image(s), you MUST collect ALL of the following BEFORE triggering scan_image_to_excel:
+    a) WHICH CLASS is this for? → params.class_name (e.g. "SS 1T", "SS 2Q") — REQUIRED, do NOT assume.
+    b) WHAT SUBJECT? → params.subject_name (e.g. "Mathematics", "English") — REQUIRED, do NOT assume.
+    c) WHICH TERM? → params.assessment_type (e.g. "1st Term", "2nd Term", "3rd Term") — REQUIRED, do NOT assume.
+    d) WHAT COLUMNS to extract? → params.instruction. If the image shows a full record sheet, you can default to "extract all columns".
+    You can often detect class, subject, and term from the image header itself. If you can SEE it in the image, tell the teacher what you see and ask for confirmation (e.g. "I see 'SS 1S Record Sheet, 1st Term' at the top."). If the info is NOT visible in the image and the teacher hasn't told you, ASK — do NOT guess.
+    If the teacher provides some info upfront (e.g. "this is SS 1T Mathematics 2nd Term"), don't re-ask for what you already know. Only ask ONE question for the FIRST missing piece of info.
 14. SMART COLUMN GUESSING: Nigerian record sheets often have these columns: 1st CA, 2nd CA, Open Day, Note Book, Assignment, Attendance, Total, Exam, Grand Total. If teacher says "extract all columns" or "everything", use these standard names.
 15. AUTO-DETECT FROM IMAGE: If you can see the image AND it clearly shows a class name or subject in the header, TELL the teacher what you see and ask them to confirm. Be specific: "I can see this says 'SS 1T - Mathematics' at the top. Is that right?"
 16. MULTI-CLASS UPLOADS: If teacher uploads multiple images and says they're for DIFFERENT classes, ask which image is for which class. Do NOT assume all images are the same class.
