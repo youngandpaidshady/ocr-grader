@@ -1572,7 +1572,8 @@ def upload_excel_scorelist():
 
             # Detect Assessment types
             exclude = [name_col, class_col, subj_col, 'Total Score', 'Position', 'Rank', 'Total']
-            sheet_assessments = [col for col in df.columns if col not in exclude and not str(col).startswith('Unnamed')]
+            sheet_assessments = [str(col) for col in df.columns if col not in exclude and not str(col).startswith('Unnamed')]
+            
             for a in sheet_assessments:
                 if a not in assessment_types:
                     assessment_types.append(a)
