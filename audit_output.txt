@@ -1,0 +1,25 @@
+SHEET NAMES: ["SS 1Q - 1st Term", "SS 1Q - 2nd Term", "SS 1Q - 3rd Term"]
+
+=== SHEET: SS 1Q - 1st Term ===
+COLUMNS: ['Name', 'Class', '1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment', 'Total CA', 'Exam', 'Grand Total', 'Grade', 'Remarks', 'Position']
+ROWS: 3
+          Name  Class  1st CA  2nd CA  Open Day  Note  Assignment  Total CA  Exam  Grand Total  Grade  Remarks Position
+0  Aishat Musa  SS 1Q       8     7.0       NaN   NaN         NaN       7.5   NaN          NaN    NaN      NaN      1st
+1   Bola Ahmed  SS 1Q       6     8.0       NaN   NaN         NaN       7.0   NaN          NaN    NaN      NaN      2nd
+2    Chidi Obi  SS 1Q       9     NaN       NaN   NaN         NaN       4.5   NaN          NaN    NaN      NaN      3rd
+
+=== SHEET: SS 1Q - 2nd Term ===
+COLUMNS: ['Name', 'Class', '1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment', 'Total CA', 'Exam', 'Grand Total', '1st Term Total', '1st & 2nd', 'Grade', 'Remarks', 'Position']
+ROWS: 3
+          Name  Class  1st CA  2nd CA  Open Day  Note  Assignment  Total CA  Exam  Grand Total  1st Term Total  1st & 2nd  Grade  Remarks  Position
+0  Aishat Musa  SS 1Q     NaN     NaN       NaN   NaN         NaN       NaN   NaN          NaN             NaN        NaN    NaN      NaN       NaN
+1   Bola Ahmed  SS 1Q     NaN     NaN       NaN   NaN         NaN       NaN   NaN          NaN             NaN        NaN    NaN      NaN       NaN
+2    Chidi Obi  SS 1Q     NaN     NaN       NaN   NaN         NaN       NaN   NaN          NaN             NaN        NaN    NaN      NaN       NaN
+
+=== SHEET: SS 1Q - 3rd Term ===
+COLUMNS: ['Name', 'Class', '1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment', 'Total CA', 'Exam', 'Grand Total', '1st Term Total', '2nd Term Total', '1st 2nd & 3rd', 'Average', 'Grade', 'Remarks', 'Position']
+ROWS: 3
+          Name  Class  1st CA  2nd CA  Open Day  Note  Assignment  Total CA  Exam  Grand Total  1st Term Total  2nd Term Total  1st 2nd & 3rd  Average  Grade  Remarks  Position
+0  Aishat Musa  SS 1Q     NaN     NaN       NaN   NaN         NaN       NaN   NaN          NaN             NaN             NaN            NaN      NaN    NaN      NaN       NaN
+1   Bola Ahmed  SS 1Q     NaN     NaN       NaN   NaN         NaN       NaN   NaN          NaN             NaN             NaN            NaN      NaN    NaN      NaN       NaN
+2    Chidi Obi  SS 1Q     NaN     NaN       NaN   NaN         NaN       NaN   NaN          NaN             NaN             NaN            NaN      NaN    NaN      NaN       NaN

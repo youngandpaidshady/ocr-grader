@@ -1,0 +1,343 @@
+def export_excel():
+    """Generates Excel from scanned results. Handles multi-term merge and standard formatting."""
+    try:
+        data = request.json
+        if not data or 'results' not in data:
+            return jsonify({"error": "No results provided for export"}), 400
+            
+        results = data['results']
+        assessment_type = data.get('assessmentType', 'Score').strip()
+        subject_name = data.get('subjectType', data.get('subjectName', '')).strip()
+        term = data.get('term', '1st Term').strip()  # 1st Term, 2nd Term, 3rd Term
+        existing_records = data.get('existingRecords', None)
+        
+        if not assessment_type:
+            assessment_type = 'Score'
+        if not subject_name or subject_name.lower() == 'uncategorized':
+            subject_name = data.get('subjectName', data.get('subjectType', '')).strip()
+        if not subject_name:
+            subject_name = 'General'
+            
+        if not results and not existing_records:
+             return jsonify({"error": "No data to export"}), 400
+
+        subject_mode = data.get('subjectMode', 'general').strip().lower()
+             
+        # === ROSTER-ONLY DB SYNC ===
+        # Only update class rosters (student names), NOT scores
+        
+        # Merge new scanned names for roster sync
+        all_new_names = []
+        for r in results:
+            name = str(r.get('name', '')).strip().title()
+            if not name: continue
+            all_new_names.append((name, str(r.get('class', '')).strip().upper()))
+            
+        for name, c_raw in all_new_names:
+            c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', c_raw)
+            match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
+            class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
+            
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if not c:
+                c = ClassModel(name=class_name)
+                db.session.add(c)
+                db.session.commit()
+                
+            student = StudentModel.query.filter_by(class_id=c.id, name=name).first()
+            if not student:
+                existing_students = StudentModel.query.filter_by(class_id=c.id).all()
+                existing_names = [s.name for s in existing_students]
+                if existing_names:
+                    best = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
+                    if best and best[1] >= 85:
+                        student = StudentModel.query.filter_by(class_id=c.id, name=best[0]).first()
+                if not student:
+                    student = StudentModel(class_id=c.id, name=name)
+                    db.session.add(student)
+                    db.session.commit()
+            
+        # === BUILD & MERGE EXCEL DATA ===
+        
+        # 1. Standardize and process new scanned results by class
+        new_scores_by_class = {}
+        for r in results:
+            name = str(r.get('name', '')).strip().title()
+            if not name: continue
+            
+            c_raw = str(r.get('class', '')).strip().upper()
+            c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', c_raw)
+            match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
+            class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
+            
+            if class_name not in new_scores_by_class:
+                new_scores_by_class[class_name] = {}
+            new_scores_by_class[class_name][name] = str(r.get('score', '')).strip()
+            
+        # 2. Add existing records and merge with new
+        merged_by_class = {} # {class_name: {name: {col: val}}}
+        
+        if existing_records and isinstance(existing_records, list):
+            for r in existing_records:
+                # Expecting records like: {'Name': 'John', 'Class': 'SS 1A', '1st CA': 8, ...}
+                name = str(r.get('Name', '')).strip().title()
+                clsz = str(r.get('Class', '')).strip()
+                if not name or not clsz: continue
+                
+                if clsz not in merged_by_class:
+                    merged_by_class[clsz] = {}
+                
+                # Copy existing data exactly as is (ignoring computed columns which we'll recalculate)
+                row_data = {k: v for k, v in r.items() if k not in ["Position", "Rank"]}
+                # Make sure name and class are uniform
+                row_data["Name"] = name
+                row_data["Class"] = clsz
+                
+                merged_by_class[clsz][name] = row_data
+
+        # 3. Merge in the new scans
+        for class_name, students in new_scores_by_class.items():
+            if class_name not in merged_by_class:
+                merged_by_class[class_name] = {}
+                
+            for name, score in students.items():
+                if not score: continue
+                
+                # Fuzzy match name against existing merged records to prevent duplicates
+                existing_names = list(merged_by_class[class_name].keys())
+                target_name = name
+                if existing_names:
+                    best = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
+                    if best and best[1] >= 85:
+                        target_name = best[0]
+                
+                if target_name not in merged_by_class[class_name]:
+                    merged_by_class[class_name][target_name] = {"Name": target_name, "Class": class_name}
+                
+                # Update the new assessment column (this will overwrite previous session's value IF they regrade the SAME assessment)
+                merged_by_class[class_name][target_name][assessment_type] = score
+        
+        # 4. Fill in missing roster students (if general mode)
+        class_filter = data.get('classList', [])
+        if subject_mode == 'general' and class_filter:
+            for class_name in class_filter:
+                c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+                if c:
+                    roster = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
+                    if class_name not in merged_by_class:
+                        merged_by_class[class_name] = {}
+                        
+                    existing_names = list(merged_by_class[class_name].keys())
+                    for s in roster:
+                        found_name = s.name
+                        if existing_names:
+                            best = process.extractOne(s.name, existing_names, scorer=fuzz.token_set_ratio)
+                            if best and best[1] >= 85:
+                                found_name = best[0]
+                        
+                        if found_name not in merged_by_class[class_name]:
+                            merged_by_class[class_name][s.name] = {"Name": s.name, "Class": class_name}
+
+        # === COMPUTE & GROUP BY CLASS LEVEL ===
+        level_groups = {}  # {level: {arm: [results]}}
+        config = NIGERIAN_MARK_BOOK_CONFIG
+        
+        for class_name, students in merged_by_class.items():
+            parsed = parse_class_level(class_name)
+            level = parsed["level"]
+            arm = parsed["arm"]
+            
+            if level not in level_groups:
+                level_groups[level] = {}
+            if class_name not in level_groups[level]:
+                level_groups[level][class_name] = []
+                
+            for name, row_data in students.items():
+                # Extract and clean ONLY the standard configured columns for computation
+                # Other columns (like 1st Term Total) just pass through
+                ca_scores = {}
+                for col in config["ca_columns"]:
+                    val = row_data.get(col)
+                    if val is not None and str(val).strip() != '' and str(val).upper() != 'ABS':
+                        try:
+                            # Handle potential fractions like "8/10"
+                            c_val = str(val).split('/')[0] if '/' in str(val) else val
+                            ca_scores[col] = float(c_val)
+                        except: pass
+                
+                if 'Exam' in row_data:
+                    val = row_data['Exam']
+                    if val is not None and str(val).strip() != '' and str(val).upper() != 'ABS':
+                        try:
+                            c_val = str(val).split('/')[0] if '/' in str(val) else val
+                            ca_scores['Exam'] = float(c_val)
+                        except: pass
+                
+                # Recompute Total CA, Grand Total, Grade, Remarks
+                if ca_scores:
+                    derived, _ = compute_derived_scores(ca_scores)
+                    for key in ['Total CA', 'Grand Total', 'Grade', 'Remarks']:
+                        if key in derived:
+                            row_data[key] = derived[key]
+                else:
+                    for key in ['Total CA', 'Grand Total', 'Grade', 'Remarks']:
+                        if key in row_data:
+                            del row_data[key] # clear out old computations if scores were removed
+                            
+                # Ensure it's in the group
+                level_groups[level][class_name].append(row_data)
+
+        # === GENERATE EXCEL FILES ===
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.utils import get_column_letter
+        
+        all_sheets_summary = {}
+        generated_files = {}  # {level: filepath}
+        
+        for level, classes_in_level in level_groups.items():
+            safe_subject = re_mod.sub(r'[^A-Za-z0-9 ]', '', subject_name).strip()
+            # File named with term
+            safe_term = re_mod.sub(r'[^A-Za-z0-9 ]', '', term).strip()
+            filename = "{}_{}_{}.xlsx".format(safe_subject or "Scores", safe_term.replace(' ', ''), level)
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+            generated_files[level] = {"path": filepath, "filename": filename}
+            
+            sheets_dict = {}
+            
+            for class_name, rows in classes_in_level.items():
+                # Create the term specific sheet (e.g. "SS 1A - 1st Term")
+                sheet_name = "{} - {}".format(class_name[:18], term[:10])
+                
+                # Build dataframe
+                df = pd.DataFrame(rows)
+                
+                # Define standard mark book columns
+                standard_cols = ['Name', 'Class', '1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment', 'Project', 'Total CA', 'Exam', 'Grand Total', 'Grade', 'Remarks']
+                
+                # Check what past terms exist in the records
+                past_term_cols = [c for c in list(df.columns) if "Term Total" in c or "Term Average" in c]
+                
+                final_cols = ['Name', 'Class'] + past_term_cols
+                for col in standard_cols[2:]: # Add CAs through Remarks
+                    final_cols.append(col)
+                    if col not in df.columns:
+                        df[col] = '' # Add missing standard columns as blank
+                
+                # Reorder and filter (only keep these columns + any custom ones)
+                existing_custom = [c for c in df.columns if c not in final_cols and c not in ['Position', 'Rank']]
+                final_cols.extend(existing_custom)
+                
+                # Compute cumulative if 2nd/3rd term
+                if "2nd" in term and "1st Term Total" in df.columns:
+                    # simplistic cumulative average for demo
+                    pass 
+                
+                df = df[final_cols]
+                
+                # Ranking based on Grand Total (or whatever highest score is available)
+                rank_col = 'Grand Total' if 'Grand Total' in df.columns and len(df['Grand Total'].dropna()) > 0 else (
+                           'Total CA' if 'Total CA' in df.columns and len(df['Total CA'].dropna()) > 0 else None)
+                           
+                if rank_col:
+                    numeric_scores = pd.to_numeric(df[rank_col], errors='coerce')
+                    df['Rank'] = numeric_scores.rank(method='min', ascending=False)
+                    
+                    def format_position(rank):
+                        if pd.isna(rank): return ''
+                        r = int(rank)
+                        if 11 <= (r % 100) <= 13: return "{}th".format(r)
+                        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+                        return "{}{}".format(r, suffix)
+                        
+                    df['Position'] = df['Rank'].apply(format_position)
+                    df = df.drop(columns=['Rank'])
+                else:
+                    df['Position'] = ''
+                    
+                # Replace NaNs with blanks for cleaner Excel
+                df = df.fillna('')
+                sheets_dict[sheet_name] = df
+            
+            if not sheets_dict:
+                continue
+            
+            # Write out
+            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+                for s_name, df_sheet in sheets_dict.items():
+                    df_sheet.to_excel(writer, sheet_name=s_name, index=False, startrow=4)
+                    worksheet = writer.sheets[s_name]
+                    
+                    worksheet.merge_cells('A1:K1')
+                    title_cell = worksheet['A1']
+                    title_cell.value = "QSI SMART GRADER SCORESHEET - {}".format(term.upper())
+                    title_cell.font = Font(bold=True, size=16)
+                    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+                    
+                    target_class = s_name.split(' - ')[0]
+                    worksheet.merge_cells('A2:E2')
+                    class_cell = worksheet['A2']
+                    class_cell.value = "CLASS: {}".format(target_class)
+                    class_cell.font = Font(bold=True, size=12)
+                    
+                    worksheet.merge_cells('A3:E3')
+                    subj_cell = worksheet['A3']
+                    subj_cell.value = "SUBJECT: {}".format(subject_name)
+                    subj_cell.font = Font(bold=True, size=12)
+                    
+                    header_font = Font(bold=True)
+                    header_fill = PatternFill(start_color="EAEAEA", end_color="EAEAEA", fill_type="solid")
+                    for col_idx in range(1, len(df_sheet.columns) + 1):
+                        cell = worksheet.cell(row=5, column=col_idx)
+                        cell.font = header_font
+                        cell.fill = header_fill
+                        cell.alignment = Alignment(horizontal='center')
+                        
+                        col_letter = get_column_letter(col_idx)
+                        column_header = df_sheet.columns[col_idx - 1]
+                        if column_header == 'Name':
+                            worksheet.column_dimensions[col_letter].width = 30
+                        elif column_header == 'Class':
+                            worksheet.column_dimensions[col_letter].width = 12
+                        elif column_header == 'Remarks':
+                            worksheet.column_dimensions[col_letter].width = 15
+                        else:
+                            worksheet.column_dimensions[col_letter].width = 10
+                            
+                    for row in worksheet.iter_rows(min_row=6, max_row=worksheet.max_row, min_col=3, max_col=worksheet.max_column):
+                        for cell in row:
+                            cell.alignment = Alignment(horizontal='center')
+            
+            for s_name, df_sheet in sheets_dict.items():
+                all_sheets_summary[s_name] = {
+                    "columns": list(df_sheet.columns),
+                    "rows": df_sheet.to_dict(orient='records'),
+                    "class": s_name.split(' - ')[0],
+                    "subject": subject_name,
+                    "level": level
+                }
+        
+        if generated_files:
+            import shutil
+            first_level = list(generated_files.keys())[0]
+            shutil.copy2(generated_files[first_level]["path"], WORKING_EXCEL_PATH)
+        
+        downloads = []
+        for level, info in generated_files.items():
+            downloads.append({
+                "level": level,
+                "filename": info["filename"],
+                "url": "/download-sheet?level={}".format(level)
+            })
+
+        return jsonify({
+            "message": "Grades saved! {} file(s) ready for download.".format(len(downloads)),
+            "sheets": all_sheets_summary,
+            "downloads": downloads,
+            "subject": subject_name
+        }), 200
+
+    except Exception as e:
+        print("Excel export error: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500

@@ -597,6 +597,8 @@ async function handleErrorWithAI(error, action) {
 // ═══════════════════════════════════════════════
 let assistantContext = {};
 let assistantHistory = [];
+let _pendingInteraction = null; // Track active UI widgets expecting user input
+let _assistantImageBase64 = []; // Base64 images to send to AI
 
 function openSmartAssistant(parsedData) {
     const modal = document.getElementById('smart-assistant-modal');
@@ -645,7 +647,9 @@ function openSmartAssistant(parsedData) {
         if (parsedData && parsedData.classes) {
             // Excel upload context — show the file summary
             const classesList = parsedData.classes?.join(', ') || 'Unknown';
-            const assessments = parsedData.assessments?.join(', ') || 'None detected';
+            const assessments = (parsedData.assessments && parsedData.assessments.length > 0)
+                ? parsedData.assessments.join(', ')
+                : 'no assessment columns detected yet';
             summaryEl.innerHTML = `
                 <div class="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
                     <i class="fa-solid fa-file-excel text-emerald-400 text-2xl"></i>
@@ -653,7 +657,7 @@ function openSmartAssistant(parsedData) {
                         <p class="text-sm font-bold text-white">Your file looks good!</p>
                         <p class="text-xs text-emerald-300/70 mt-1">
                             Found <strong>${parsedData.studentCount || 0} students</strong> in 
-                            <strong>${classesList}</strong> with <strong>${assessments}</strong> scores.
+                            <strong>${classesList}</strong>${(parsedData.assessments && parsedData.assessments.length > 0) ? ` with <strong>${assessments}</strong> scores` : '. Ready to start grading!'}.
                         </p>
                     </div>
                 </div>
@@ -681,6 +685,8 @@ function openSmartAssistant(parsedData) {
 
     // Clear chat history
     assistantHistory = [];
+    _pendingInteraction = null;
+    _assistantImageBase64 = [];
     const chatEl = modal.querySelector('#assistant-chat');
     if (chatEl) chatEl.innerHTML = '';
 
@@ -747,6 +753,18 @@ async function sendAssistantMessage(message) {
     const inputEl = document.getElementById('assistant-input');
     if (!chatEl) return;
 
+    // ──────────────────────────────────────────────────
+    //  CONTEXTUAL ROUTING: Route user replies to active UI widgets
+    //  instead of sending everything to the AI backend
+    // ──────────────────────────────────────────────────
+    if (_pendingInteraction && !message.startsWith('[SYSTEM]')) {
+        const handled = _handlePendingInteraction(message, chatEl);
+        if (handled) {
+            if (inputEl) inputEl.value = '';
+            return; // Handled locally, no need to call AI
+        }
+    }
+
     // Add user message to history
     const displayMessage = message.startsWith('[SYSTEM]') ? null : message;
     assistantHistory.push({ role: 'user', text: message });
@@ -800,22 +818,48 @@ async function sendAssistantMessage(message) {
                 name: r.name || '', score: r.score || '', class: r.class || ''
             })) : [];
 
+        // ──────────────────────────────────────────────────
+        //  IMAGE FORWARDING: Send attached images to AI so it can see them
+        // ──────────────────────────────────────────────────
+        let imagesToSend = [];
+        if (_assistantImageBase64.length > 0) {
+            imagesToSend = _assistantImageBase64.slice(0, 5); // Max 5 images
+            _assistantImageBase64 = []; // Clear after sending once
+        }
+
+        const requestBody = {
+            message,
+            context: assistantContext,
+            currentScreen: currentScreen,
+            currentResults: liveResults,
+            sessionInfo: sessionInfo,
+            history: assistantHistory.slice(-20)
+        };
+        if (imagesToSend.length > 0) {
+            requestBody.images = imagesToSend;
+        }
+
         const response = await fetch('/api/smart-assistant', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message,
-                context: assistantContext,
-                currentScreen: currentScreen,
-                currentResults: liveResults,
-                sessionInfo: sessionInfo,
-                history: assistantHistory.slice(-20) // Send last 20 messages for context
-            })
+            body: JSON.stringify(requestBody)
         });
         const data = await response.json();
 
         // Track assistant response in history
         assistantHistory.push({ role: 'assistant', text: data.response || '', action: data.action || 'none' });
+
+        // ──────────────────────────────────────────────────
+        //  PENDING INTERACTION: Track if the next action opens a widget
+        //  that expects user input (like roster editor or scan)
+        // ──────────────────────────────────────────────────
+        if (data.action === 'update_roster' || data.action === 'manage_enrollment') {
+            _pendingInteraction = { type: 'roster_editor', params: data.params || {} };
+        } else if (data.action === 'scan_image_to_excel' && (!data.params?.class_name)) {
+            _pendingInteraction = { type: 'awaiting_class_for_scan', params: data.params || {} };
+        } else if (data.action !== 'none') {
+            _pendingInteraction = null; // Clear on other actions
+        }
 
         // Remove typing indicator
         document.getElementById('assistant-typing')?.remove();
@@ -897,6 +941,64 @@ async function sendAssistantMessage(message) {
             </div>
         `;
     }
+}
+
+// ──────────────────────────────────────────────────
+//  CONTEXTUAL ROUTER: Handle user input directed at active widgets
+// ──────────────────────────────────────────────────
+function _handlePendingInteraction(message, chatEl) {
+    const msg = message.trim();
+
+    // ROSTER EDITOR: User typed a class name while roster editor is showing
+    if (_pendingInteraction.type === 'roster_editor') {
+        const rosterSelect = document.getElementById('roster-class-select');
+        if (rosterSelect) {
+            // Try to match user input to a class in the dropdown
+            const msgLower = msg.toLowerCase().replace(/\s+/g, '');
+            for (let opt of rosterSelect.options) {
+                const optLower = opt.textContent.toLowerCase().replace(/\s+/g, '');
+                const optNameLower = (opt.dataset.name || '').toLowerCase().replace(/\s+/g, '');
+                if (optLower.includes(msgLower) || optNameLower.includes(msgLower) ||
+                    msgLower.includes(optNameLower) || optLower.startsWith(msgLower)) {
+                    rosterSelect.value = opt.value;
+                    rosterSelect.dispatchEvent(new Event('change'));
+                    // Show user message in chat
+                    chatEl.innerHTML += `
+                        <div class="flex justify-end mb-3">
+                            <div class="bg-primary/20 border border-primary/30 rounded-2xl rounded-br-md px-4 py-2 max-w-[80%]">
+                                <p class="text-sm text-white">${msg}</p>
+                            </div>
+                        </div>
+                    `;
+                    chatEl.innerHTML += `
+                        <div class="flex justify-start mb-3">
+                            <div class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                                <p class="text-sm text-white leading-relaxed">Opening the roster for <strong>${opt.dataset.name || opt.textContent}</strong> now. What changes do you need to make?</p>
+                            </div>
+                        </div>
+                    `;
+                    chatEl.scrollTop = chatEl.scrollHeight;
+                    assistantHistory.push({ role: 'user', text: msg });
+                    assistantHistory.push({ role: 'assistant', text: `Opening roster for ${opt.dataset.name || opt.textContent}.` });
+                    // Load students for the selected class
+                    if (typeof window._loadRosterStudents === 'function') {
+                        window._loadRosterStudents(opt.value);
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+
+    // SCAN AWAITING CLASS: User typed a class name for pending image scan
+    if (_pendingInteraction.type === 'awaiting_class_for_scan') {
+        // User is providing class name for scan — route through AI with the class context
+        _pendingInteraction.params.class_name = msg;
+        _pendingInteraction = null; // Clear pending state
+        return false; // Let the AI handle it with the enriched context
+    }
+
+    return false; // Not handled, let AI process it
 }
 
 async function executeAssistantAction(action, params) {
@@ -1333,6 +1435,25 @@ async function executeAssistantAction(action, params) {
         case 'manage_enrollment':
         case 'update_roster':
             // Build inline roster editor in assistant chat
+            // PREVENT DUPLICATES: Skip if roster editor already exists
+            if (document.getElementById('roster-editor-area')) {
+                // Roster editor already open — if params have a class name, auto-select it
+                const existingSelect = document.getElementById('roster-class-select');
+                if (existingSelect && params?.class_name) {
+                    const msgLower = (params.class_name || '').toLowerCase().replace(/\s+/g, '');
+                    for (let opt of existingSelect.options) {
+                        const optName = (opt.dataset.name || '').toLowerCase().replace(/\s+/g, '');
+                        if (optName.includes(msgLower) || msgLower.includes(optName)) {
+                            existingSelect.value = opt.value;
+                            if (typeof window._loadRosterStudents === 'function') {
+                                window._loadRosterStudents(opt.value);
+                            }
+                            break;
+                        }
+                    }
+                }
+                break;
+            }
             (async () => {
                 const chatEl = document.getElementById('assistant-chat');
                 if (!chatEl) return;
@@ -1724,7 +1845,20 @@ async function handleAssistantFileUpload(input) {
     const isExcel = /\.(xlsx|xls|csv)$/i.test(files[0].name);
 
     if (isImageBatch) {
-        _assistantUploadedFiles = files; // Store all images
+        _assistantUploadedFiles = files; // Store all images for scan_image_to_excel
+
+        // Convert images to base64 for AI vision
+        _assistantImageBase64 = [];
+        for (const f of files) {
+            try {
+                const b64 = await fileToBase64(f);
+                // Extract just the base64 data (remove data:image/...;base64, prefix)
+                const b64Data = b64.includes(',') ? b64.split(',')[1] : b64;
+                _assistantImageBase64.push({ data: b64Data, mime_type: f.type || 'image/jpeg' });
+            } catch (e) {
+                console.warn('Could not convert image to base64:', e);
+            }
+        }
 
         let fileDisplayHTML = '';
         files.forEach(f => {
@@ -1749,7 +1883,10 @@ async function handleAssistantFileUpload(input) {
         `;
         chatEl.scrollTop = chatEl.scrollHeight;
 
-        sendAssistantMessage(`[SYSTEM] Teacher just attached ${files.length} image(s) of what looks like a handwritten record sheet. Acknowledge this warmly and ask just ONE question: Which class is this for? (e.g. SS 1T, SS 2Q). Default to extracting ALL columns you can see. Do NOT ask multiple questions at once — keep it simple and conversational. If the image header clearly shows a class name, mention it and confirm.`);
+        // Set pending interaction so contextual replies route correctly
+        _pendingInteraction = { type: 'awaiting_class_for_scan', params: {} };
+
+        sendAssistantMessage(`[SYSTEM] Teacher just attached ${files.length} image(s) of what looks like a handwritten record sheet. I'm sending you the image(s) so you can SEE them. Look at the image carefully — if you can read any class name, subject, or term from the header/title, mention what you see. Then ask which class this record sheet is for. Default to extracting ALL columns you can see. Do NOT ask multiple questions at once — keep it simple and one question at a time.`);
 
     } else if (isExcel) {
         const file = files[0]; // Only process the first excel

@@ -1517,7 +1517,7 @@ def upload_excel_scorelist():
         if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
             return jsonify({"error": "Only Excel or CSV files are supported"}), 400
 
-        # Read Excel/CSV
+        # Read Excel/CSV — smart header detection
         if file.filename.lower().endswith('.csv'):
             all_sheets = {"Sheet1": pd.read_csv(file)}
         else:
@@ -1525,7 +1525,16 @@ def upload_excel_scorelist():
             xf = pd.ExcelFile(file)
             all_sheets = {}
             for sn in xf.sheet_names:
-                all_sheets[sn] = pd.read_excel(file, sheet_name=sn, skiprows=4)
+                # Try skiprows=4 first (QSI-generated files have 4 header rows)
+                df_try = pd.read_excel(file, sheet_name=sn, skiprows=4)
+                # Check if we got a valid "Name" column — if not, try without skiprows
+                has_name_col = any('name' in str(c).lower() for c in df_try.columns)
+                if not has_name_col or df_try.empty:
+                    df_try2 = pd.read_excel(file, sheet_name=sn, skiprows=0)
+                    has_name_col2 = any('name' in str(c).lower() for c in df_try2.columns)
+                    if has_name_col2 and not df_try2.empty:
+                        df_try = df_try2
+                all_sheets[sn] = df_try
 
         all_records = []
         term_data = {}  # {term: [{student records}]}
@@ -2337,6 +2346,7 @@ def smart_assistant():
         current_results = data.get('currentResults', [])  # Live scores from frontend
         session_info = data.get('sessionInfo', {})  # Classes graded, subject, etc.
         history = data.get('history', [])  # Conversation history
+        images = data.get('images', [])  # Base64 images from frontend
         
         # Build conversation history string
         conversation_context = ""
@@ -2544,12 +2554,16 @@ INTELLIGENCE RULES:
     d) WHAT ASSESSMENT TYPE? → params.assessment_type (e.g. "1st Term", "2nd Term") if visible on the sheet.
     If the teacher provides some info upfront (e.g. "this is SS 1T Mathematics"), don't re-ask for what you already know. Only ask for MISSING info.
 14. SMART COLUMN GUESSING: Nigerian record sheets often have these columns: 1st CA, 2nd CA, Open Day, Note Book, Assignment, Attendance, Total, Exam, Grand Total. If teacher says "extract all columns" or "everything", use these standard names.
-15. AUTO-DETECT FROM IMAGE: If the teacher says "just scan it" without specifying columns, ask them: "I can see this looks like a record sheet. Want me to extract ALL the columns I can see, or just specific ones like 1st CA and 2nd CA?"
+15. AUTO-DETECT FROM IMAGE: If you can see the image AND it clearly shows a class name or subject in the header, TELL the teacher what you see and ask them to confirm. Be specific: "I can see this says 'SS 1T - Mathematics' at the top. Is that right?"
 16. MULTI-CLASS UPLOADS: If teacher uploads multiple images and says they're for DIFFERENT classes, ask which image is for which class. Do NOT assume all images are the same class.
 17. STANDARD FORMAT: When teacher says "standard format", "our format", "mark book format", or "convert to standard" — they want the Nigerian school mark book structure:
     - Column order: name, 1st CA (10), 2nd CA (10), Open Day (10-20), Note (10), Assignment (10), Total CA (CAs÷2, max 30), Exam (70), Grand Total (100)
     - Use action "edit_excel" with a detailed instruction to restructure the columns. The instruction should tell the AI editor to rename score columns to standard names, compute Total CA = sum(CAs)/2, and Grand Total = Total CA + Exam.
     - If the uploaded Excel only has "name" and "score" (one column), ask the teacher: "Which assessment is this score for? (1st CA, 2nd CA, Exam, etc.)"
+18. IMAGE AWARENESS: If images are attached, I can SEE them. Describe what I observe in the images when relevant. If the image shows a record sheet, describe the structure I see (number of columns, visible headers, etc.).
+19. CONVERSATION FLOW: When I just asked a question and the teacher gives a short answer (like a class name, "yes", or a subject name), I MUST interpret it as an answer to my question, NOT as a new unrelated command. Context matters!
+20. ONE QUESTION AT A TIME: Never ask more than one question. Teachers are busy — keep the conversation flowing with one question, wait for the answer, then proceed.
+21. FOLLOW-UP INTELLIGENCE: When the conversation history shows I just opened a roster editor / asked "which class is this for?" / asked about a subject, the teacher's next short reply IS the answer. Process it accordingly.
 
 {conversation}
 
@@ -2566,13 +2580,39 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
         models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
         raw_text = None
         last_error = None
+
+        # Build content parts: system prompt + any images + user message
+        content_parts = [system_prompt]
+        if images:
+            for img in images[:5]:  # Max 5 images
+                try:
+                    img_data = img.get('data', '')
+                    img_mime = img.get('mime_type', 'image/jpeg')
+                    if img_data:
+                        content_parts.append({
+                            "mime_type": img_mime,
+                            "data": base64.b64decode(img_data)
+                        })
+                except Exception as img_err:
+                    print("Smart assistant image decode error: {}".format(img_err))
+        content_parts.append(message)
         
         for model_name in models_to_try:
             for attempt in range(3):
                 try:
                     model = genai.GenerativeModel(model_name)
-                    response = model.generate_content([system_prompt, message])
-                    raw_text = response.text.strip()
+                    response = model.generate_content(content_parts)
+                    raw_text = ''
+                    # Handle thinking mode responses (skip thought blocks)
+                    if hasattr(response, 'candidates') and response.candidates:
+                        for part in response.candidates[0].content.parts:
+                            if hasattr(part, 'thought') and part.thought:
+                                continue  # Skip thought blocks
+                            if hasattr(part, 'text') and part.text:
+                                raw_text += part.text
+                    if not raw_text:
+                        raw_text = response.text.strip()
+                    raw_text = raw_text.strip()
                     break
                 except Exception as model_err:
                     last_error = model_err
@@ -2581,7 +2621,6 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
                     # Only retry on rate limit errors, not on model-not-found etc.
                     if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
                         rotate_api_key()  # Switch to next API key
-                        model = genai.GenerativeModel(model_name)  # Re-create model with new key
                         if attempt < 2:
                             wait = [3, 8][attempt]
                             print("Rate limited, rotated key & waiting {}s...".format(wait))
@@ -2594,14 +2633,38 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
         if not raw_text:
             raise last_error or Exception("All models failed")
         
+        # Robust JSON extraction — handle various AI response formats
+        # Strip markdown code fences
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.startswith("```"):
             raw_text = raw_text[3:]
         if raw_text.endswith("```"):
             raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
+        # Try direct JSON parse first
+        result = None
+        try:
+            result = json.loads(raw_text)
+        except json.JSONDecodeError:
+            # Fallback: try to find JSON object in the text using regex
+            json_match = re_mod.search(r'\{[\s\S]*"response"[\s\S]*"action"[\s\S]*\}', raw_text)
+            if json_match:
+                try:
+                    result = json.loads(json_match.group())
+                except json.JSONDecodeError:
+                    pass
             
-        result = json.loads(raw_text.strip())
+            # Ultimate fallback: treat the entire response as conversational text
+            if result is None:
+                print("Smart assistant JSON parse failed, using text fallback. Raw: {}".format(raw_text[:200]))
+                result = {
+                    "response": raw_text,
+                    "action": "none",
+                    "params": {}
+                }
+        
         return jsonify(result), 200
         
     except Exception as e:

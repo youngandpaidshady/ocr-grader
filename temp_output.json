@@ -1,0 +1,23 @@
+[
+  {
+    "Name":"Aishat Musa",
+    "Class":"SS 1Q",
+    "1st CA":8.0,
+    "2nd CA":7.0,
+    "Total CA":15.0
+  },
+  {
+    "Name":"Bola Ahmed",
+    "Class":"SS 1Q",
+    "1st CA":6.0,
+    "2nd CA":8.0,
+    "Total CA":14.0
+  },
+  {
+    "Name":"Chidi Obi",
+    "Class":"SS 1Q",
+    "1st CA":9.0,
+    "2nd CA":null,
+    "Total CA":9.0
+  }
+]
