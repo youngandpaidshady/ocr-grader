@@ -598,8 +598,8 @@ async function handleErrorWithAI(error, action) {
 let assistantContext = {};
 let assistantHistory = [];
 let _pendingInteraction = null; // Track active UI widgets expecting user input
-let _assistantImageBase64 = []; // Base64 images to send to AI
-let _assistantImageBlobs = []; // Stable Blob copies for FormData (survives iOS GC)
+let _assistantImageBase64 = []; // Base64 images to send to AI (cleared after first send)
+let _assistantScanImages = []; // PERSISTENT base64 copy for scan_image_to_excel (never cleared until new upload)
 
 function openSmartAssistant(parsedData) {
     const modal = document.getElementById('smart-assistant-modal');
@@ -684,10 +684,11 @@ function openSmartAssistant(parsedData) {
         }
     }
 
-    // Clear chat history
+    // Clear chat history and image state
     assistantHistory = [];
     _pendingInteraction = null;
     _assistantImageBase64 = [];
+    _assistantScanImages = [];
     const chatEl = modal.querySelector('#assistant-chat');
     if (chatEl) chatEl.innerHTML = '';
 
@@ -1344,52 +1345,21 @@ async function executeAssistantAction(action, params) {
             break;
         }
         case 'scan_image_to_excel': {
-            // Check if we have images (prefer base64 data, fallback to file refs)
-            const hasImages = (_assistantImageBase64.length > 0) ||
-                (_assistantImageBlobs.length > 0) ||
-                (typeof _assistantUploadedFiles !== 'undefined' && _assistantUploadedFiles.length > 0);
-            if (hasImages) {
+            // Use persistent scan images (never cleared until new upload/modal reopen)
+            if (_assistantScanImages.length > 0) {
                 const chatEl = document.getElementById('assistant-chat');
-                const imageCount = _assistantImageBase64.length || _assistantImageBlobs.length || _assistantUploadedFiles.length;
                 if (chatEl) {
-                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning ${imageCount} image(s)... This may take a moment.</p></div></div>`;
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning ${_assistantScanImages.length} image(s)... This may take a moment.</p></div></div>`;
                     chatEl.scrollTop = chatEl.scrollHeight;
                 }
 
-                // Re-read images to base64 if needed (in case _assistantImageBase64 was cleared)
-                let imagesToScan = [];
-                if (_assistantImageBase64.length > 0) {
-                    imagesToScan = _assistantImageBase64;
-                } else if (_assistantImageBlobs.length > 0) {
-                    for (const blob of _assistantImageBlobs) {
-                        try {
-                            const b64 = await new Promise((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onload = () => resolve(reader.result);
-                                reader.onerror = reject;
-                                reader.readAsDataURL(blob);
-                            });
-                            const b64Data = b64.includes(',') ? b64.split(',')[1] : b64;
-                            imagesToScan.push({ data: b64Data, mime_type: blob.type || 'image/jpeg' });
-                        } catch (e) { console.warn('Blob read failed:', e); }
-                    }
-                } else if (_assistantUploadedFiles.length > 0) {
-                    for (const f of _assistantUploadedFiles) {
-                        try {
-                            const b64 = await fileToBase64(f);
-                            const b64Data = b64.includes(',') ? b64.split(',')[1] : b64;
-                            imagesToScan.push({ data: b64Data, mime_type: f.type || 'image/jpeg' });
-                        } catch (e) { console.warn('File read failed:', e); }
-                    }
-                }
-
-                // Send as JSON instead of FormData (avoids iOS Safari FormData+Blob crashes)
+                // Send as JSON with base64 (works on all platforms including iOS Safari)
                 try {
                     const scanResp = await fetch('/api/assistant-scan-to-excel', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            images_base64: imagesToScan,
+                            images_base64: _assistantScanImages,
                             instruction: params?.instruction || 'extract all columns',
                             class_name: params?.class_name || ''
                         })
@@ -1884,19 +1854,16 @@ async function handleAssistantFileUpload(input) {
     if (isImageBatch) {
         _assistantUploadedFiles = files; // Store original File refs
 
-        // Read files into stable Blobs immediately (survives iOS Safari GC)
-        _assistantImageBlobs = [];
+        // Convert to base64 once, store persistently for scan use
         _assistantImageBase64 = [];
+        _assistantScanImages = []; // Persistent copy for scan_image_to_excel
         for (const f of files) {
             try {
-                const arrayBuf = await f.arrayBuffer();
-                const blob = new Blob([arrayBuf], { type: f.type || 'image/jpeg' });
-                blob.name = f.name; // Preserve filename
-                _assistantImageBlobs.push(blob);
-                // Also create base64 for AI vision
                 const b64 = await fileToBase64(f);
                 const b64Data = b64.includes(',') ? b64.split(',')[1] : b64;
-                _assistantImageBase64.push({ data: b64Data, mime_type: f.type || 'image/jpeg' });
+                const imgObj = { data: b64Data, mime_type: f.type || 'image/jpeg' };
+                _assistantImageBase64.push(imgObj);
+                _assistantScanImages.push(imgObj); // Same data, separate reference
             } catch (e) {
                 console.warn('Could not process image:', e);
             }
