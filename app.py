@@ -2194,6 +2194,11 @@ def assistant_build_excel():
             output_filename = "Extracted_Data_{}.xlsx".format(int(time.time()))
         
         output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
+        # --- Convert score columns to float to avoid int64 errors with decimal values ---
+        for col in df.columns:
+            if col not in ['name', 'Grade', 'Remarks', 'Position']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
         df.to_excel(output_path, index=False, engine='openpyxl')
         
         return jsonify({

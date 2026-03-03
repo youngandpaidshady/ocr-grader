@@ -1396,13 +1396,19 @@ async function executeAssistantAction(action, params) {
                             tableHTML += `<p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-table mr-1.5"></i>${scanData.message}</p>`;
                             tableHTML += `<div class="overflow-x-auto max-h-[300px] overflow-y-auto"><table class="w-full text-[11px] border-collapse">`;
                             tableHTML += `<thead><tr class="border-b border-white/20">`;
-                            cols.forEach(c => { tableHTML += `<th class="px-2 py-1 text-left text-white/70 font-bold sticky top-0 bg-[#1a1a2e]">${c}</th>`; });
+                            cols.forEach(c => {
+                                const isName = c.toLowerCase() === 'name';
+                                const style = isName ? 'min-width:140px;' : 'min-width:45px;';
+                                tableHTML += `<th class="px-2 py-1 text-left text-white/70 font-bold sticky top-0 bg-[#1a1a2e] whitespace-nowrap" style="${style}">${c}</th>`;
+                            });
                             tableHTML += `<th class="px-1 py-1 sticky top-0 bg-[#1a1a2e]"></th></tr></thead><tbody>`;
 
                             scanData.data.forEach((row, ri) => {
                                 tableHTML += `<tr class="border-b border-white/5 hover:bg-white/5" data-row="${ri}">`;
                                 cols.forEach(c => {
-                                    tableHTML += `<td class="px-2 py-1"><input type="text" value="${(row[c] || '').toString().replace(/"/g, '&quot;')}" data-row="${ri}" data-col="${c}" class="bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary focus:outline-none text-white text-[11px] w-full" onchange="updatePreviewCell(${ri},'${c.replace(/'/g, "\\'")}',this.value)"></td>`;
+                                    const isName = c.toLowerCase() === 'name';
+                                    const style = isName ? 'min-width:140px;' : 'min-width:45px;';
+                                    tableHTML += `<td class="px-2 py-1" style="${style}"><input type="text" value="${(row[c] || '').toString().replace(/"/g, '&quot;')}" data-row="${ri}" data-col="${c}" class="bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary focus:outline-none text-white text-[11px] w-full" onchange="updatePreviewCell(${ri},'${c.replace(/'/g, "\\'")}',this.value)"></td>`;
                                 });
                                 tableHTML += `<td class="px-1 py-1"><button onclick="deletePreviewRow(${ri})" class="text-red-400/50 hover:text-red-400 text-[10px]" title="Delete row"><i class="fa-solid fa-trash-can"></i></button></td>`;
                                 tableHTML += `</tr>`;
