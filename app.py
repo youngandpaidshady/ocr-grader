@@ -1943,15 +1943,8 @@ CRITICAL RULES:
         raw_text = None
         for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
             try:
-                # Use Gemini 2.5 Flash with thinking mode for better accuracy on complex handwritten data
-                model = genai.GenerativeModel(
-                    'gemini-2.5-flash',
-                    generation_config=genai.GenerationConfig(
-                        thinking_config=genai.types.ThinkingConfig(
-                            thinking_budget=8192
-                        )
-                    )
-                )
+                # Use Gemini 2.5 Flash for best accuracy on complex handwritten data
+                model = genai.GenerativeModel('gemini-2.5-flash')
                 query_parts = [prompt] + image_parts
                 response = model.generate_content(query_parts)
                 # Extract text — handle thinking mode responses (skip thought blocks)
