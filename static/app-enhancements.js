@@ -1350,8 +1350,48 @@ async function executeAssistantAction(action, params) {
             if (_assistantScanImages.length > 0) {
                 const chatEl = document.getElementById('assistant-chat');
                 if (chatEl) {
-                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning ${_assistantScanImages.length} image(s)... This may take a moment.</p></div></div>`;
+                    const scanTips = [
+                        "Reading handwritten names carefully...",
+                        "Matching names to your class roster...",
+                        "Detecting column headers...",
+                        "Extracting scores row by row...",
+                        "Cross-checking with database...",
+                        "Verifying fractional scores (½ → 0.5)...",
+                        "Almost there — formatting the data...",
+                        "Checking for overwritten/corrected values...",
+                        "Combining multi-page data...",
+                        "Final quality check on extracted data..."
+                    ];
+                    const scanId = 'scan-progress-' + Date.now();
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3" id="${scanId}">
+                        <div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-3 max-w-[90%] w-full">
+                            <p class="text-sm text-blue-400 font-bold mb-2"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Scanning ${_assistantScanImages.length} image(s)</p>
+                            <div class="w-full bg-white/10 rounded-full h-1.5 mb-2 overflow-hidden">
+                                <div id="${scanId}-bar" class="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 rounded-full transition-all duration-1000" style="width:5%;background-size:200% 100%;animation:shimmer 2s linear infinite"></div>
+                            </div>
+                            <p id="${scanId}-tip" class="text-[11px] text-white/50 transition-opacity duration-500"><i class="fa-solid fa-circle-info mr-1"></i>${scanTips[0]}</p>
+                        </div>
+                    </div>`;
                     chatEl.scrollTop = chatEl.scrollHeight;
+
+                    // Animate progress and cycle tips
+                    let tipIdx = 0;
+                    window._scanProgressInterval = setInterval(() => {
+                        tipIdx = (tipIdx + 1) % scanTips.length;
+                        const tipEl = document.getElementById(scanId + '-tip');
+                        const barEl = document.getElementById(scanId + '-bar');
+                        if (tipEl) {
+                            tipEl.style.opacity = '0';
+                            setTimeout(() => {
+                                tipEl.innerHTML = '<i class="fa-solid fa-circle-info mr-1"></i>' + scanTips[tipIdx];
+                                tipEl.style.opacity = '1';
+                            }, 300);
+                        }
+                        if (barEl) {
+                            const progress = Math.min(5 + (tipIdx + 1) * 9, 92);
+                            barEl.style.width = progress + '%';
+                        }
+                    }, 4000);
                 }
 
                 // Send as JSON with base64 (works on all platforms including iOS Safari)
@@ -1382,7 +1422,8 @@ async function executeAssistantAction(action, params) {
                     }
 
                     _assistantScanInProgress = false;
-                    chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
+                    if (window._scanProgressInterval) { clearInterval(window._scanProgressInterval); window._scanProgressInterval = null; }
+                    chatEl?.querySelector('[id^=scan-progress]')?.remove();
 
                     if (scanData.success && scanData.preview) {
                         // Store preview data globally for editing
@@ -1444,7 +1485,8 @@ async function executeAssistantAction(action, params) {
                     }
                 } catch (scanErr) {
                     _assistantScanInProgress = false;
-                    chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
+                    if (window._scanProgressInterval) { clearInterval(window._scanProgressInterval); window._scanProgressInterval = null; }
+                    chatEl?.querySelector('[id^=scan-progress]')?.remove();
                     if (chatEl) {
                         chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-destructive"><i class="fa-solid fa-wifi mr-1.5"></i>Network error: ${scanErr.message}</p><button onclick="retryScanToExcel()" class="mt-2 px-3 py-1 bg-destructive/20 hover:bg-destructive/30 border border-destructive/30 rounded-lg text-destructive text-[11px] font-bold"><i class="fa-solid fa-rotate-right mr-1"></i>Retry</button></div></div>`;
                         chatEl.scrollTop = chatEl.scrollHeight;
@@ -2032,6 +2074,7 @@ function closeSmartAssistant(force) {
         }
     }
     _assistantScanInProgress = false;
+    if (window._scanProgressInterval) { clearInterval(window._scanProgressInterval); window._scanProgressInterval = null; }
     const modal = document.getElementById('smart-assistant-modal');
     if (modal) {
         modal.classList.add('hidden');

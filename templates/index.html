@@ -4120,6 +4120,16 @@
 
     <!-- Smart Assistant FAB (always visible) -->
     <style>
+        @keyframes shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
         @keyframes fab-breathe {
 
             0%,
@@ -4242,7 +4252,7 @@
     </div>
 
     <!-- Enhancement Layer -->
-    <script src="/static/app-enhancements.js?v=7"></script>
+    <script src="/static/app-enhancements.js?v=8"></script>
 </body>
 
 </html>
