@@ -1364,7 +1364,20 @@ async function executeAssistantAction(action, params) {
                             class_name: params?.class_name || ''
                         })
                     });
-                    const scanData = await scanResp.json();
+
+                    // Safely parse JSON — if it's an HTML error page (like a 504 Timeout), this catches it cleanly
+                    const respText = await scanResp.text();
+                    let scanData;
+                    try {
+                        scanData = JSON.parse(respText);
+                    } catch (e) {
+                        throw new Error(`Server returned a ${scanResp.status} error instead of valid data. Please try again.`);
+                    }
+
+                    if (!scanResp.ok && scanData.error) {
+                        throw new Error(scanData.error);
+                    }
+
                     chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
 
                     if (scanData.success && scanData.preview) {
