@@ -1868,22 +1868,45 @@ def move_student():
 def assistant_scan_to_excel():
     """Receives an image + instruction, uses Vision AI to extract a table, returns an Excel file."""
     try:
-        if 'images' not in request.files:
-            return jsonify({"error": "No images uploaded"}), 400
-        
-        instruction = request.form.get('instruction', '').strip()
-        if not instruction:
-            return jsonify({"error": "No instruction provided"}), 400
-            
-        class_name = request.form.get('class_name', '').strip()
-            
-        files = request.files.getlist('images')
-        
-        # Read multiple images
+        # Accept BOTH FormData (legacy) and JSON with base64 (iOS-safe)
         image_parts = []
-        for f in files:
-            img_bytes = f.read()
-            image_parts.append({"mime_type": f.content_type, "data": img_bytes})
+        instruction = ''
+        class_name = ''
+        
+        if request.is_json:
+            # JSON mode: images sent as base64 (iOS Safari compatible)
+            data = request.json
+            instruction = data.get('instruction', '').strip()
+            class_name = data.get('class_name', '').strip()
+            images_b64 = data.get('images_base64', [])
+            
+            if not images_b64:
+                return jsonify({"error": "No images provided"}), 400
+            
+            for img in images_b64:
+                try:
+                    img_data = base64.b64decode(img.get('data', ''))
+                    img_mime = img.get('mime_type', 'image/jpeg')
+                    image_parts.append({"mime_type": img_mime, "data": img_data})
+                except Exception as decode_err:
+                    print("Image decode error: {}".format(decode_err))
+        else:
+            # FormData mode (legacy/desktop)
+            if 'images' not in request.files:
+                return jsonify({"error": "No images uploaded"}), 400
+            
+            instruction = request.form.get('instruction', '').strip()
+            class_name = request.form.get('class_name', '').strip()
+            files = request.files.getlist('images')
+            
+            for f in files:
+                img_bytes = f.read()
+                image_parts.append({"mime_type": f.content_type, "data": img_bytes})
+        
+        if not image_parts:
+            return jsonify({"error": "No valid images received"}), 400
+        if not instruction:
+            instruction = "extract all columns"
         
         # Build optional roster context for smarter OCR
         roster_context = ""

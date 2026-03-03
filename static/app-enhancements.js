@@ -1344,21 +1344,55 @@ async function executeAssistantAction(action, params) {
             break;
         }
         case 'scan_image_to_excel': {
-            if (_assistantImageBlobs.length > 0 || (typeof _assistantUploadedFiles !== 'undefined' && _assistantUploadedFiles.length > 0)) {
+            // Check if we have images (prefer base64 data, fallback to file refs)
+            const hasImages = (_assistantImageBase64.length > 0) ||
+                (_assistantImageBlobs.length > 0) ||
+                (typeof _assistantUploadedFiles !== 'undefined' && _assistantUploadedFiles.length > 0);
+            if (hasImages) {
                 const chatEl = document.getElementById('assistant-chat');
-                const filesToSend = _assistantImageBlobs.length > 0 ? _assistantImageBlobs : _assistantUploadedFiles;
+                const imageCount = _assistantImageBase64.length || _assistantImageBlobs.length || _assistantUploadedFiles.length;
                 if (chatEl) {
-                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning ${filesToSend.length} image(s)... This may take a moment.</p></div></div>`;
+                    chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-blue-500/10 border border-blue-500/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-blue-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Scanning ${imageCount} image(s)... This may take a moment.</p></div></div>`;
                     chatEl.scrollTop = chatEl.scrollHeight;
                 }
-                const scanFormData = new FormData();
-                filesToSend.forEach(f => scanFormData.append('images', f, f.name || 'image.jpg'));
-                scanFormData.append('instruction', params?.instruction || 'extract all columns');
-                scanFormData.append('class_name', params?.class_name || '');
+
+                // Re-read images to base64 if needed (in case _assistantImageBase64 was cleared)
+                let imagesToScan = [];
+                if (_assistantImageBase64.length > 0) {
+                    imagesToScan = _assistantImageBase64;
+                } else if (_assistantImageBlobs.length > 0) {
+                    for (const blob of _assistantImageBlobs) {
+                        try {
+                            const b64 = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = () => resolve(reader.result);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(blob);
+                            });
+                            const b64Data = b64.includes(',') ? b64.split(',')[1] : b64;
+                            imagesToScan.push({ data: b64Data, mime_type: blob.type || 'image/jpeg' });
+                        } catch (e) { console.warn('Blob read failed:', e); }
+                    }
+                } else if (_assistantUploadedFiles.length > 0) {
+                    for (const f of _assistantUploadedFiles) {
+                        try {
+                            const b64 = await fileToBase64(f);
+                            const b64Data = b64.includes(',') ? b64.split(',')[1] : b64;
+                            imagesToScan.push({ data: b64Data, mime_type: f.type || 'image/jpeg' });
+                        } catch (e) { console.warn('File read failed:', e); }
+                    }
+                }
+
+                // Send as JSON instead of FormData (avoids iOS Safari FormData+Blob crashes)
                 try {
                     const scanResp = await fetch('/api/assistant-scan-to-excel', {
                         method: 'POST',
-                        body: scanFormData
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            images_base64: imagesToScan,
+                            instruction: params?.instruction || 'extract all columns',
+                            class_name: params?.class_name || ''
+                        })
                     });
                     const scanData = await scanResp.json();
                     chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
