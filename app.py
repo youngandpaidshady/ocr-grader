@@ -1874,8 +1874,13 @@ def assistant_scan_to_excel():
         class_name = ''
         
         if request.is_json:
-            # JSON mode: images sent as base64 (iOS Safari compatible)
-            data = request.json
+            # Safely parse JSON to prevent Flask default HTML error pages
+            try:
+                data = request.get_json(silent=True) or {}
+            except Exception as json_err:
+                print("JSON parsing error: {}".format(json_err))
+                return jsonify({"error": "Failed to parse image data format."}), 400
+            
             instruction = data.get('instruction', '').strip()
             class_name = data.get('class_name', '').strip()
             images_b64 = data.get('images_base64', [])
