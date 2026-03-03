@@ -1375,9 +1375,10 @@ async function executeAssistantAction(action, params) {
                     chatEl.scrollTop = chatEl.scrollHeight;
 
                     // Animate progress and cycle tips
-                    let tipIdx = 0;
+                    let tick = 0;
                     window._scanProgressInterval = setInterval(() => {
-                        tipIdx = (tipIdx + 1) % scanTips.length;
+                        tick++;
+                        const tipIdx = tick % scanTips.length;
                         const tipEl = document.getElementById(scanId + '-tip');
                         const barEl = document.getElementById(scanId + '-bar');
                         if (tipEl) {
@@ -1388,7 +1389,9 @@ async function executeAssistantAction(action, params) {
                             }, 300);
                         }
                         if (barEl) {
-                            const progress = Math.min(5 + (tipIdx + 1) * 9, 92);
+                            const currentVal = parseFloat(barEl.style.width) || 5;
+                            const remaining = 95 - currentVal;
+                            const progress = currentVal + (remaining * 0.15); // moves 15% closer to 95 on each tick
                             barEl.style.width = progress + '%';
                         }
                     }, 4000);

@@ -2068,6 +2068,12 @@ CRITICAL RULES:
         # Get column names from the first row
         columns = list(extracted_data[0].keys()) if extracted_data else []
             
+        matched_str = ""
+        if 'roster_names' in locals() and roster_names and matched_class:
+            matched_str = " (Matched roster: {})".format(matched_class.name)
+        else:
+            matched_str = " (No roster matched, used handwriting fallback)"
+
         # Return preview data instead of creating Excel immediately
         return jsonify({
             "success": True,
@@ -2075,7 +2081,7 @@ CRITICAL RULES:
             "data": extracted_data,
             "columns": columns,
             "row_count": len(extracted_data),
-            "message": "Found {} rows with columns: {}. Review the data below — you can edit anything before building the Excel file.".format(len(extracted_data), ', '.join(columns))
+            "message": "Found {} rows extracted{}. Review the data below — you can edit anything before building the Excel file.".format(len(extracted_data), matched_str)
         }), 200
 
     except json.JSONDecodeError as e:
