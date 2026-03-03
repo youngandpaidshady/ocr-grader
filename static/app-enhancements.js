@@ -600,6 +600,7 @@ let assistantHistory = [];
 let _pendingInteraction = null; // Track active UI widgets expecting user input
 let _assistantImageBase64 = []; // Base64 images to send to AI (cleared after first send)
 let _assistantScanImages = []; // PERSISTENT base64 copy for scan_image_to_excel (never cleared until new upload)
+let _assistantScanInProgress = false; // Track whether a scan is actively running
 
 function openSmartAssistant(parsedData) {
     const modal = document.getElementById('smart-assistant-modal');
@@ -1354,6 +1355,7 @@ async function executeAssistantAction(action, params) {
                 }
 
                 // Send as JSON with base64 (works on all platforms including iOS Safari)
+                _assistantScanInProgress = true;
                 try {
                     const scanResp = await fetch('/api/assistant-scan-to-excel', {
                         method: 'POST',
@@ -1371,6 +1373,7 @@ async function executeAssistantAction(action, params) {
                     try {
                         scanData = JSON.parse(respText);
                     } catch (e) {
+                        _assistantScanInProgress = false;
                         throw new Error(`Server returned a ${scanResp.status} error instead of valid data. Please try again.`);
                     }
 
@@ -1378,6 +1381,7 @@ async function executeAssistantAction(action, params) {
                         throw new Error(scanData.error);
                     }
 
+                    _assistantScanInProgress = false;
                     chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
 
                     if (scanData.success && scanData.preview) {
@@ -1439,6 +1443,7 @@ async function executeAssistantAction(action, params) {
                         }
                     }
                 } catch (scanErr) {
+                    _assistantScanInProgress = false;
                     chatEl?.querySelector('.fa-circle-notch')?.closest('.flex')?.remove();
                     if (chatEl) {
                         chatEl.innerHTML += `<div class="flex justify-start mb-3"><div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2"><p class="text-sm text-destructive"><i class="fa-solid fa-wifi mr-1.5"></i>Network error: ${scanErr.message}</p><button onclick="retryScanToExcel()" class="mt-2 px-3 py-1 bg-destructive/20 hover:bg-destructive/30 border border-destructive/30 rounded-lg text-destructive text-[11px] font-bold"><i class="fa-solid fa-rotate-right mr-1"></i>Retry</button></div></div>`;
@@ -2020,7 +2025,13 @@ function triggerProactiveAssistant(eventType, details) {
     setTimeout(() => sendAssistantMessage(msg), 500);
 }
 
-function closeSmartAssistant() {
+function closeSmartAssistant(force) {
+    if (!force && _assistantScanInProgress) {
+        if (!confirm('A scan is still processing. If you close now, the results will be lost. Close anyway?')) {
+            return;
+        }
+    }
+    _assistantScanInProgress = false;
     const modal = document.getElementById('smart-assistant-modal');
     if (modal) {
         modal.classList.add('hidden');
