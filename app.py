@@ -1942,50 +1942,59 @@ def assistant_scan_to_excel():
                 students = StudentModel.query.filter_by(class_id=c.id).all()
                 if students:
                     roster_names = [s.name for s in students]
-                    roster_context = "\n\nCRITICAL KNOWLEDGE: The teacher mentioned this image belongs to class '{}'. The official database roster for this class is: {}. \nWHEN EXTRACTING NAMES, YOU MUST MATCH THEM STRICTLY TO THIS ROSTER, IGNORING TYPOS IN THE HANDWRITING. Fix any misspelled handwritten names to perfectly match the official database spelling.".format(c.name, roster_names)
+                    # Build a numbered roster for the AI to use as a lookup table
+                    numbered_roster = '\n'.join(['  {}. {}'.format(i+1, name) for i, name in enumerate(roster_names)])
+                    roster_context = """
+
+===== MANDATORY NAME MATCHING =====
+This image belongs to class '{class_name}'. There are {count} students enrolled in this class.
+Here is the COMPLETE OFFICIAL ROSTER — every name the AI outputs MUST come from this list:
+
+{numbered_roster}
+
+RULES FOR NAME MATCHING:
+- For EVERY row in the handwritten table, you MUST assign the "name" field to the CLOSEST matching name from the roster above.
+- The handwriting may be messy, abbreviated, or misspelled. Use your best judgment to match each handwritten name to the correct roster entry.
+- NEVER output a name that is NOT in the roster above. NEVER leave a name as empty string "".
+- NEVER skip a student row. If you can see a row with scores, there MUST be a name for it.
+- The number of rows you extract should approximately match the number of students in the roster ({count}).
+- If you truly cannot determine which roster name a row belongs to, use your BEST GUESS from the roster — a wrong guess from the roster is better than an empty name or an invented name.
+====================================""".format(class_name=c.name, count=len(roster_names), numbered_roster=numbered_roster)
         
         prompt = """
-You are an expert OCR and data extraction AI specializing in Nigerian school record sheets. A teacher has uploaded image(s) of a handwritten document and given you specific instructions.
+You are an expert OCR and data extraction AI specializing in Nigerian school record sheets. A teacher has uploaded image(s) of a handwritten document.
 
 TEACHER'S INSTRUCTION: "{instruction}"{roster_context}
 
-YOUR JOB: Read ALL the images and produce ONE combined JSON array of row objects representing the table data across every page/image.
+YOUR JOB: Read ALL the images and produce ONE combined JSON array of row objects representing the table data.
 
 CRITICAL RULES:
-1. **OUTPUT FORMAT**: Return ONLY a raw JSON array. Start with [ and end with ]. No markdown, no backticks, no explanations, no commentary.
+1. **OUTPUT FORMAT**: Return ONLY a raw JSON array. Start with [ and end with ]. No markdown, no backticks, no explanations.
 2. **COLUMN NAMING**: 
    - The student name column MUST always be keyed as "name" (lowercase).
-   - If the teacher asks for a single generic score, use "score".
-   - If they ask for MULTIPLE assessment columns (e.g. 1st CA, 2nd CA, Exam), use those exact names as keys.
-   - If the teacher says "extract everything" or "all columns", auto-detect every column from the header row and use readable names.
-3. **COMPLEX COLUMN HEADERS**: School record sheets often have these handwritten column headers (detect them even if messy):
-   - "1st CA" or "1st Test" = First Continuous Assessment
-   - "2nd CA" or "2nd Test" = Second Continuous Assessment  
-   - "Open Day" or "Open" = Open Day score
+   - If the teacher says "extract everything" or "all columns", auto-detect every column from the HEADER ROW and use readable names.
+3. **ONLY EXTRACT WHAT IS PHYSICALLY WRITTEN**: 
+   - Do NOT compute, calculate, or generate any values. Only extract what you can SEE written on the paper.
+   - Do NOT add columns like "Grade", "Remarks", "Position", "Rank" etc. unless they are PHYSICALLY WRITTEN as a column on the sheet.
+   - If you see columns like "Total CA", "Exam", "Grand Total" written on the sheet with handwritten values, extract them.
+4. **COMMON COLUMN HEADERS** (detect even if handwritten messily):
+   - "1st CA" / "1st Test" = First Continuous Assessment
+   - "2nd CA" / "2nd Test" = Second Continuous Assessment  
+   - "Open Day" / "Open" = Open Day score
    - "Note" / "NB" / "Note Book" = Notebook score
    - "Ass" / "Assig" / "Assignment" = Assignment score
    - "Attend" / "Attendance" = Attendance score
-   - "Total" = Total/subtotal
+   - "Total CA" = Total Continuous Assessment
    - "Exam" = Examination score
-   - "Grand Total" / "Total (final)" = Final cumulative score
-4. **FRACTIONAL SCORES**: Convert handwritten fractions to decimals: 6½ → 6.5, 8½ → 8.5, 7½ → 7.5, 9½ → 9.5. If unsure, round to nearest 0.5.
-5. **OVERWRITTEN/CORRECTED VALUES**: If a number appears to be crossed out and rewritten, use the CORRECTED (newer) value.
-6. **MISSING/UNREADABLE VALUES**: Use empty string "" for any value you cannot read. NEVER skip the key.
-7. **MULTI-PART NAMES**: Combine first name, middle name, and surname into ONE "name" field. E.g. "Abass Aishat" or "Abdulazees Zainab Oyadamola".
-8. **PAGE CONTINUITY**: If multiple images show pages of the SAME class (continuing serial numbers), combine all rows into one array. Do NOT create separate arrays per image.
-9. **SERIAL NUMBERS**: Do NOT include the S/N or serial number column unless specifically asked.
-10. **AUTO-DETECT CLASS INFO**: If you can see a class name (e.g. "SS 1T", "SS2Q") or term (e.g. "1st Term", "2nd Term") written at the top of the sheet, note them but still focus on extracting the table data.
-11. **NIGERIAN MARK BOOK STRUCTURE**: The standard record sheet follows this grading system:
-   - Columns 1-5 are Continuous Assessments: 1st CA, 2nd CA, Open Day, Note Book, Assignment/Attendance
-   - EACH column is out of 10, EXCEPT one column (usually Open Day or the combined one) which can be out of 20
-   - Columns 1-5 are summed and DIVIDED BY 2 to get "Total CA" (max 30)
-   - "Exam" column is out of 70
-   - "Grand Total" = Total CA + Exam (max 100)
-   - For MULTI-TERM sheets: 2nd Term Grand Total averages current + 1st Term total (÷ 2). 3rd Term averages all three (÷ 3).
-   - The standard column order is: name, 1st CA, 2nd CA, Open Day, Note, Assignment, Total CA, Exam, Total
-   - Output the RAW scores you read. Do NOT compute totals yourself — just extract what is written.
-12. **NUMERIC VALUES**: All score values should be numbers (integers or decimals), NOT strings. Use 0 for a zero score, "" for missing/unreadable.
-13. **THINK ROW BY ROW**: Before outputting JSON, carefully examine each row of the table. For each student, verify: Is the name legible? Are the scores in the correct columns? Do the numbers make sense (e.g., CAs should be 0-10 or 0-20, Exam 0-70)? If a value looks wrong, re-examine the image carefully.
+   - "Grand Total" / "Total" = Final total score
+5. **FRACTIONAL SCORES**: Convert fractions: 6½ → 6.5, 8½ → 8.5, 7½ → 7.5. If unsure, round to nearest 0.5.
+6. **OVERWRITTEN VALUES**: If crossed out and rewritten, use the CORRECTED value.
+7. **MISSING/UNREADABLE SCORES**: Use empty string "" for unreadable score values. NEVER skip the key.
+8. **NAMES ARE MANDATORY**: Every single row MUST have a non-empty "name" field. NEVER output a row with an empty or missing name.
+9. **SERIAL NUMBERS**: Do NOT include the S/N column unless specifically asked.
+10. **MULTI-IMAGE**: If multiple images show pages of the SAME class, combine all rows into one array.
+11. **NUMERIC VALUES**: All score values should be numbers (integers or decimals), NOT strings. Use 0 for zero, "" for missing.
+12. **ROW-BY-ROW VERIFICATION**: For each row, verify: Is the name assigned? Are scores in correct columns? Do numbers make sense (CAs: 0-10, Exam: 0-70)?
 """.format(instruction=instruction, roster_context=roster_context)
 
         # Call AI
