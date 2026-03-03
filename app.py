@@ -1883,6 +1883,8 @@ def assistant_scan_to_excel():
             
             instruction = data.get('instruction', '').strip()
             class_name = data.get('class_name', '').strip()
+            subject_name = data.get('subject_name', '').strip()
+            assessment_type = data.get('assessment_type', '').strip()
             images_b64 = data.get('images_base64', [])
             
             if not images_b64:
@@ -1902,6 +1904,8 @@ def assistant_scan_to_excel():
             
             instruction = request.form.get('instruction', '').strip()
             class_name = request.form.get('class_name', '').strip()
+            subject_name = request.form.get('subject_name', '').strip()
+            assessment_type = request.form.get('assessment_type', '').strip()
             files = request.files.getlist('images')
             
             for f in files:
@@ -1910,6 +1914,16 @@ def assistant_scan_to_excel():
         
         if not image_parts:
             return jsonify({"error": "No valid images received"}), 400
+            
+        # Hard validation: Do not allow scan without required context
+        missing = []
+        if not class_name: missing.append("class")
+        if not subject_name: missing.append("subject")
+        if not assessment_type: missing.append("term/assessment")
+        
+        if missing:
+            return jsonify({"error": "Missing required information: {}. Please tell the assistant the missing info before scanning.".format(", ".join(missing))}), 400
+            
         if not instruction:
             instruction = "extract all columns"
         
@@ -2637,13 +2651,19 @@ INTELLIGENCE RULES:
 10. ALWAYS return valid JSON with "response", "action" and "params". For general LLM tasks, use action "none" and put your full, rich answer in "response".
 11. READ VS EDIT EXCEL: If the teacher asks you to simply "read", "review", or "tell me what you found" about an uploaded Excel file, DO NOT use "edit_excel". Only use "edit_excel" if they explicitly ask you to MODIFY data (e.g. add, delete, rename). If they just want to read, use action "none" and summarize it in the response based on the "Context" I provided you about the upload.
 12. AVOID FALSE EDITS: If the teacher asks a question LIKE "where is the edited file?", they are asking a question, NOT giving an instruction to edit an Excel file. Use action "none".
-13. IMAGE SCAN INTELLIGENCE: When teacher uploads image(s), you MUST collect ALL of the following BEFORE triggering scan_image_to_excel:
-    a) WHICH CLASS is this for? → params.class_name (e.g. "SS 1T", "SS 2Q") — REQUIRED, do NOT assume.
-    b) WHAT SUBJECT? → params.subject_name (e.g. "Mathematics", "English") — REQUIRED, do NOT assume.
-    c) WHICH TERM? → params.assessment_type (e.g. "1st Term", "2nd Term", "3rd Term") — REQUIRED, do NOT assume.
-    d) WHAT COLUMNS to extract? → params.instruction. If the image shows a full record sheet, you can default to "extract all columns".
-    You can often detect class, subject, and term from the image header itself. If you can SEE it in the image, tell the teacher what you see and ask for confirmation (e.g. "I see 'SS 1S Record Sheet, 1st Term' at the top."). If the info is NOT visible in the image and the teacher hasn't told you, ASK — do NOT guess.
-    If the teacher provides some info upfront (e.g. "this is SS 1T Mathematics 2nd Term"), don't re-ask for what you already know. Only ask ONE question for the FIRST missing piece of info.
+13. IMAGE SCAN INTELLIGENCE: When teacher uploads image(s), you MUST collect ALL of the following BEFORE triggering scan_image_to_excel.
+    a) WHICH CLASS is this for? → params.class_name (e.g. "SS 1T", "SS 2Q") — REQUIRED
+    b) WHAT SUBJECT? → params.subject_name (e.g. "Mathematics") — REQUIRED
+    c) WHICH TERM? → params.assessment_type (e.g. "1st Term", "2nd Term") — REQUIRED
+    d) WHAT COLUMNS to extract? → params.instruction (e.g. "extract all columns")
+    
+    You can often detect class, subject, and term from the image header itself. If you can SEE it in the image, tell the teacher what you see and ask for confirmation.
+    
+    >>> CRITICAL RULE <<< 
+    If ANY of the 3 required fields (class, subject, term) are missing and not visible in the image, you MUST ask the teacher for the missing info. 
+    While you are asking a question to collect this info, your action MUST BE "none". 
+    DO NOT use action "scan_image_to_excel" until you have confirmed ALL required information.
+    
 14. SMART COLUMN GUESSING: Nigerian record sheets often have these columns: 1st CA, 2nd CA, Open Day, Note Book, Assignment, Attendance, Total, Exam, Grand Total. If teacher says "extract all columns" or "everything", use these standard names.
 15. AUTO-DETECT FROM IMAGE: If you can see the image AND it clearly shows a class name or subject in the header, TELL the teacher what you see and ask them to confirm. Be specific: "I can see this says 'SS 1T - Mathematics' at the top. Is that right?"
 16. MULTI-CLASS UPLOADS: If teacher uploads multiple images and says they're for DIFFERENT classes, ask which image is for which class. Do NOT assume all images are the same class.

@@ -1406,7 +1406,9 @@ async function executeAssistantAction(action, params) {
                         body: JSON.stringify({
                             images_base64: _assistantScanImages,
                             instruction: params?.instruction || 'extract all columns',
-                            class_name: params?.class_name || ''
+                            class_name: params?.class_name || '',
+                            subject_name: params?.subject_name || '',
+                            assessment_type: params?.assessment_type || ''
                         })
                     });
 
