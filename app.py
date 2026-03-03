@@ -1887,13 +1887,34 @@ def assistant_scan_to_excel():
         
         # Build optional roster context for smarter OCR
         roster_context = ""
+        roster_names = []
+        matched_class = None
         if class_name:
+            # Fuzzy class name lookup: "ss1s" should match "SS 1S"
+            # First try exact (case-insensitive)
             c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if not c:
+                # Normalize: strip spaces/punctuation and compare
+                normalized_input = re_mod.sub(r'[^a-zA-Z0-9]', '', class_name).lower()
+                all_classes = ClassModel.query.all()
+                for cls in all_classes:
+                    normalized_db = re_mod.sub(r'[^a-zA-Z0-9]', '', cls.name).lower()
+                    if normalized_db == normalized_input:
+                        c = cls
+                        break
+                # If still not found, use thefuzz
+                if not c and all_classes:
+                    class_names = [cls.name for cls in all_classes]
+                    best = process.extractOne(class_name, class_names, scorer=fuzz.token_set_ratio)
+                    if best and best[1] >= 70:
+                        c = next((cls for cls in all_classes if cls.name == best[0]), None)
+            
             if c:
+                matched_class = c
                 students = StudentModel.query.filter_by(class_id=c.id).all()
                 if students:
                     roster_names = [s.name for s in students]
-                    roster_context = "\n\nCRITICAL KNOWLEDGE: The teacher mentioned this image belongs to class '{}'. The official database roster for this class is: {}. \nWHEN EXTRACTING NAMES, YOU MUST MATCH THEM STRICTLY TO THIS ROSTER, IGNORING TYPOS IN THE HANDWRITING. Fix any misspelled handwritten names to perfectly match the official database spelling.".format(class_name, roster_names)
+                    roster_context = "\n\nCRITICAL KNOWLEDGE: The teacher mentioned this image belongs to class '{}'. The official database roster for this class is: {}. \nWHEN EXTRACTING NAMES, YOU MUST MATCH THEM STRICTLY TO THIS ROSTER, IGNORING TYPOS IN THE HANDWRITING. Fix any misspelled handwritten names to perfectly match the official database spelling.".format(c.name, roster_names)
         
         prompt = """
 You are an expert OCR and data extraction AI specializing in Nigerian school record sheets. A teacher has uploaded image(s) of a handwritten document and given you specific instructions.
@@ -1978,6 +1999,20 @@ CRITICAL RULES:
         
         if not isinstance(extracted_data, list) or len(extracted_data) == 0:
             return jsonify({"error": "No valid data or table found in the image based on your instructions."}), 400
+        
+        # Post-OCR fuzzy name correction against the roster
+        if roster_names:
+            for row in extracted_data:
+                ocr_name = str(row.get('name', '')).strip()
+                if not ocr_name:
+                    continue
+                # Check if name already matches roster exactly
+                if ocr_name in roster_names:
+                    continue
+                # Fuzzy match against roster
+                best = process.extractOne(ocr_name, roster_names, scorer=fuzz.token_set_ratio)
+                if best and best[1] >= 75:
+                    row['name'] = best[0]  # Correct to official roster spelling
         
         # Get column names from the first row
         columns = list(extracted_data[0].keys()) if extracted_data else []
