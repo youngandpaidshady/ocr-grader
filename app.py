@@ -2510,37 +2510,83 @@ def smart_assistant():
         history = data.get('history', [])  # Conversation history
         images = data.get('images', [])  # Base64 images from frontend
         
-        # Build conversation history string
+        # Build SMART conversation context with action tracking
         conversation_context = ""
-        if history and len(history) > 1:  # More than just the current message
+        last_proposed_action = None
+        last_proposed_params = {}
+        
+        if history and len(history) > 1:
             conv_lines = []
-            for h in history[:-1]:  # Exclude current message (it's sent separately)
+            for h in history[:-1]:  # Exclude current message
                 role = "Teacher" if h.get('role') == 'user' else "You (Assistant)"
                 text = h.get('text', '')
+                action = h.get('action', '')
                 if text.startswith('[SYSTEM]'):
                     role = 'SYSTEM'
                     text = text[8:].strip()
-                conv_lines.append("{}: {}".format(role, text))
-            conversation_context = "\nCONVERSATION HISTORY (maintain context!):\n{}\n".format("\n".join(conv_lines[-10:]))
+                if action and action != 'none':
+                    conv_lines.append("{}: {} [ACTION: {}]".format(role, text, action))
+                    if role == "You (Assistant)":
+                        last_proposed_action = action
+                        last_proposed_params = h.get('params', {})
+                else:
+                    conv_lines.append("{}: {}".format(role, text))
+            
+            # Use sliding window for conversation history
+            recent = conv_lines[-MAX_CONVERSATION_HISTORY:]
+            conversation_context = "\nCONVERSATION HISTORY (maintain context!):\n{}\n".format("\n".join(recent))
+            
+            if last_proposed_action:
+                conversation_context += "\nLAST PROPOSED ACTION: {} with params: {}\n".format(
+                    last_proposed_action, json.dumps(last_proposed_params)
+                )
+                conversation_context += ">>> If teacher says 'yes'/'ok'/'do it'/'go ahead', RE-EXECUTE this action with SAME params! <<<\n"
         
-        # Build RICH context from actual database
+        # Build RICH context from actual database — gives the AI real intelligence
         classes = ClassModel.query.order_by(ClassModel.name).all()
         class_data = {}
+        grading_progress = []  # Proactive suggestions for the AI
+        
         for c in classes:
             students = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
             scores = ScoreModel.query.filter(
                 ScoreModel.student_id.in_([s.id for s in students])
             ).all() if students else []
             
-            # Get assessment types that exist for this class
+            # Rich breakdown per class
             assessment_types = list(set(s.assessment_type for s in scores)) if scores else []
             subjects = list(set(s.subject_name for s in scores)) if scores else []
+            terms = list(set(s.term for s in scores)) if scores else []
+            
+            # Per-subject grading completion check
+            subject_progress = {}
+            for subj in subjects:
+                subj_scores = [s for s in scores if s.subject_name == subj]
+                subj_assessments = list(set(s.assessment_type for s in subj_scores))
+                subj_terms = list(set(s.term for s in subj_scores))
+                students_scored = len(set(s.student_id for s in subj_scores))
+                subject_progress[subj] = {
+                    "assessments_done": subj_assessments,
+                    "terms_done": subj_terms,
+                    "students_scored": students_scored
+                }
+                
+                # Figure out next logical assessment
+                standard_order = ['1st CA', '2nd CA', 'Open Day', 'Note Book', 'Assignment', 'Exam']
+                missing = [a for a in standard_order if a not in subj_assessments]
+                if missing:
+                    grading_progress.append("{} → {} needs {} next for {}".format(
+                        c.name, subj, missing[0],
+                        subj_terms[0] if subj_terms else "1st Term"
+                    ))
             
             class_data[c.name] = {
                 "student_count": len(students),
-                "students": [s.name for s in students[:20]],
+                "students": [s.name for s in students[:MAX_STUDENTS_IN_CONTEXT]],
                 "assessments": assessment_types,
                 "subjects": subjects,
+                "terms": terms,
+                "subject_progress": subject_progress,
                 "has_scores": len(scores) > 0
             }
         
@@ -2625,6 +2671,8 @@ DATABASE (live rosters):
 {db_data}
 
 {analytics}
+
+{progress}
 
 ACTIONS YOU CAN TAKE (pick the best one):
 {{
@@ -2742,6 +2790,7 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
             context=json.dumps(context),
             db_data=json.dumps(class_data, indent=2),
             analytics=session_analytics,
+            progress="GRADING PROGRESS (proactively mention relevant items):\n{}".format("\n".join(grading_progress[:10])) if grading_progress else "No grading progress tracked yet — this teacher might be new.",
             conversation=conversation_context
         )
         
@@ -2776,32 +2825,44 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
         if not raw_text:
             raise Exception("All AI models failed to respond")
         
-        # Robust JSON extraction — handle various AI response formats
-        # Strip markdown code fences
-        if raw_text.startswith("```json"):
-            raw_text = raw_text[7:]
-        if raw_text.startswith("```"):
-            raw_text = raw_text[3:]
-        if raw_text.endswith("```"):
-            raw_text = raw_text[:-3]
+        # ─── Robust JSON extraction ───────────────────────────────
+        # Strip markdown code fences and common AI quirks
+        raw_text = re_mod.sub(r'^```(?:json)?\s*', '', raw_text)
+        raw_text = re_mod.sub(r'\s*```$', '', raw_text)
         raw_text = raw_text.strip()
+        
+        # Clean common JSON quirks from AI output
+        # 1. Trailing commas before closing braces/brackets
+        raw_text = re_mod.sub(r',\s*([}\]])', r'\1', raw_text)
+        # 2. Single quotes to double quotes (careful: only around keys/values)
+        # 3. Unescaped newlines inside strings
         
         # Try direct JSON parse first
         result = None
         try:
             result = json.loads(raw_text)
         except json.JSONDecodeError:
-            # Fallback: try to find JSON object in the text using regex
+            # Fallback 1: Find the outermost JSON object with response+action
             json_match = re_mod.search(r'\{[\s\S]*"response"[\s\S]*"action"[\s\S]*\}', raw_text)
             if json_match:
                 try:
-                    result = json.loads(json_match.group())
+                    cleaned = re_mod.sub(r',\s*([}\]])', r'\1', json_match.group())
+                    result = json.loads(cleaned)
                 except json.JSONDecodeError:
                     pass
             
+            # Fallback 2: Try to find ANY JSON object
+            if result is None:
+                json_match2 = re_mod.search(r'\{[^{}]*"response"[^{}]*\}', raw_text)
+                if json_match2:
+                    try:
+                        result = json.loads(json_match2.group())
+                    except json.JSONDecodeError:
+                        pass
+            
             # Ultimate fallback: treat the entire response as conversational text
             if result is None:
-                print("Smart assistant JSON parse failed, using text fallback. Raw: {}".format(raw_text[:200]))
+                logger.warning("JSON parse failed, using text fallback. Raw: {}".format(raw_text[:300]))
                 result = {
                     "response": raw_text,
                     "action": "none",
