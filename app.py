@@ -129,7 +129,14 @@ db_url = os.getenv("DATABASE_URL")
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url or 'sqlite:///smartgrader.db'
+if not db_url:
+    # On Render, we mount a persistent disk to /data. Locally, we just use the root folder.
+    if os.path.exists('/data'):
+        db_url = 'sqlite:////data/smartgrader.db'
+    else:
+        db_url = 'sqlite:///smartgrader.db'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
