@@ -2,6 +2,7 @@
 import os
 import base64
 import json
+import logging
 from flask import Flask, request, jsonify, render_template, send_file, Response, stream_with_context, make_response
 from flask_cors import CORS
 import google.generativeai as genai
@@ -17,6 +18,28 @@ import re as re_mod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 load_dotenv()
 
+# ═══════════════════════════════════════════════════════════════
+#  PRODUCTION CONSTANTS
+# ═══════════════════════════════════════════════════════════════
+AI_MODEL_PRIMARY = 'gemini-2.5-flash'
+AI_MODEL_FALLBACK = 'gemini-2.0-flash'
+AI_MAX_RETRIES = 3
+AI_BACKOFF_SECONDS = [3, 8, 15]  # Exponential backoff per attempt
+FUZZY_MATCH_THRESHOLD = 95  # Minimum score for class name fuzzy matching
+MAX_UPLOAD_MB = 100
+MAX_CONVERSATION_HISTORY = 20  # Sliding window for chat context
+MAX_STUDENTS_IN_CONTEXT = 20  # Students sent to AI prompt per class
+
+# ═══════════════════════════════════════════════════════════════
+#  STRUCTURED LOGGING
+# ═══════════════════════════════════════════════════════════════
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('smartgrader')
+
 # Active working file path configured globally
 WORKING_EXCEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ActiveRoaster.xlsx")
 
@@ -28,9 +51,9 @@ _current_key_index = 0
 _key_lock = threading.Lock()
 
 if not API_KEYS:
-    print("WARNING: No API keys set in .env file. Set GEMINI_API_KEY (comma-separated for multiple).")
+    logger.warning("No API keys set in .env file. Set GEMINI_API_KEY (comma-separated for multiple).")
 else:
-    print("Loaded {} API key(s) for rotation.".format(len(API_KEYS)))
+    logger.info("Loaded {} API key(s) for rotation.".format(len(API_KEYS)))
 
 def get_current_api_key():
     """Get the current API key."""
@@ -39,7 +62,7 @@ def get_current_api_key():
     return API_KEYS[_current_key_index % len(API_KEYS)]
 
 def rotate_api_key():
-    """Rotate to the next API key. Returns the new key."""
+    """Rotate to the next API key. Thread-safe."""
     global _current_key_index
     if len(API_KEYS) <= 1:
         return get_current_api_key()
@@ -47,16 +70,59 @@ def rotate_api_key():
         _current_key_index = (_current_key_index + 1) % len(API_KEYS)
         new_key = API_KEYS[_current_key_index]
         genai.configure(api_key=new_key)
-        print("Rotated to API key #{} of {}".format(_current_key_index + 1, len(API_KEYS)))
+        logger.info("Rotated to API key #{} of {}".format(_current_key_index + 1, len(API_KEYS)))
     return new_key
+
+def _call_gemini(model_name, content_parts, max_retries=None):
+    """Centralized Gemini API caller with retry, rotation, and timeout.
+    Returns raw_text on success, raises on total failure."""
+    retries = max_retries or AI_MAX_RETRIES
+    last_error = None
+    for attempt in range(retries):
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(content_parts)
+            # Extract text — handle thinking mode responses (skip thought blocks)
+            raw_text = ''
+            if hasattr(response, 'candidates') and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'thought') and part.thought:
+                        continue
+                    if hasattr(part, 'text') and part.text:
+                        raw_text += part.text
+            if not raw_text:
+                raw_text = response.text.strip()
+            raw_text = raw_text.strip()
+            if raw_text:
+                return raw_text
+        except Exception as err:
+            last_error = err
+            err_str = str(err).lower()
+            logger.warning("Gemini {} attempt {}/{} failed: {}".format(model_name, attempt + 1, retries, err))
+            if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
+                rotate_api_key()
+                if attempt < retries - 1:
+                    wait = AI_BACKOFF_SECONDS[min(attempt, len(AI_BACKOFF_SECONDS) - 1)]
+                    logger.info("Rate limited — waiting {}s before retry...".format(wait))
+                    time.sleep(wait)
+            else:
+                break  # Non-rate-limit error, don't retry
+    raise last_error or Exception("All AI attempts failed")
 
 # Configure with the first key
 genai.configure(api_key=get_current_api_key())
 
 # Initialize Flask App
 app = Flask(__name__)
-CORS(app)
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024 # 100MB upload limit to support unlimited batches
+
+# CORS: allow the Render domain + localhost for dev
+_render_url = os.getenv('RENDER_EXTERNAL_URL', '')
+_allowed_origins = ['http://localhost:5000', 'http://127.0.0.1:5000']
+if _render_url:
+    _allowed_origins.append(_render_url)
+CORS(app, origins=_allowed_origins)
+
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_MB * 1024 * 1024
 
 # Configure Database
 db_url = os.getenv("DATABASE_URL")
@@ -396,12 +462,23 @@ def _keep_alive():
         time.sleep(14 * 60)  # 14 minutes
         try:
             urllib.request.urlopen(ping_url, timeout=10)
-            print("Self-ping OK")
+            logger.debug("Self-ping OK")
         except Exception as e:
-            print("Self-ping failed: {}".format(e))
+            logger.warning("Self-ping failed: {}".format(e))
 
 _ping_thread = threading.Thread(target=_keep_alive, daemon=True)
 _ping_thread.start()
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Render and monitoring."""
+    try:
+        # Quick DB check
+        db.session.execute(text('SELECT 1'))
+        return jsonify({"status": "healthy", "db": "ok", "ai_keys": len(API_KEYS)}), 200
+    except Exception as e:
+        logger.error("Health check failed: {}".format(e))
+        return jsonify({"status": "unhealthy", "error": str(e)}), 503
 
 @app.route('/')
 def index():
@@ -2026,48 +2103,16 @@ CRITICAL RULES:
 12. **ROW-BY-ROW VERIFICATION**: For each row, verify: Is the name assigned? Are scores in correct columns? Do numbers make sense (CAs: 0-10, Exam: 0-70)?
 """.format(instruction=instruction, roster_context=roster_context)
 
-        # Call AI
-        raw_text = None
-        last_error = None
-        
-        # If only 1 key, still allow 3 attempts with brief backoff for transient rate limits
-        max_attempts = len(API_KEYS) if 'API_KEYS' in globals() and len(API_KEYS) > 1 else 3
-        
-        for attempt in range(max_attempts):
-            try:
-                # Use Gemini 2.5 Flash for best accuracy on complex handwritten data
-                model = genai.GenerativeModel('gemini-2.5-flash')
-                query_parts = [prompt] + image_parts
-                response = model.generate_content(query_parts)
-                # Extract text — handle thinking mode responses (skip thought blocks)
-                raw_text = ''
-                if hasattr(response, 'candidates') and response.candidates:
-                    for part in response.candidates[0].content.parts:
-                        if hasattr(part, 'thought') and part.thought:
-                            continue  # Skip thought blocks
-                        if hasattr(part, 'text') and part.text:
-                            raw_text += part.text
-                if not raw_text:
-                    raw_text = response.text.strip()
-                raw_text = raw_text.strip()
-                break
-            except Exception as model_err:
-                err_str = str(model_err).lower()
-                last_error = str(model_err)
-                if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
-                    if 'rotate_api_key' in globals() and 'API_KEYS' in globals() and len(API_KEYS) > 1:
-                        rotate_api_key()
-                    else:
-                        time.sleep(2) # Brief backoff if only 1 key
-                    continue
-                raise model_err
-                
-        if not raw_text:
-            if last_error:
-                if 'quota' in last_error.lower() or '429' in last_error.lower() or 'resource' in last_error.lower():
-                    return jsonify({"error": "AI Quota Exceeded (Rate limit hit). Please wait 1 minute and try again."}), 503
-                return jsonify({"error": "AI Error: {}".format(last_error)}), 503
-            return jsonify({"error": "AI service busy or safety blocked. Please try again."}), 503
+        # Call AI using centralized helper with retry + key rotation
+        try:
+            query_parts = [prompt] + image_parts
+            raw_text = _call_gemini(AI_MODEL_PRIMARY, query_parts)
+        except Exception as ai_err:
+            err_str = str(ai_err).lower()
+            logger.error("OCR scan AI failed after retries: {}".format(ai_err))
+            if 'quota' in err_str or '429' in err_str or 'resource' in err_str:
+                return jsonify({"error": "AI rate limit hit. Please wait about a minute and try again."}), 503
+            return jsonify({"error": "AI Error: {}".format(str(ai_err)[:200])}), 503
             
         # Parse JSON
         raw_text = re_mod.sub(r'```json\n?', '', raw_text)
@@ -2700,10 +2745,6 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
             conversation=conversation_context
         )
         
-        # Primary: best quality model. Fallback: lighter model if primary fails.
-        models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
-        raw_text = None
-        last_error = None
 
         # Build content parts: system prompt + any images + user message
         content_parts = [system_prompt]
@@ -2718,44 +2759,22 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
                             "data": base64.b64decode(img_data)
                         })
                 except Exception as img_err:
-                    print("Smart assistant image decode error: {}".format(img_err))
+                    logger.warning("Smart assistant image decode error: {}".format(img_err))
         content_parts.append(message)
         
-        for model_name in models_to_try:
-            for attempt in range(3):
-                try:
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(content_parts)
-                    raw_text = ''
-                    # Handle thinking mode responses (skip thought blocks)
-                    if hasattr(response, 'candidates') and response.candidates:
-                        for part in response.candidates[0].content.parts:
-                            if hasattr(part, 'thought') and part.thought:
-                                continue  # Skip thought blocks
-                            if hasattr(part, 'text') and part.text:
-                                raw_text += part.text
-                    if not raw_text:
-                        raw_text = response.text.strip()
-                    raw_text = raw_text.strip()
+        # Try primary model, fallback to lighter model
+        raw_text = None
+        for model_name in [AI_MODEL_PRIMARY, AI_MODEL_FALLBACK]:
+            try:
+                raw_text = _call_gemini(model_name, content_parts)
+                if raw_text:
                     break
-                except Exception as model_err:
-                    last_error = model_err
-                    err_str = str(model_err).lower()
-                    print("Smart assistant model {} attempt {}/3 failed: {}".format(model_name, attempt + 1, model_err))
-                    # Only retry on rate limit errors, not on model-not-found etc.
-                    if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
-                        rotate_api_key()  # Switch to next API key
-                        if attempt < 2:
-                            wait = [3, 8][attempt]
-                            print("Rate limited, rotated key & waiting {}s...".format(wait))
-                            time.sleep(wait)
-                    else:
-                        break  # Non-rate-limit error, skip to next model
-            if raw_text:
-                break
+            except Exception as model_err:
+                logger.warning("Chat model {} failed, trying fallback: {}".format(model_name, model_err))
+                continue
         
         if not raw_text:
-            raise last_error or Exception("All models failed")
+            raise Exception("All AI models failed to respond")
         
         # Robust JSON extraction — handle various AI response formats
         # Strip markdown code fences
@@ -2792,21 +2811,33 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
         return jsonify(result), 200
         
     except Exception as e:
-        print("Smart assistant error: {}".format(e))
         import traceback
-        traceback.print_exc()
+        logger.error("Smart assistant error: {}".format(e))
+        logger.error(traceback.format_exc())
         
-        # Check if the error is a known rate limit exhaustion
+        # Categorize the error for a smart, specific response
         error_msg = str(e).lower()
         if 'quota' in error_msg or '429' in error_msg or 'resource' in error_msg:
             return jsonify({
-                "response": "Whoops! We're moving a bit too fast and hit the AI rate limit. Please wait about a minute and try your message again.",
+                "response": "We're hitting the AI rate limit right now. Give it about 60 seconds and try again — I'll be ready!",
+                "action": "none",
+                "params": {}
+            }), 200
+        elif 'safety' in error_msg or 'blocked' in error_msg:
+            return jsonify({
+                "response": "The AI flagged that as potentially unsafe content. Could you rephrase your question?",
+                "action": "none",
+                "params": {}
+            }), 200
+        elif 'invalid' in error_msg or 'not found' in error_msg:
+            return jsonify({
+                "response": "Something went wrong with the AI model. This is temporary — please try again in a moment.",
                 "action": "none",
                 "params": {}
             }), 200
             
         return jsonify({
-            "response": "Sorry, I had a hiccup processing that. Could you say it differently? I'm here to help!",
+            "response": "Sorry, I had a hiccup processing that ({}). Could you say it differently?".format(type(e).__name__),
             "action": "none",
             "params": {}
         }), 200
@@ -2878,5 +2909,6 @@ def safe_add_student():
 if __name__ == '__main__':
     # Make sure templates folder exists
     os.makedirs('templates', exist_ok=True)
-    # Run server
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Run server — debug mode only when explicitly enabled
+    is_debug = os.getenv('FLASK_DEBUG', 'false').lower() in ('true', '1', 'yes')
+    app.run(debug=is_debug, host='0.0.0.0', port=5000)
