@@ -1829,16 +1829,56 @@ function refreshPreviewTable() {
     const data = window._assistantPreviewData;
     const cols = Object.keys(data[0] || {});
 
-    let tableHTML = `<p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-table mr-1.5"></i>${data.length} rows with columns: ${cols.join(', ')}. Edit anything below.</p>`;
+    // Check for inferred cells (starting with ~)
+    let inferredCount = 0;
+    const inferredCols = new Set();
+    data.forEach(row => {
+        cols.forEach(c => {
+            if (typeof row[c] === 'string' && row[c].startsWith('~')) {
+                inferredCount++;
+                inferredCols.add(c);
+            }
+        });
+    });
+
+    let tableHTML = "";
+
+    if (inferredCount > 0) {
+        tableHTML += `<div class="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] px-3 py-2 rounded-xl mb-3 font-medium">
+            <i class="fa-solid fa-bolt text-amber-500 mr-1.5"></i>Smart-filled ${inferredCount} gaps from image context — review highlighted cells
+         </div>`;
+    }
+
+    tableHTML += `<p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-table mr-1.5"></i>${data.length} rows with columns: ${cols.join(', ')}. Edit anything below.</p>`;
     tableHTML += `<div class="overflow-x-auto max-h-[300px] overflow-y-auto"><table class="w-full text-[11px] border-collapse">`;
     tableHTML += `<thead><tr class="border-b border-white/20">`;
-    cols.forEach(c => { tableHTML += `<th class="px-2 py-1 text-left text-white/70 font-bold sticky top-0 bg-[#1a1a2e]">${c}</th>`; });
-    tableHTML += `<th class="px-1 py-1 sticky top-0 bg-[#1a1a2e]"></th></tr></thead><tbody>`;
+    cols.forEach(c => {
+        const badge = inferredCols.has(c) ? ' <i class="fa-solid fa-bolt text-amber-500 ml-1" title="Contains smart-filled cells"></i>' : '';
+        tableHTML += `<th class="px-2 py-1 text-left text-white/70 font-bold sticky top-0 bg-[#1a1a2e] z-10">${c}${badge}</th>`;
+    });
+    tableHTML += `<th class="px-1 py-1 sticky top-0 bg-[#1a1a2e] z-10"></th></tr></thead><tbody>`;
 
     data.forEach((row, ri) => {
         tableHTML += `<tr class="border-b border-white/5 hover:bg-white/5" data-row="${ri}">`;
         cols.forEach(c => {
-            tableHTML += `<td class="px-2 py-1"><input type="text" value="${(row[c] || '').toString().replace(/"/g, '&quot;')}" data-row="${ri}" data-col="${c}" class="bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary focus:outline-none text-white text-[11px] w-full" onchange="updatePreviewCell(${ri},'${c.replace(/'/g, "\\'")}',this.value)"></td>`;
+            let rawVal = (row[c] || '').toString();
+            let isInferred = false;
+
+            if (rawVal.startsWith('~')) {
+                isInferred = true;
+                rawVal = rawVal.substring(1); // strip the ~ for display and editing
+            }
+
+            const safeVal = rawVal.replace(/"/g, '&quot;');
+            const safeCol = c.replace(/'/g, "\\'");
+
+            const styleClasses = isInferred
+                ? "bg-amber-500/20 text-amber-300 font-bold border-amber-500/50"
+                : "bg-transparent border-transparent text-white";
+
+            const titleMsg = isInferred ? 'title="Inferred from image context — please verify"' : '';
+
+            tableHTML += `<td class="px-2 py-1"><input type="text" value="${safeVal}" data-row="${ri}" data-col="${c}" class="border-b hover:border-white/20 focus:border-primary focus:outline-none text-[11px] w-full px-1 py-0.5 rounded-sm transition-colors ${styleClasses}" ${titleMsg} onchange="updatePreviewCell(${ri},'${safeCol}',this.value)"></td>`;
         });
         tableHTML += `<td class="px-1 py-1"><button onclick="deletePreviewRow(${ri})" class="text-red-400/50 hover:text-red-400 text-[10px]" title="Delete row"><i class="fa-solid fa-trash-can"></i></button></td>`;
         tableHTML += `</tr>`;

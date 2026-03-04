@@ -2098,7 +2098,7 @@ CRITICAL RULES:
    - "Grand Total" / "Total" = Final total score
 5. **FRACTIONAL SCORES**: Convert fractions: 6½ → 6.5, 8½ → 8.5, 7½ → 7.5. If unsure, round to nearest 0.5.
 6. **OVERWRITTEN VALUES**: If crossed out and rewritten, use the CORRECTED value.
-7. **MISSING/UNREADABLE SCORES**: Use empty string "" for unreadable score values. NEVER skip the key.
+7. **MISSING/UNREADABLE SCORES**: Mark completely unreadable or missing scores as exactly `null` (not "", not 0). This signals a gap for review.
 8. **NAMES ARE MANDATORY**: Every single row MUST have a non-empty "name" field. NEVER output a row with an empty or missing name.
 9. **SERIAL NUMBERS**: Do NOT include the S/N column unless specifically asked.
 10. **MULTI-IMAGE**: If multiple images show pages of the SAME class, combine all rows into one array.
@@ -2125,6 +2125,43 @@ CRITICAL RULES:
         
         if not isinstance(extracted_data, list) or len(extracted_data) == 0:
             return jsonify({"error": "No valid data or table found in the image based on your instructions."}), 400
+            
+        # --- PASS 2: AI Smart Gap-Filling ---
+        null_count = sum(1 for row in extracted_data for k, v in row.items() if v is None)
+        if null_count > 0:
+            logger.info("Found {} null cells. Triggering Pass 2 Smart Fill...".format(null_count))
+            pass2_prompt = """
+You are reviewing a partially extracted Nigerian school record sheet.
+Here is what was extracted so far (null = unreadable):
+{}
+
+Using the ORIGINAL IMAGE, fill in ONLY the null cells.
+Rules:
+1. Use the image as the source of truth, not rigid math.
+2. If you can SEE the value clearly in the handwriting, use it.
+3. If you can logically INFER it from the row's other values and visible column totals, prefix it with ~ (e.g. "~8").
+4. If you truly cannot determine it, leave it null.
+5. Return ONLY the same JSON array structure with nulls filled. No explanation, no markdown.
+""".format(json.dumps(extracted_data, indent=2))
+            
+            try:
+                pass2_query = [pass2_prompt] + image_parts
+                # Fallback model is fine for the simpler gap-filling task
+                pass2_raw = _call_gemini(AI_MODEL_FALLBACK, pass2_query)
+                pass2_raw = re_mod.sub(r'^```(?:json)?\s*', '', pass2_raw)
+                pass2_raw = re_mod.sub(r'\s*```$', '', pass2_raw)
+                pass2_data = json.loads(pass2_raw.strip())
+                if isinstance(pass2_data, list) and len(pass2_data) == len(extracted_data):
+                    extracted_data = pass2_data
+                    logger.info("Pass 2 Smart Fill successful.")
+            except Exception as p2_err:
+                logger.warning("Pass 2 Smart Fill failed, falling back to Pass 1 data: {}".format(p2_err))
+                
+        # Clean up any remaining nulls back to "" for the frontend
+        for row in extracted_data:
+            for k, v in row.items():
+                if v is None:
+                    row[k] = ""
         
         # Post-OCR fuzzy name correction against the roster
         if roster_names:
@@ -2184,6 +2221,10 @@ def assistant_build_excel():
             return jsonify({"error": "No data to build Excel from"}), 400
         
         df = pd.DataFrame(extracted_data)
+        
+        # Clean up any remaining '~' inferred markers if the teacher didn't edit them
+        for col in df.columns:
+            df[col] = df[col].apply(lambda x: str(x)[1:] if str(x).startswith('~') else x)
         
         # --- Normalize column names using grading engine ---
         rename_map = {}
