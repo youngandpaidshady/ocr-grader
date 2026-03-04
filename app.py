@@ -1945,11 +1945,11 @@ def assistant_scan_to_excel():
                     if normalized_db == normalized_input:
                         c = cls
                         break
-                # If still not found, use thefuzz
+                # If still not found, use thefuzz with a VERY strict threshold (classes differ by 1 letter often)
                 if not c and all_classes:
                     class_names = [cls.name for cls in all_classes]
                     best = process.extractOne(class_name, class_names, scorer=fuzz.token_set_ratio)
-                    if best and best[1] >= 70:
+                    if best and best[1] >= 95:
                         c = next((cls for cls in all_classes if cls.name == best[0]), None)
             
             if c:
@@ -2028,7 +2028,12 @@ CRITICAL RULES:
 
         # Call AI
         raw_text = None
-        for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
+        last_error = None
+        
+        # If only 1 key, still allow 3 attempts with brief backoff for transient rate limits
+        max_attempts = len(API_KEYS) if 'API_KEYS' in globals() and len(API_KEYS) > 1 else 3
+        
+        for attempt in range(max_attempts):
             try:
                 # Use Gemini 2.5 Flash for best accuracy on complex handwritten data
                 model = genai.GenerativeModel('gemini-2.5-flash')
@@ -2048,14 +2053,21 @@ CRITICAL RULES:
                 break
             except Exception as model_err:
                 err_str = str(model_err).lower()
+                last_error = str(model_err)
                 if 'quota' in err_str or 'rate' in err_str or '429' in err_str or 'resource' in err_str:
-                    if 'rotate_api_key' in globals():
+                    if 'rotate_api_key' in globals() and 'API_KEYS' in globals() and len(API_KEYS) > 1:
                         rotate_api_key()
+                    else:
+                        time.sleep(2) # Brief backoff if only 1 key
                     continue
                 raise model_err
                 
         if not raw_text:
-            return jsonify({"error": "AI service busy. Please try again."}), 503
+            if last_error:
+                if 'quota' in last_error.lower() or '429' in last_error.lower() or 'resource' in last_error.lower():
+                    return jsonify({"error": "AI Quota Exceeded (Rate limit hit). Please wait 1 minute and try again."}), 503
+                return jsonify({"error": "AI Error: {}".format(last_error)}), 503
+            return jsonify({"error": "AI service busy or safety blocked. Please try again."}), 503
             
         # Parse JSON
         raw_text = re_mod.sub(r'```json\n?', '', raw_text)
