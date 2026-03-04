@@ -443,10 +443,6 @@ Use the following JSON schema:
 Return ONLY the raw JSON array. DO NOT wrap it in markdown block quotes like ```json ... ```.
 """
 
-# Health check endpoint (used by self-ping to keep Render awake)
-@app.route('/health')
-def health_check():
-    return jsonify({"status": "ok"}), 200
 
 # Self-ping to keep Render free tier awake (pings every 14 min)
 def _keep_alive():
