@@ -2795,6 +2795,16 @@ Return ONLY raw JSON. No markdown wrapping.""".format(
         print("Smart assistant error: {}".format(e))
         import traceback
         traceback.print_exc()
+        
+        # Check if the error is a known rate limit exhaustion
+        error_msg = str(e).lower()
+        if 'quota' in error_msg or '429' in error_msg or 'resource' in error_msg:
+            return jsonify({
+                "response": "Whoops! We're moving a bit too fast and hit the AI rate limit. Please wait about a minute and try your message again.",
+                "action": "none",
+                "params": {}
+            }), 200
+            
         return jsonify({
             "response": "Sorry, I had a hiccup processing that. Could you say it differently? I'm here to help!",
             "action": "none",
