@@ -2780,15 +2780,24 @@ INTELLIGENCE RULES:
 
 {conversation}
 
-Return ONLY raw JSON. No markdown wrapping.""".format(
+Return ONLY raw JSON. No markdown wrapping."""
+
+        # Build progress text BEFORE the outer format() call to avoid nested {} issues
+        if grading_progress:
+            progress_text = "GRADING PROGRESS (proactively mention relevant items):\n" + "\n".join(grading_progress[:10])
+        else:
+            progress_text = "No grading progress tracked yet."
+        
+        system_prompt = system_prompt.format(
             screen=current_screen,
             session=json.dumps(session_info),
             context=json.dumps(context),
             db_data=json.dumps(class_data, indent=2),
             analytics=session_analytics,
-            progress="GRADING PROGRESS (proactively mention relevant items):\n{}".format("\n".join(grading_progress[:10])) if grading_progress else "No grading progress tracked yet — this teacher might be new.",
+            progress=progress_text,
             conversation=conversation_context
         )
+
         
 
         # Build content parts: system prompt + any images + user message
