@@ -1645,7 +1645,13 @@ def upload_excel_scorelist():
 
             # Detect Assessment types
             exclude = [name_col, class_col, subj_col, 'Total Score', 'Position', 'Rank', 'Total']
-            sheet_assessments = [str(col) for col in df.columns if col not in exclude and not str(col).startswith('Unnamed')]
+            sheet_assessments = [
+                str(col) for col in df.columns
+                if col not in exclude
+                and isinstance(col, str)           # skip integer/unnamed column indices
+                and not str(col).startswith('Unnamed')
+                and str(col).strip() != ''
+            ]
             
             for a in sheet_assessments:
                 if a not in assessment_types:
@@ -1716,8 +1722,9 @@ def upload_excel_scorelist():
         }), 200
 
     except Exception as e:
-        print("Excel scorelist upload error: {}".format(e))
-        return jsonify({"error": str(e)}), 500
+        err_detail = "{}: {}".format(type(e).__name__, str(e))
+        logger.error("Excel scorelist upload error: {}".format(err_detail))
+        return jsonify({"error": "Could not parse the Excel file. {}".format(err_detail)}), 500
 
 
 @app.route('/api/extract-names', methods=['POST'])

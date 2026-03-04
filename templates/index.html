@@ -1456,10 +1456,10 @@
                     <!-- Lowest Score Card -->
                     <div class="bg-background rounded-xl p-5 border border-white/5 relative overflow-hidden group">
                         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i
-                                class="fa-solid fa-arrow-trend-down text-4xl text-destructive"></i></div>
+                                class="fa-solid fa-arrow-trend-down text-4xl text-red-400"></i></div>
                         <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Lowest Score
                         </p>
-                        <p id="stat-low" class="text-4xl font-extrabold text-destructive">--</p>
+                        <p id="stat-low" class="text-4xl font-extrabold text-red-400">--</p>
                         <p id="stat-low-name" class="text-xs text-muted-foreground/70 mt-1 truncate">--</p>
                     </div>
                 </div>
@@ -2962,7 +2962,7 @@
             } catch (err) {
                 console.error("Export error:", err);
                 exportMsg.classList.remove('hidden', 'text-primary');
-                exportMsg.classList.add('text-destructive');
+                exportMsg.classList.add('text-red-400');
                 // Try AI-powered error explanation
                 if (typeof handleErrorWithAI === 'function') {
                     handleErrorWithAI(err, 'saving grades');

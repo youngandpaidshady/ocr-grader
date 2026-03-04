@@ -939,8 +939,8 @@ async function sendAssistantMessage(message) {
         document.getElementById('assistant-typing')?.remove();
         chatEl.innerHTML += `
             <div class="flex justify-start mb-3">
-                <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
-                    <p class="text-sm text-destructive">Sorry, something went wrong. Try again?</p>
+                <div class="bg-red-500/10 border border-red-500/30 rounded-2xl rounded-bl-md px-4 py-2">
+                    <p class="text-sm text-red-400"><i class="fa-solid fa-circle-exclamation mr-1.5"></i>Sorry, something went wrong. Try again?</p>
                 </div>
             </div>
         `;
@@ -1897,7 +1897,7 @@ async function buildExcelFromPreview() {
     } catch (err) {
         if (container) {
             const btns = container.querySelector('.flex.gap-2') || container.querySelector('p.text-blue-400')?.parentElement;
-            if (btns) btns.innerHTML = `<p class="text-sm text-destructive">Network error: ${err.message}</p><button onclick="buildExcelFromPreview()" class="mt-1 px-3 py-1 bg-destructive/20 hover:bg-destructive/30 rounded-lg text-destructive text-[11px] font-bold"><i class="fa-solid fa-rotate-right mr-1"></i>Retry</button>`;
+            if (btns) btns.innerHTML = `<p class="text-sm text-red-400"><i class="fa-solid fa-circle-exclamation mr-1.5"></i>Network error: ${err.message}</p><button onclick="buildExcelFromPreview()" class="mt-1 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 text-[11px] font-bold"><i class="fa-solid fa-rotate-right mr-1"></i>Retry</button>`;
         }
     }
 }
@@ -2029,8 +2029,8 @@ async function handleAssistantFileUpload(input) {
             } else {
                 chatEl.innerHTML += `
                     <div class="flex justify-start mb-3">
-                        <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
-                            <p class="text-sm text-destructive">${data.error || "Couldn't parse the Excel file."}</p>
+                        <div class="bg-red-500/10 border border-red-500/30 rounded-2xl rounded-bl-md px-4 py-2">
+                            <p class="text-sm text-red-400"><i class="fa-solid fa-circle-exclamation mr-1.5"></i>${data.error || "Couldn't parse the Excel file."}</p>
                         </div>
                     </div>
                 `;
@@ -2039,8 +2039,8 @@ async function handleAssistantFileUpload(input) {
             document.getElementById('upload-typing')?.remove();
             chatEl.innerHTML += `
                 <div class="flex justify-start mb-3">
-                    <div class="bg-destructive/10 border border-destructive/20 rounded-2xl rounded-bl-md px-4 py-2">
-                        <p class="text-sm text-destructive">Upload failed: ${err.message}</p>
+                    <div class="bg-red-500/10 border border-red-500/30 rounded-2xl rounded-bl-md px-4 py-2">
+                        <p class="text-sm text-red-400"><i class="fa-solid fa-circle-exclamation mr-1.5"></i>Upload failed: ${err.message}</p>
                     </div>
                 </div>
             `;
