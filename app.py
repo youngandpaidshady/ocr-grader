@@ -1621,15 +1621,21 @@ def upload_excel_scorelist():
             xf = pd.ExcelFile(file)
             all_sheets = {}
             for sn in xf.sheet_names:
-                # Try skiprows=4 first (QSI-generated files have 4 header rows)
-                df_try = pd.read_excel(file, sheet_name=sn, skiprows=4)
-                # Check if we got a valid "Name" column — if not, try without skiprows
-                has_name_col = any('name' in str(c).lower() for c in df_try.columns)
-                if not has_name_col or df_try.empty:
-                    df_try2 = pd.read_excel(file, sheet_name=sn, skiprows=0)
-                    has_name_col2 = any('name' in str(c).lower() for c in df_try2.columns)
-                    if has_name_col2 and not df_try2.empty:
-                        df_try = df_try2
+                # Read without headers to dynamically find the row containing 'Name'
+                df_raw = pd.read_excel(file, sheet_name=sn, header=None)
+                if df_raw.empty:
+                    all_sheets[sn] = pd.DataFrame()
+                    continue
+                    
+                header_row = 0
+                for idx, row in df_raw.iterrows():
+                    # Look for any cell containing 'name' (case-insensitive)
+                    if any('name' in str(cell).lower().strip() for cell in row.values if pd.notna(cell)):
+                        header_row = idx
+                        break
+                        
+                # Re-read with correct header
+                df_try = pd.read_excel(file, sheet_name=sn, skiprows=header_row)
                 all_sheets[sn] = df_try
 
         all_records = []
@@ -2254,9 +2260,16 @@ def assistant_build_excel():
         
         # --- Normalize column names using grading engine ---
         rename_map = {}
+        seen_normalized = set()
         for col in df.columns:
             normalized = normalize_column_name(col)
-            if normalized != col:
+            base_normalized = normalized
+            counter = 1
+            while normalized in seen_normalized:
+                normalized = "{} {}".format(base_normalized, counter)
+                counter += 1
+            seen_normalized.add(normalized)
+            if normalized != str(col):
                 rename_map[col] = normalized
         if rename_map:
             df = df.rename(columns=rename_map)
