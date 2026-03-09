@@ -1221,25 +1221,24 @@ def export_excel():
                 # Update the new assessment column (this will overwrite previous session's value IF they regrade the SAME assessment)
                 merged_by_class[class_name][target_name][assessment_type] = score
         
-        # === ROSTER PADDING (General Subjects) ===
-        # If General, ensure all students known to the database for this class are listed.
-        if subject_mode == 'general':
-            for class_name in list(merged_by_class.keys()):
-                c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
-                if c:
-                    db_students = StudentModel.query.filter_by(class_id=c.id).all()
-                    existing_names = list(merged_by_class[class_name].keys())
-                    
-                    for db_stu in db_students:
-                        target_name = db_stu.name
-                        found = False
-                        if existing_names:
-                            best = process.extractOne(target_name, existing_names, scorer=fuzz.token_set_ratio)
-                            if best and best[1] >= 85:
-                                found = True
-                        if not found:
-                            # Pad with missing student
-                            merged_by_class[class_name][target_name] = {"Name": target_name, "Class": class_name}
+        # === ROSTER PADDING (All Subjects) ===
+        # Always ensure all students known to the database for this class are listed.
+        for class_name in list(merged_by_class.keys()):
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if c:
+                db_students = StudentModel.query.filter_by(class_id=c.id).all()
+                existing_names = list(merged_by_class[class_name].keys())
+                
+                for db_stu in db_students:
+                    target_name = db_stu.name
+                    found = False
+                    if existing_names:
+                        best = process.extractOne(target_name, existing_names, scorer=fuzz.token_set_ratio)
+                        if best and best[1] >= 85:
+                            found = True
+                    if not found:
+                        # Pad with missing student
+                        merged_by_class[class_name][target_name] = {"Name": target_name, "Class": class_name}
         
         # === COMPUTE & GROUP BY CLASS LEVEL ===
         level_groups = {}  # {level: {arm: [results]}}
@@ -1313,6 +1312,11 @@ def export_excel():
                 base_df = pd.DataFrame(rows)
                 if not base_df.empty and 'Name' in base_df.columns:
                     base_df = base_df.sort_values(by='Name', key=lambda col: col.str.lower()).reset_index(drop=True)
+                
+                # Insert Serial Number column at the far left
+                if not base_df.empty:
+                    base_df.insert(0, 'S/N', range(1, len(base_df) + 1))
+                
                 standard_ca_cols = ['1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment']
                 
                 # Build a lookup of previous term Grand Totals from existingRecords
@@ -1421,7 +1425,7 @@ def export_excel():
                         df['Average'] = averages
                     
                     # === BUILD FINAL COLUMN ORDER ===
-                    final_cols = ['Name']
+                    final_cols = ['S/N', 'Name']
                     for col in standard_ca_cols:
                         final_cols.append(col)
                     final_cols.extend(['Total CA', 'Exam', 'Grand Total'])
@@ -1684,10 +1688,12 @@ def upload_excel_scorelist():
                 if 'subject' in c_low: subj_col = col
 
             # Detect Assessment types
-            exclude = [name_col, class_col, subj_col, 'Total Score', 'Position', 'Rank', 'Total']
+            exclude_base = [name_col, class_col, subj_col, 'Total Score', 'Position', 'Rank', 'Total', 'S/N', 'S/N.', 'No', 'No.']
+            exclude_lower = [str(x).lower().strip() for x in exclude_base if x]
+            
             sheet_assessments = [
                 str(col) for col in df.columns
-                if col not in exclude
+                if str(col).lower().strip() not in exclude_lower
                 and isinstance(col, str)           # skip integer/unnamed column indices
                 and not str(col).startswith('Unnamed')
                 and str(col).strip() != ''
@@ -2269,10 +2275,36 @@ def assistant_build_excel():
         # Drop redundant 'Class' column if present
         df.drop(columns=['Class', 'class', 'CLASS'], errors='ignore', inplace=True)
         
+        # --- Pad with unscanned students from the database roster ---
+        if class_name:
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if c:
+                db_students = StudentModel.query.filter_by(class_id=c.id).all()
+                existing_names_lower = []
+                name_col = next((col for col in df.columns if str(col).lower() == 'name'), None)
+                if name_col and not df.empty:
+                    existing_names_lower = [str(n).lower().strip() for n in df[name_col].tolist() if pd.notna(n)]
+                
+                missing_students = []
+                for db_s in db_students:
+                    if db_s.name.lower().strip() not in existing_names_lower:
+                        row_dict = {name_col if name_col else 'name': db_s.name}
+                        # Add blank entries for all other columns
+                        for col in df.columns:
+                            if col != (name_col if name_col else 'name'):
+                                row_dict[col] = ''
+                        missing_students.append(row_dict)
+                
+                if missing_students:
+                    df = pd.concat([df, pd.DataFrame(missing_students)], ignore_index=True)
+        
         # Sort rows alphabetically by student name
-        name_col = next((c for c in df.columns if str(c).lower() == 'name'), None)
+        name_col = next((col for col in df.columns if str(col).lower() == 'name'), None)
         if name_col:
             df = df.sort_values(by=name_col, key=lambda col: col.str.lower()).reset_index(drop=True)
+            
+        # Add Serial Number (S/N) column at the far left
+        df.insert(0, 'S/N', range(1, len(df) + 1))
         
         # Clean up any remaining '~' inferred markers if the teacher didn't edit them
         for col in df.columns:
@@ -2348,8 +2380,8 @@ def assistant_build_excel():
                 return "{}{}".format(r, suffix)
             df['Position'] = df['Position'].apply(format_pos)
         
-        # --- Reorder columns: name → CAs → Total CA → Exam → Grand Total → Grade → Remarks → Position ---
-        desired_order = ['name'] + ca_columns
+        # --- Reorder columns: S/N → name → CAs → Total CA → Exam → Grand Total → Grade → Remarks → Position ---
+        desired_order = ['S/N', 'name'] + ca_columns
         for extra in ['Total CA', 'Exam', 'Grand Total', 'Grade', 'Remarks', 'Position']:
             if extra in df.columns:
                 desired_order.append(extra)
@@ -2377,7 +2409,7 @@ def assistant_build_excel():
         output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
         # --- Convert score columns to float to avoid int64 errors with decimal values ---
         for col in df.columns:
-            if col not in ['name', 'Grade', 'Remarks', 'Position']:
+            if col not in ['S/N', 'name', 'Grade', 'Remarks', 'Position']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
         df.to_excel(output_path, index=False, engine='openpyxl')
