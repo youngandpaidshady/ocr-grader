@@ -1212,10 +1212,26 @@ def export_excel():
                 # Update the new assessment column (this will overwrite previous session's value IF they regrade the SAME assessment)
                 merged_by_class[class_name][target_name][assessment_type] = score
         
-        # NOTE: DB stores only student names + class (roster).
-        # Excel output contains ONLY scanned students + existingRecords. 
-        # We do NOT pad with the full roster — only what the teacher has data for.
-
+        # === ROSTER PADDING (General Subjects) ===
+        # If General, ensure all students known to the database for this class are listed.
+        if subject_mode == 'general':
+            for class_name in list(merged_by_class.keys()):
+                c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+                if c:
+                    db_students = StudentModel.query.filter_by(class_id=c.id).all()
+                    existing_names = list(merged_by_class[class_name].keys())
+                    
+                    for db_stu in db_students:
+                        target_name = db_stu.name
+                        found = False
+                        if existing_names:
+                            best = process.extractOne(target_name, existing_names, scorer=fuzz.token_set_ratio)
+                            if best and best[1] >= 85:
+                                found = True
+                        if not found:
+                            # Pad with missing student
+                            merged_by_class[class_name][target_name] = {"Name": target_name, "Class": class_name}
+        
         # === COMPUTE & GROUP BY CLASS LEVEL ===
         level_groups = {}  # {level: {arm: [results]}}
         config = NIGERIAN_MARK_BOOK_CONFIG
@@ -1687,12 +1703,15 @@ def upload_excel_scorelist():
                     continue
 
                 r = {
-                    "name": name,
-                    "scores": scores,
-                    "class": str(row[class_col]).strip() if class_col else detected_class,
-                    "subject": str(row[subj_col]).strip() if subj_col else detected_subject,
-                    "term": sheet_term
+                    "Name": name,
+                    "Class": str(row[class_col]).strip() if class_col else detected_class,
+                    "Subject": str(row[subj_col]).strip() if subj_col else detected_subject,
+                    "Term": sheet_term
                 }
+                # Flatten scores into the main record so /export-excel can read them naturally
+                for k, v in scores.items():
+                    r[k] = v
+                
                 sheet_records.append(r)
                 all_records.append(r)
 
@@ -2958,7 +2977,7 @@ Return ONLY raw JSON. No markdown wrapping."""
             }), 200
             
         return jsonify({
-            "response": "Sorry, I had a hiccup processing that ({}). Could you say it differently?".format(type(e).__name__),
+            "response": "Sorry, I had a hiccup processing that ({}: {}). Could you say it differently?".format(type(e).__name__, str(e)),
             "action": "none",
             "params": {}
         }), 200
