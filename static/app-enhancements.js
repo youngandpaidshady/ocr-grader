@@ -1431,47 +1431,46 @@ async function executeAssistantAction(action, params) {
                     chatEl?.querySelector('[id^=scan-progress]')?.remove();
 
                     if (scanData.success && scanData.preview) {
-                        // Store preview data globally for editing
-                        window._assistantPreviewData = scanData.data;
-                        window._assistantPreviewMeta = {
-                            class_name: params?.class_name || '',
-                            subject_name: params?.subject_name || '',
-                            assessment_type: params?.assessment_type || ''
-                        };
+                        // Store or append preview data globally for editing
+                        if (window._assistantPreviewData && window._assistantPreviewData.length > 0) {
+                            window._assistantPreviewData.push(...scanData.data);
+                            scanData.message = `<span class="text-amber-400">Appended ${scanData.data.length} new rows.</span> Total is now ${window._assistantPreviewData.length} rows.`;
+                        } else {
+                            window._assistantPreviewData = scanData.data;
+                            window._assistantPreviewMeta = {
+                                class_name: params?.class_name || '',
+                                subject_name: params?.subject_name || '',
+                                assessment_type: params?.assessment_type || ''
+                            };
+                        }
 
                         if (chatEl) {
-                            // Render the editable preview table
-                            const cols = scanData.columns || Object.keys(scanData.data[0] || {});
-                            let tableHTML = `<div id="preview-table-container" class="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-3 py-3 max-w-[95%] overflow-x-auto">`;
-                            tableHTML += `<p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-table mr-1.5"></i>${scanData.message}</p>`;
-                            tableHTML += `<div class="overflow-x-auto max-h-[300px] overflow-y-auto"><table class="w-full text-[11px] border-collapse">`;
-                            tableHTML += `<thead><tr class="border-b border-white/20">`;
-                            cols.forEach(c => {
-                                const isName = c.toLowerCase() === 'name';
-                                const style = isName ? 'min-width:140px;' : 'min-width:45px;';
-                                tableHTML += `<th class="px-2 py-1 text-left text-white/70 font-bold sticky top-0 bg-[#1a1a2e] whitespace-nowrap" style="${style}">${c}</th>`;
-                            });
-                            tableHTML += `<th class="px-1 py-1 sticky top-0 bg-[#1a1a2e]"></th></tr></thead><tbody>`;
+                            // Remove any old preview table from the chat stream so the combined one appears at the bottom
+                            const oldContainer = document.getElementById('preview-table-container');
+                            if (oldContainer) {
+                                const wrapper = oldContainer.closest('.flex.justify-start.mb-3');
+                                if (wrapper) wrapper.remove();
+                            }
 
-                            scanData.data.forEach((row, ri) => {
-                                tableHTML += `<tr class="border-b border-white/5 hover:bg-white/5" data-row="${ri}">`;
-                                cols.forEach(c => {
-                                    const isName = c.toLowerCase() === 'name';
-                                    const style = isName ? 'min-width:140px;' : 'min-width:45px;';
-                                    tableHTML += `<td class="px-2 py-1" style="${style}"><input type="text" value="${(row[c] || '').toString().replace(/"/g, '&quot;')}" data-row="${ri}" data-col="${c}" class="bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary focus:outline-none text-white text-[11px] w-full" onchange="updatePreviewCell(${ri},'${c.replace(/'/g, "\\'")}',this.value)"></td>`;
-                                });
-                                tableHTML += `<td class="px-1 py-1"><button onclick="deletePreviewRow(${ri})" class="text-red-400/50 hover:text-red-400 text-[10px]" title="Delete row"><i class="fa-solid fa-trash-can"></i></button></td>`;
-                                tableHTML += `</tr>`;
-                            });
-
-                            tableHTML += `</tbody></table></div>`;
-                            tableHTML += `<div class="flex gap-2 mt-3 flex-wrap">`;
-                            tableHTML += `<button onclick="addPreviewRow()" class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white/60 text-[11px] transition-all"><i class="fa-solid fa-plus mr-1"></i>Add Row</button>`;
-                            tableHTML += `<button onclick="buildExcelFromPreview()" class="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-primary hover:opacity-90 rounded-lg text-white text-xs font-bold transition-all"><i class="fa-solid fa-file-arrow-down mr-1.5"></i>Looks Good — Build Excel</button>`;
-                            tableHTML += `</div></div>`;
-
-                            chatEl.innerHTML += `<div class="flex justify-start mb-3">${tableHTML}</div>`;
+                            // Inject the empty container at the bottom
+                            chatEl.innerHTML += `
+                                <div class="flex justify-start mb-3 w-full">
+                                    <div id="preview-table-container" class="bg-white/5 border border-white/10 rounded-2xl md:rounded-bl-md px-3 py-3 w-full max-w-[98%] md:max-w-[95%] overflow-hidden"></div>
+                                </div>
+                            `;
                             chatEl.scrollTop = chatEl.scrollHeight;
+
+                            // Let the helper function build the table (which includes ~ amber parsing logic)
+                            refreshPreviewTable();
+
+                            // Re-append the specific message from this scan iteration inside the container
+                            const newContainer = document.getElementById('preview-table-container');
+                            if (newContainer) {
+                                const msgEl = document.createElement('p');
+                                msgEl.className = 'text-sm text-emerald-400 font-bold mb-2 mt-2';
+                                msgEl.innerHTML = `<i class="fa-solid fa-plus-circle mr-1.5"></i>${scanData.message}`;
+                                newContainer.prepend(msgEl);
+                            }
                         }
                     } else if (scanData.success) {
                         // Fallback: direct download (shouldn't happen with new backend)
@@ -2058,10 +2057,11 @@ async function handleAssistantFileUpload(input) {
                 `;
                 // Now ask assistant to analyze it
                 _assistantUploadedFile = file; // Store for follow-up edit instructions
+                window._excelRecords = data.records; // STORE IT FOR EXPORT MERGING!
 
                 let fileNamesList = "";
                 if (data.records && data.records.length > 0) {
-                    const names = data.records.map(r => r.name);
+                    const names = data.records.map(r => r.Name || r.name || 'Unknown');
                     fileNamesList = ` They are: ${names.join(', ')}.`;
                 }
 

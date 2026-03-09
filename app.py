@@ -694,9 +694,18 @@ def handle_classes():
 def handle_students():
     if request.method == 'GET':
         class_id = request.args.get('class_id')
-        if not class_id:
-            return jsonify({"error": "class_id is required"}), 400
-        students = StudentModel.query.filter_by(class_id=class_id).order_by(StudentModel.name).all()
+        class_name = request.args.get('class_name')
+        
+        if class_id:
+            students = StudentModel.query.filter_by(class_id=class_id).order_by(StudentModel.name).all()
+        elif class_name:
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == str(class_name).strip().lower()).first()
+            if not c:
+                return jsonify([]), 200
+            students = StudentModel.query.filter_by(class_id=c.id).order_by(StudentModel.name).all()
+        else:
+            return jsonify({"error": "class_id or class_name is required"}), 400
+            
         return jsonify([{"id": s.id, "name": s.name} for s in students]), 200
         
     if request.method == 'POST':
@@ -1302,6 +1311,8 @@ def export_excel():
                 # Exactly 3 terms as per physical mark book — NO Annual tab
                 all_terms = ["1st Term", "2nd Term", "3rd Term"]
                 base_df = pd.DataFrame(rows)
+                if not base_df.empty and 'Name' in base_df.columns:
+                    base_df = base_df.sort_values(by='Name', key=lambda col: col.str.lower()).reset_index(drop=True)
                 standard_ca_cols = ['1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment']
                 
                 # Build a lookup of previous term Grand Totals from existingRecords
@@ -1410,7 +1421,7 @@ def export_excel():
                         df['Average'] = averages
                     
                     # === BUILD FINAL COLUMN ORDER ===
-                    final_cols = ['Name', 'Class']
+                    final_cols = ['Name']
                     for col in standard_ca_cols:
                         final_cols.append(col)
                     final_cols.extend(['Total CA', 'Exam', 'Grand Total'])
@@ -1734,7 +1745,8 @@ def upload_excel_scorelist():
 
             existing_student_names = [s.name.lower() for s in StudentModel.query.filter_by(class_id=c.id).all()]
             for r in all_records:
-                s_name = r['name'].strip()
+                s_name = r.get('Name', '').strip()
+                if not s_name: continue
                 if s_name.lower() not in existing_student_names:
                     new_student = StudentModel(name=s_name.title(), class_id=c.id)
                     db.session.add(new_student)
@@ -2253,6 +2265,14 @@ def assistant_build_excel():
             return jsonify({"error": "No data to build Excel from"}), 400
         
         df = pd.DataFrame(extracted_data)
+        
+        # Drop redundant 'Class' column if present
+        df.drop(columns=['Class', 'class', 'CLASS'], errors='ignore', inplace=True)
+        
+        # Sort rows alphabetically by student name
+        name_col = next((c for c in df.columns if str(c).lower() == 'name'), None)
+        if name_col:
+            df = df.sort_values(by=name_col, key=lambda col: col.str.lower()).reset_index(drop=True)
         
         # Clean up any remaining '~' inferred markers if the teacher didn't edit them
         for col in df.columns:

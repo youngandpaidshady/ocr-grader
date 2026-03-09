@@ -1,0 +1,17 @@
+Cols:Index(['QSI SMART GRADER SCORESHEET - 1ST TERM', 'Unnamed: 1', 'Unnamed: 2',
+       'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7',
+       'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'Unnamed: 11',
+       'Unnamed: 12'],
+      dtype='str')
+
+  QSI SMART GRADER SCORESHEET - 1ST TERM Unnamed: 1 Unnamed: 2 Unnamed: 3 Unnamed: 4 Unnamed: 5  Unnamed: 6 Unnamed: 7 Unnamed: 8   Unnamed: 9 Unnamed: 10 Unnamed: 11 Unnamed: 12
+0                           CLASS: SS 1Q        NaN        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
+1                     SUBJECT: Chemistry        NaN        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
+2                                    NaN        NaN        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
+3                                   Name      Class     1st CA     2nd CA   Open Day       Note  Assignment   Total CA       Exam  Grand Total       Grade     Remarks    Position
+4                      Benjamin Victoria      SS 1Q        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
+5                            Edegbai Joy      SS 1Q        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
+6                       Okanlawon Esther      SS 1Q        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
+7               Olukotun Ayomide Opeyemi      SS 1Q        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
+8                          Oriade Bolade      SS 1Q        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
+9                   Olayanju Oluwasikemi      SS 1Q        NaN        NaN        NaN        NaN         NaN        NaN        NaN          NaN         NaN         NaN         NaN
