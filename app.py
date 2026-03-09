@@ -300,10 +300,9 @@ def validate_and_cap_score(column_name, value, config=None):
         warnings.append("{} score {} is negative — set to 0".format(column_name, numeric_val))
         numeric_val = 0
 
-    # Return as int if whole number, else float
-    if numeric_val == int(numeric_val):
-        return (int(numeric_val), warnings)
-    return (round(numeric_val, 1), warnings)
+    # Return as int using math.ceil
+    import math
+    return (int(math.ceil(numeric_val)), warnings)
 
 def compute_derived_scores(student_scores, config=None):
     """Given a dict of {column: value}, compute Total CA, Grand Total, Grade, Remarks.
@@ -331,7 +330,8 @@ def compute_derived_scores(student_scores, config=None):
 
     # Compute Total CA = sum(CAs) / 2
     if has_any_ca:
-        total_ca = round(ca_sum / 2.0, 1)
+        import math
+        total_ca = int(math.ceil(ca_sum / 2.0))
         if total_ca > config["ca_total_max"]:
             warnings.append("Total CA {} exceeds max {} — capped".format(total_ca, config["ca_total_max"]))
             total_ca = config["ca_total_max"]
@@ -360,7 +360,8 @@ def compute_derived_scores(student_scores, config=None):
 
     # Compute Grand Total = Total CA + Exam
     if total_ca is not None and exam_numeric is not None:
-        grand_total = round(total_ca + exam_numeric, 1)
+        import math
+        grand_total = int(math.ceil(total_ca + exam_numeric))
         if grand_total > config["grand_total_max"]:
             warnings.append("Grand Total {} exceeds max {} — capped".format(grand_total, config["grand_total_max"]))
             grand_total = config["grand_total_max"]
@@ -403,7 +404,8 @@ def compute_term_averages(term_totals, current_term):
 
     if not valid_totals:
         return (None, 0)
-    return (round(sum(valid_totals) / len(valid_totals), 1), len(valid_totals))
+    import math
+    return (int(math.ceil(sum(valid_totals) / len(valid_totals))), len(valid_totals))
 
 def get_grade_and_remark(score, config=None):
     """Get grade and remark for a numeric score."""
@@ -1482,7 +1484,13 @@ def export_excel():
                             df[col] = ''
                     
                     df = df[final_cols]
-                    df = df.fillna('')
+                    
+                    # Force nullable integer type to lose the .0 trailing decimals in output
+                    for col in df.columns:
+                        if col not in ['S/N', 'Name', 'Class', 'Grade', 'Remarks', 'Position']:
+                            # Using 'Int64' (capital I) allows Pandas to hold NA/blank gracefully while dropping decimal places.
+                            df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+                    
                     sheets_dict[sheet_name] = df
             if not sheets_dict:
                 continue
@@ -2407,10 +2415,10 @@ def assistant_build_excel():
             output_filename = "Extracted_Data_{}.xlsx".format(int(time.time()))
         
         output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
-        # --- Convert score columns to float to avoid int64 errors with decimal values ---
+        # --- Convert score columns to Nullable Integer 'Int64' to avoid trailing .0 ---
         for col in df.columns:
             if col not in ['S/N', 'name', 'Grade', 'Remarks', 'Position']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
         
         df.to_excel(output_path, index=False, engine='openpyxl')
         
