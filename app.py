@@ -1492,7 +1492,7 @@ def export_excel():
                     for col in df.columns:
                         if col in ['Name', 'Class', 'Grade', 'Remarks', 'Position']:
                             # Remove illegal characters from strings to prevent openpyxl XML errors
-                            df[col] = df[col].apply(lambda x: ILLEGAL_CHARACTERS_RE.sub('', str(x)) if pd.notna(x) else x)
+                            df[col] = df[col].apply(lambda x: ILLEGAL_CHARACTERS_RE.sub('', str(x)) if pd.notna(x) else x).astype(str)
                         elif col not in ['S/N']:
                             # Round floats to nearest whole number so it can safely cast to Int64
                             df[col] = pd.to_numeric(df[col], errors='coerce').round().astype('Int64')
