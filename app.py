@@ -420,6 +420,14 @@ def get_grade_and_remark(score, config=None):
             return (grade, remark)
     return ("", "")
 
+def format_position(rank):
+    """Format a numeric rank into ordinal position string (1st, 2nd, 3rd, etc.)."""
+    if pd.isna(rank): return ''
+    r = int(rank)
+    if 11 <= (r % 100) <= 13: return "{}th".format(r)
+    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
+    return "{}{}".format(r, suffix)
+
 # The prompt instructions for the AI model
 SYSTEM_PROMPT = """
 You are an expert OCR Assistant helping a Nigerian teacher grade test scripts.
@@ -856,7 +864,7 @@ Return ONLY the raw JSON object. DO NOT wrap it in markdown block quotes like ``
 
         # Process with AI model — with retry + key rotation for rate limits
         raw_text = None
-        for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
+        for attempt in range(len(API_KEYS) if API_KEYS else 3):
             try:
                 model = genai.GenerativeModel('gemini-2.5-flash')
                 contents = [system_prompt, {"mime_type": "image/jpeg", "data": img_b64}]
@@ -1285,7 +1293,7 @@ def export_excel():
                 if not base_df.empty:
                     base_df.insert(0, 'S/N', range(1, len(base_df) + 1))
                 
-                standard_ca_cols = ['1st CA', '2nd CA', 'Open Day', 'Note', 'Assignment']
+                standard_ca_cols = ['1st CA', '2nd CA', 'Open Day', 'Note Book', 'Assignment']
                 
                 # Build a lookup of previous term Grand Totals from existingRecords
                 prev_term_totals = {}  # {student_name: {"1st Term": total, "2nd Term": total}}
@@ -1322,6 +1330,9 @@ def export_excel():
                         # Inactive term — blank template with student names
                         empty_rows = [{"Name": r.get('Name'), "Class": r.get('Class')} for r in rows]
                         df = pd.DataFrame(empty_rows)
+                        # Add Serial Number column for inactive term sheets too
+                        if not df.empty:
+                            df.insert(0, 'S/N', range(1, len(df) + 1))
                     
                     # Build standard columns: CA1-5, Total CA, Exam, Grand Total, Grade, Remarks
                     for col in standard_ca_cols + ['Total CA', 'Exam', 'Grand Total', 'Grade', 'Remarks']:
@@ -1412,12 +1423,6 @@ def export_excel():
                         numeric_avg = pd.to_numeric(df['Average'], errors='coerce')
                         if numeric_avg.dropna().shape[0] > 0:
                             df['Rank'] = numeric_avg.rank(method='min', ascending=False)
-                            def format_position(rank):
-                                if pd.isna(rank): return ''
-                                r = int(rank)
-                                if 11 <= (r % 100) <= 13: return "{}th".format(r)
-                                suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
-                                return "{}{}".format(r, suffix)
                             df['Position'] = df['Rank'].apply(format_position)
                             df = df.drop(columns=['Rank'])
                         else:
@@ -1429,12 +1434,6 @@ def export_excel():
                         if rank_col:
                             numeric_scores = pd.to_numeric(df[rank_col], errors='coerce')
                             df['Rank'] = numeric_scores.rank(method='min', ascending=False)
-                            def format_position(rank):
-                                if pd.isna(rank): return ''
-                                r = int(rank)
-                                if 11 <= (r % 100) <= 13: return "{}th".format(r)
-                                suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
-                                return "{}{}".format(r, suffix)
                             df['Position'] = df['Rank'].apply(format_position)
                             df = df.drop(columns=['Rank'])
                         else:
@@ -1538,10 +1537,12 @@ def export_excel():
         
         downloads = []
         for level, info in generated_files.items():
+            safe_subject_url = re_mod.sub(r'[^A-Za-z0-9 ]', '', subject_name).strip() or 'Scores'
+            safe_term_url = re_mod.sub(r'[^A-Za-z0-9 ]', '', term).strip()
             downloads.append({
                 "level": level,
                 "filename": info["filename"],
-                "url": "/download-sheet?level={}".format(level)
+                "url": "/download-sheet?level={}&subject={}&term={}".format(level, safe_subject_url, safe_term_url)
             })
 
         return jsonify({
@@ -1562,11 +1563,16 @@ def download_sheet():
     """Returns the compiled Excel file, optionally filtered by level."""
     level = request.args.get('level', '').strip()
     subject = request.args.get('subject', '').strip()
+    term_param = request.args.get('term', '').strip()
     
     if level:
-        # Look for level-specific file
+        # Look for level-specific file (must include term to match export_excel naming)
         safe_subject = re_mod.sub(r'[^A-Za-z0-9 ]', '', subject).strip() if subject else "Scores"
-        filename = "{}_{}.xlsx".format(safe_subject or "Scores", level)
+        safe_term = re_mod.sub(r'[^A-Za-z0-9 ]', '', term_param).strip().replace(' ', '') if term_param else ''
+        if safe_term:
+            filename = "{}_{}_{}.xlsx".format(safe_subject or "Scores", safe_term, level)
+        else:
+            filename = "{}_{}.xlsx".format(safe_subject or "Scores", level)
         filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
         
         if os.path.exists(filepath):
@@ -1624,7 +1630,7 @@ def upload_excel_scorelist():
             all_sheets = {}
             for sn in xf.sheet_names:
                 # Read without headers to dynamically find the row containing 'Name'
-                df_raw = pd.read_excel(file, sheet_name=sn, header=None)
+                df_raw = pd.read_excel(xf, sheet_name=sn, header=None)
                 if df_raw.empty:
                     all_sheets[sn] = pd.DataFrame()
                     continue
@@ -1636,8 +1642,8 @@ def upload_excel_scorelist():
                         header_row = idx
                         break
                         
-                # Re-read with correct header
-                df_try = pd.read_excel(file, sheet_name=sn, skiprows=header_row)
+                # Re-read with correct header (use cached xf to avoid file pointer exhaustion)
+                df_try = pd.read_excel(xf, sheet_name=sn, skiprows=header_row)
                 all_sheets[sn] = df_try
 
         all_records = []
@@ -1712,10 +1718,17 @@ def upload_excel_scorelist():
                 if not scores:
                     continue
 
+                # Guard against NaN class/subject values
+                cls_val = str(row[class_col]).strip() if class_col else ''
+                if cls_val.lower() in ['nan', 'none', '']:
+                    cls_val = detected_class or ''
+                subj_val = str(row[subj_col]).strip() if subj_col else ''
+                if subj_val.lower() in ['nan', 'none', '']:
+                    subj_val = detected_subject or ''
                 r = {
                     "Name": name,
-                    "Class": str(row[class_col]).strip() if class_col else detected_class,
-                    "Subject": str(row[subj_col]).strip() if subj_col else detected_subject,
+                    "Class": cls_val,
+                    "Subject": subj_val,
                     "Term": sheet_term
                 }
                 # Flatten scores into the main record so /export-excel can read them naturally
@@ -2262,28 +2275,58 @@ def assistant_build_excel():
         # Drop redundant 'Class' column if present
         df.drop(columns=['Class', 'class', 'CLASS'], errors='ignore', inplace=True)
         
-        # --- Pad with unscanned students from the database roster ---
+        # --- PHASE 1: Correct OCR names to official roster names ---
+        # --- PHASE 2: Pad with unscanned roster students ---
+        # This ensures ALL names in the output come from the class roster.
         if class_name:
             c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
             if c:
                 db_students = StudentModel.query.filter_by(class_id=c.id).all()
-                existing_names_lower = []
+                roster_names = [s.name for s in db_students]
                 name_col = next((col for col in df.columns if str(col).lower() == 'name'), None)
-                if name_col and not df.empty:
-                    existing_names_lower = [str(n).lower().strip() for n in df[name_col].tolist() if pd.notna(n)]
                 
-                missing_students = []
-                for db_s in db_students:
-                    if db_s.name.lower().strip() not in existing_names_lower:
-                        row_dict = {name_col if name_col else 'name': db_s.name}
-                        # Add blank entries for all other columns
-                        for col in df.columns:
-                            if col != (name_col if name_col else 'name'):
-                                row_dict[col] = ''
-                        missing_students.append(row_dict)
+                # PHASE 1: Correct every OCR name to the closest roster match
+                # This prevents duplicates like "Abdulkareem I.O." vs "Abdulkareem Ihtimod Oyewumi"
+                matched_roster_names = set()  # Track which roster names have been claimed
+                if name_col and not df.empty and roster_names:
+                    for idx in df.index:
+                        ocr_name = str(df.at[idx, name_col]).strip()
+                        if not ocr_name or ocr_name.lower() in ['nan', 'none']:
+                            continue
+                        # Check if this OCR name already exactly matches a roster name
+                        if ocr_name in roster_names:
+                            matched_roster_names.add(ocr_name)
+                            continue
+                        # Fuzzy match against UNCLAIMED roster names to avoid two OCR rows mapping to the same student
+                        available_roster = [n for n in roster_names if n not in matched_roster_names]
+                        if not available_roster:
+                            available_roster = roster_names  # Fallback if all claimed
+                        best = process.extractOne(ocr_name, available_roster, scorer=fuzz.token_set_ratio)
+                        if best and best[1] >= 75:
+                            df.at[idx, name_col] = best[0]  # Correct to official roster name
+                            matched_roster_names.add(best[0])
+                        # If no match at all (<75), keep the OCR name as-is (edge case: new student not on roster)
                 
-                if missing_students:
-                    df = pd.concat([df, pd.DataFrame(missing_students)], ignore_index=True)
+                # PHASE 2: Pad with roster students who had NO match in the scanned data
+                if name_col and roster_names:
+                    current_names = [str(n).strip() for n in df[name_col].tolist() if pd.notna(n) and str(n).strip()] if not df.empty else []
+                    missing_students = []
+                    for roster_name in roster_names:
+                        # Check if this roster name is already in the DataFrame
+                        found = False
+                        if current_names:
+                            best = process.extractOne(roster_name, current_names, scorer=fuzz.token_set_ratio)
+                            if best and best[1] >= 85:
+                                found = True
+                        if not found:
+                            row_dict = {name_col: roster_name}
+                            for col in df.columns:
+                                if col != name_col:
+                                    row_dict[col] = ''
+                            missing_students.append(row_dict)
+                    
+                    if missing_students:
+                        df = pd.concat([df, pd.DataFrame(missing_students)], ignore_index=True)
         
         # Sort rows alphabetically by student name
         name_col = next((col for col in df.columns if str(col).lower() == 'name'), None)
@@ -2359,13 +2402,7 @@ def assistant_build_excel():
         if 'Grand Total' in df.columns:
             numeric_gt = pd.to_numeric(df['Grand Total'], errors='coerce')
             df['Position'] = numeric_gt.rank(method='min', ascending=False)
-            def format_pos(rank):
-                if pd.isna(rank): return ''
-                r = int(rank)
-                if 11 <= (r % 100) <= 13: return "{}th".format(r)
-                suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(r % 10, 'th')
-                return "{}{}".format(r, suffix)
-            df['Position'] = df['Position'].apply(format_pos)
+            df['Position'] = df['Position'].apply(format_position)
         
         # --- Reorder columns: S/N → name → CAs → Total CA → Exam → Grand Total → Grade → Remarks → Position ---
         desired_order = ['S/N', 'name'] + ca_columns
@@ -2466,7 +2503,7 @@ Return ONLY raw JSON. Example:
         
         # Call AI with retry
         raw_text = None
-        for attempt in range(len(API_KEYS) if 'API_KEYS' in dir() else 3):
+        for attempt in range(len(API_KEYS) if API_KEYS else 3):
             try:
                 model = genai.GenerativeModel('gemini-2.5-flash')
                 response = model.generate_content(prompt)
@@ -2531,7 +2568,18 @@ Return ONLY raw JSON. Example:
                 expr = edit.get('expression', '')
                 if col in df.columns and expr:
                     try:
-                        df[col] = df[col].apply(lambda x: eval(expr, {"__builtins__": {}}, {"x": float(x) if str(x).replace('.','',1).replace('-','',1).isdigit() else 0}) if pd.notna(x) else x)
+                        # Safe math evaluation — only allow basic arithmetic with x
+                        def _safe_eval_expr(x_val, expression):
+                            """Evaluate simple arithmetic expressions with x as the variable."""
+                            import re as _re
+                            # Only allow: digits, x, +, -, *, /, ., (, ), spaces
+                            if not _re.match(r'^[\dx\.\+\-\*/\(\)\s]+$', expression):
+                                raise ValueError("Unsafe expression: {}".format(expression))
+                            # Replace 'x' with the actual value
+                            safe_expr = expression.replace('x', str(float(x_val)))
+                            return eval(safe_expr, {"__builtins__": {}}, {})
+                        
+                        df[col] = df[col].apply(lambda x: _safe_eval_expr(float(x) if str(x).replace('.','',1).replace('-','',1).isdigit() else 0, expr) if pd.notna(x) else x)
                         changes_made += len(df)
                     except Exception as eval_err:
                         print("Expression eval error: {}".format(eval_err))
@@ -2541,8 +2589,15 @@ Return ONLY raw JSON. Example:
                 cond = edit.get('condition', '')
                 if col in df.columns and cond:
                     try:
+                        import re as _re
+                        # Only allow: comparison operators, digits, x, basic math, spaces
+                        if not _re.match(r'^[\dx\.\+\-\*/\(\)\s<>=!]+$', 'x ' + cond):
+                            raise ValueError("Unsafe condition: {}".format(cond))
                         before_count = len(df)
-                        mask = df[col].apply(lambda x: eval("x {}".format(cond), {"__builtins__": {}}, {"x": float(x) if str(x).replace('.','',1).replace('-','',1).isdigit() else 0}) if pd.notna(x) else False)
+                        def _safe_eval_cond(x_val, condition):
+                            safe_expr = "x {}".format(condition).replace('x', str(float(x_val)))
+                            return eval(safe_expr, {"__builtins__": {}}, {})
+                        mask = df[col].apply(lambda x: _safe_eval_cond(float(x) if str(x).replace('.','',1).replace('-','',1).isdigit() else 0, cond) if pd.notna(x) else False)
                         df = df[~mask]
                         changes_made += before_count - len(df)
                     except Exception as eval_err:
