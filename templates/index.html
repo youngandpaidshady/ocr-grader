@@ -2857,7 +2857,16 @@
                     })
                 });
 
-                const data = await response.json();
+                const textResp = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(textResp);
+                } catch (parseErr) {
+                    // Check if it's an HTML error page from Render (502 Gateway, etc.)
+                    const peek = textResp.replace(/<[^>]+>/g, ' ').substring(0, 150).trim();
+                    throw new Error(`Server returned an invalid non-JSON response: ${peek || 'Unknown Server Error'}`);
+                }
+
                 if (!response.ok) throw new Error(data.error || "Export failed");
 
                 exportMsg.classList.remove('hidden', 'text-destructive');
