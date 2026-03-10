@@ -1550,9 +1550,16 @@ def export_excel():
                             cell.alignment = Alignment(horizontal='center')
             
             for s_name, df_sheet in sheets_dict.items():
+                raw_rows = df_sheet.to_dict(orient='records')
+                # Clean NaNs and pd.NAs from rows so Flask jsonify doesn't output invalid JSON
+                for r in raw_rows:
+                    for k, v in r.items():
+                        if pd.isna(v):
+                            r[k] = ""
+                            
                 all_sheets_summary[s_name] = {
                     "columns": list(df_sheet.columns),
-                    "rows": df_sheet.to_dict(orient='records'),
+                    "rows": raw_rows,
                     "class": s_name.split(' - ')[0],
                     "subject": subject_name,
                     "level": level
