@@ -2578,12 +2578,73 @@ def assistant_build_excel():
         
         output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_filename)
         # --- Convert score columns to Nullable Integer 'Int64' to avoid trailing .0 ---
+        import re
+        ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
+        
         for col in df.columns:
-            if col not in ['S/N', 'name', 'Grade', 'Remarks', 'Position']:
-                df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+            if col in ['S/N', 'name', 'Grade', 'Remarks', 'Position', 'Name', 'Class']:
+                df[col] = df[col].apply(lambda x: ILLEGAL_CHARACTERS_RE.sub('', str(x)) if pd.notna(x) else x).astype(str)
+            else:
+                df[col] = pd.to_numeric(df[col], errors='coerce').round().astype('Int64')
         
-        df.to_excel(output_path, index=False, engine='openpyxl')
-        
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            sheet_name_str = "Scores"
+            if class_name and subject_name:
+                sheet_name_str = "{} - {}".format(class_name[:15], subject_name[:15])
+                
+            df.to_excel(writer, sheet_name=sheet_name_str, index=False, startrow=4)
+            worksheet = writer.sheets[sheet_name_str]
+            
+            # --- Emulate export_excel formatting ---
+            worksheet.merge_cells('A1:K1')
+            title_cell = worksheet['A1']
+            title_cell.value = "QSI SMART GRADER SCORESHEET"
+            title_cell.font = Font(bold=True, size=16)
+            title_cell.alignment = Alignment(horizontal='center', vertical='center')
+            
+            worksheet.merge_cells('A2:E2')
+            class_cell = worksheet['A2']
+            class_cell.value = "Class: {}".format(class_name or "Unknown")
+            class_cell.font = Font(bold=True)
+            
+            worksheet.merge_cells('F2:K2')
+            term_cell = worksheet['F2']
+            term_cell.value = "Term: {}".format("Active") # Assuming active term
+            term_cell.font = Font(bold=True)
+            term_cell.alignment = Alignment(horizontal='right')
+            
+            worksheet.merge_cells('A3:E3')
+            subj_cell = worksheet['A3']
+            subj_cell.value = "Subject: {}".format(subject_name or "Unknown")
+            subj_cell.font = Font(bold=True)
+            
+            worksheet.merge_cells('F3:K3')
+            assess_cell = worksheet['F3']
+            assess_cell.value = "Assessment: {}".format(", ".join(assessment_type) if isinstance(assessment_type, list) else assessment_type)
+            assess_cell.font = Font(bold=True)
+            assess_cell.alignment = Alignment(horizontal='right')
+            
+            # Style headers
+            header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+            for cell in worksheet[5]:
+                cell.fill = header_fill
+                cell.font = Font(bold=True, color="FFFFFF")
+                
+            # Auto-size columns
+            for col in worksheet.columns:
+                max_length = 0
+                column = col[0].column_letter
+                for cell in col:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(cell.value)
+                    except:
+                        pass
+                worksheet.column_dimensions[column].width = min(max_length + 2, 30)
+
         return jsonify({
             "success": True,
             "message": "Excel file ready! {} rows, {} columns.".format(len(df), len(df.columns)),
