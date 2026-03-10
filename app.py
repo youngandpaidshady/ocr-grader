@@ -3470,6 +3470,61 @@ def safe_add_student():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/admin-fix-db', methods=['GET', 'POST'])
+def admin_fix_db():
+    """Emergency route to forcefully wipe Unknown Class and sync SS1 rosters."""
+    try:
+        deleted_classes = []
+        deleted_students = []
+        added_students = []
+        
+        # 1. Wipe "Unknown Class"
+        unknown_c = ClassModel.query.filter(ClassModel.name.ilike('%unknown%')).all()
+        for uc in unknown_c:
+            kids = StudentModel.query.filter_by(class_id=uc.id).all()
+            for k in kids:
+                deleted_students.append(f"{k.name} (from {uc.name})")
+                db.session.delete(k)
+            deleted_classes.append(uc.name)
+            db.session.delete(uc)
+            
+        # 2. Resync SS1 Classes explicitly
+        for class_name, correct_names in DEFINITIVE_ROSTERS.items():
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if not c:
+                continue
+                
+            existing = StudentModel.query.filter_by(class_id=c.id).all()
+            existing_map = {s.name.strip().lower(): s for s in existing}
+            target_map = {' '.join(n.strip().split()).lower(): ' '.join(n.strip().split()).title() for n in correct_names}
+            
+            # Remove extras
+            for s in existing:
+                s_lower = ' '.join(s.name.strip().split()).lower()
+                if s_lower not in target_map:
+                    deleted_students.append(f"{s.name} (from {class_name})")
+                    db.session.delete(s)
+                elif s.name != target_map[s_lower]:
+                    s.name = target_map[s_lower]
+                    
+            # Add missing
+            for t_lower, t_title in target_map.items():
+                if t_lower not in existing_map:
+                    added_students.append(f"{t_title} (to {class_name})")
+                    db.session.add(StudentModel(name=t_title, class_id=c.id))
+                    
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": "Database successfully scrubbed.",
+            "deleted_classes": deleted_classes,
+            "deleted_students": deleted_students,
+            "added_students": added_students
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
