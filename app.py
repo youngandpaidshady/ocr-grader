@@ -1175,7 +1175,33 @@ def export_excel():
                 
                 merged_by_class[clsz][name] = row_data
 
-        # 3. Merge in the new scans
+        # 3. Correct scanned names to roster names BEFORE merging
+        #    This prevents duplicates from OCR spelling differences
+        for class_name, students in new_scores_by_class.items():
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if c:
+                db_students = StudentModel.query.filter_by(class_id=c.id).all()
+                roster_names = [s.name for s in db_students]
+                if roster_names:
+                    corrected = {}
+                    claimed = set()
+                    for name, score in students.items():
+                        if name in roster_names:
+                            corrected[name] = score
+                            claimed.add(name)
+                        else:
+                            available = [n for n in roster_names if n not in claimed]
+                            if not available:
+                                available = roster_names
+                            best = process.extractOne(name, available, scorer=fuzz.token_set_ratio)
+                            if best and best[1] >= 75:
+                                corrected[best[0]] = score
+                                claimed.add(best[0])
+                            else:
+                                corrected[name] = score  # Keep as-is if no match
+                    new_scores_by_class[class_name] = corrected
+
+        # 4. Merge corrected scans into existing records
         for class_name, students in new_scores_by_class.items():
             if class_name not in merged_by_class:
                 merged_by_class[class_name] = {}
