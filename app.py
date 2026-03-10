@@ -15,6 +15,7 @@ from sqlalchemy import func
 # Load environment variables
 import time
 import re as re_mod
+import glob
 from concurrent.futures import ThreadPoolExecutor, as_completed
 load_dotenv()
 
@@ -184,6 +185,52 @@ with app.app_context():
         db.session.execute(text("ALTER TABLE scores ADD COLUMN term VARCHAR(20) DEFAULT '1st Term'"))
         db.session.commit()
     except Exception:
+        db.session.rollback()
+
+    # --- ONE-TIME RENDER ROSTER SYNC ---
+    # Automatically syncs the DB with the definitive rosters on app startup.
+    # This removes phantom students (from old OCR bugs) and adds any missing ones.
+    DEFINITIVE_ROSTERS = {
+        "SS 1Q": ["Abdul Azeez Haliyah", "Abdul Hammed Qowiyat", "Abdul Kareem Zainab", "Abdulmumin Soburat", "Abdul Quadri Faridah", "Adeaga Mercy", "Adebayo Faouziyah", "Adekola Ayomide", "Adekunle Favour", "Adesina Adeola", "Ajao Lois", "Ajayi Elizabeth", "Ajayi Temilade", "Ajetunmobi Hepzibah", "Akindele Faith", "Akinlekan Faith", "Akinlolu Oluwademilade", "Akpan Priscilla", "Alade Pelumi", "Alaka Courage", "Alli Oluwadarasimi", "Asalu Rukayat", "Asiwaju Alimat", "Atolagbe Deborah", "Bamgbose Faridah", "Bamigbola Fiyinfoluwa", "Bashiru Aishat", "Bello Azeezat", "Benjamin Victoria", "Daniel Oluwadarasimi", "Durodola Naimot", "Edegbai Joy", "Fafowora Mofeyisara", "Fayemi Sunmisola", "Hammed Uruwat", "Hamzat Darasimi", "Ibrahim Yussiroh", "Ilori Julianah", "Jimoh Davida", "Jose Olayinka", "Joshua Tamilore", "Kazeem Alimot", "Kolawole Pemisire", "Lawal Aramide", "Lukman Ayomikun", "Morakinyo Eniola", "Moshood Zainab", "Nurudeen Moridyyah", "Obasuyi Peculiar", "Odesola Suudat", "Okanlawon Esther", "Okeowo Sofiat", "Oladimeji Adijat", "Oladokun Haliyah", "Olaniyi Latifat", "Olanrewaju Aishat", "Olateju Iyanuoluwa", "Olatunde Abigeal", "Olayanju Oluwasikemi", "Olayiwola Fathia", "Oluokun Favor", "Oluwagbenga Deborah", "Oluwasola Oluwaseyifunmi", "Oluwatoyin Jewel", "Oluyemi Oluwadarasimi", "Oriade Bolade", "Salami Oluwatobi", "Unorbueze Victoria", "Uzogbo Chioma"],
+        "SS 1S": ["Abdul Kareem Hikmat", "Abdullahi Istijabah", "Abdullateef Olaitan", "Abdulsalam Aishat", "Abdulsalam Sofiat", "Adebayo Inioluwa", "Adefisoye Mariam", "Adejumo Rayhanat", "Adeleke Ifeoluwa", "Adeleke Rebecca", "Adeniji Olamide", "Adepoju Victoria", "Adeshina Adedoyinsola", "Adewole Precious", "Adunse Ibunkunoluwa", "Ahmad Aishah", "Aina Omolewq", "Ajayi Itunuoluwa", "Ajayi Testimony", "Ajibola Olatunmininu", "Akimbo Mercy", "Akindele Habibat", "Alamuoye Seun", "Aminullahi Hikmat", "Amoo Adesewa", "Amuda Khadijah", "Arotile Fortune", "Attai Favour", "Awe Anjola", "Ayangbade Mojirayo", "Ayeloja Yesiroh", "Ayeni Victoria", "Babarinde Adunola", "Babasessin Boluwatife", "Bakare Darasimi", "Ebenezer Marvelous", "Elesho Deborah", "Fakayode Gbemisola", "Fatade Moyinoluwa", "Hoseni Hazeenat", "Ibitoye Oluwadamilola", "Ike Happiness", "Jegede Mercy", "Joel Tofunmi", "Josiah Favour", "Kazeem Faheedah", "Komolafe Ibukun", "Lawal Mazeedah", "Mogaji Asian", "Ocheje Anita", "Odedele Blessing", "Odunbanjo Fariah", "Ogunleye Saidah", "Ogunseye Precious", "Okunade Mercy", "Oladipupo Alimat", "Olapade Victoria", "Olagbegi Ewaoluwa", "Olayiwola Haliyah", "Olowookere Faridah", "Oluborode Semilore", "Oluwadamilare Precious", "Oluwatosin Dorcas", "Oriade Bolanle", "Osineye Mary", "Oyedotun Habibat", "Safiriyu Faizah", "Sakirullahi Aishah", "Sulaimon Haliyah", "Tawhid Mufliah", "Wale Gbadamosi Aisha", "Yakubu Qowiyah"],
+        "SS 1I": ["Abass Aishat", "Abdulazeez Zainab", "Adamson Zainab", "Adebayo Ayomide", "Adedeji Lydia", "Adegoke Fiyinfoluwa", "Adegun Aliyat", "Ademola Aishat", "Adeshina Inioluwa", "Adewale Aliyat", "Adeyanju Edith", "Adeyemo Princess", "Agbaje Zainab", "Aina Moridiyah", "Ajani Folashade", "Ajayi Abigal", "Ajiboye Adebimpe", "Ajike Esther", "Ajise Joyce", "Akerele Ewaoluwa", "Alamoye Seyi", "Aluko Irebami", "Amuda Fatimoh", "Apanpa Rokeebat", "Ashabi Ifeoluwa", "Balogun Noimot", "Bello Fatimoh", "Bello Tolulope", "Chukwu Amarachi", "Dada Rukayah", "Daniel Joy", "Daud Hakimat", "Ehidiamin Esther", "Enyi Glorious", "Fajuyigbe Mercy", "Griffin Mushinat", "Hassan Kareemah", "Ibrahim Azeezat", "Ilesanmi Deborah", "Ismail Mariam", "Jacob Favour", "Jegede Mojolaoluwa", "Joseph Adeola", "Kolawole Victoria", "Lawal Kehinde", "Manasseh Peace", "Muideen Sofiat", "Nana Hannah", "Nwaocha Ngozi", "Obideyi Opeoluwa", "Ogunbowale Rokeebat", "Ojo Elizabeth", "Ojo Nifemi", "Okeronbi Oluwadarasimi", "Okoronkwo Grace", "Okunola Arinola", "Oladejo Oluwafeyikemi", "Oladele Inioluwa", "Oladokun Naimot", "Olaitan Oluwadarasimi", "Olaleye Esther", "Olaniyi Abigeal", "Olusola Jesunifemi", "Olutoki Rokeebat", "Oyedeji Olorunwa", "Popoola Esther", "Rafiu Mazeedat", "Rasheed Mosope", "Smith Celestina", "Sulaimon Mariam", "Taiwo Erijuwon"]
+    }
+    
+    try:
+        for class_name, correct_names in DEFINITIVE_ROSTERS.items():
+            # Create class if missing
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
+            if not c:
+                c = ClassModel(name=class_name)
+                db.session.add(c)
+                db.session.flush()
+            
+            # Get existing students
+            existing = StudentModel.query.filter_by(class_id=c.id).all()
+            existing_map = {s.name.strip().lower(): s for s in existing}
+            
+            # Target list
+            target_map = {' '.join(n.strip().split()).lower(): ' '.join(n.strip().split()).title() for n in correct_names}
+            
+            # 1. Remove extras (like the 3 phantom students in SS 1Q)
+            for s in existing:
+                s_lower = ' '.join(s.name.strip().split()).lower()
+                if s_lower not in target_map:
+                    logger.info("Startup Sync [{}]: Removed phantom student '{}'".format(class_name, s.name))
+                    db.session.delete(s)
+                elif s.name != target_map[s_lower]:
+                    # Update capitalization / spacing to be perfectly uniform
+                    s.name = target_map[s_lower]
+                    
+            # 2. Add missing
+            for t_lower, t_title in target_map.items():
+                if t_lower not in existing_map:
+                    logger.info("Startup Sync [{}]: Added missing student '{}'".format(class_name, t_title))
+                    db.session.add(StudentModel(name=t_title, class_id=c.id))
+                    
+        db.session.commit()
+    except Exception as e:
+        logger.error("Startup Roster Sync Error: {}".format(e))
         db.session.rollback()
 
 # ═══════════════════════════════════════════════════════════════
@@ -481,6 +528,45 @@ def _keep_alive():
 
 _ping_thread = threading.Thread(target=_keep_alive, daemon=True)
 _ping_thread.start()
+
+# ═══════════════════════════════════════════════════════════════
+#  GENERATED EXCEL FILE CLEANUP
+#  Prevents disk exhaustion by removing stale generated spreadsheets.
+# ═══════════════════════════════════════════════════════════════
+EXCEL_MAX_AGE_SECONDS = 3600  # 1 hour
+_PROTECTED_EXCEL_FILES = {
+    "ActiveRoaster.xlsx",
+    "Mathematics_1stTerm_SS1.xlsx",
+    "Math_2ndTerm_SS1.xlsx",
+    "Chemistry_SS1.xlsx",
+    "test.xlsx",
+}
+
+def _cleanup_old_excel_files(max_age_seconds=None):
+    """Remove generated .xlsx files older than max_age_seconds from the app root.
+    Preserves protected files (ActiveRoaster, sample spreadsheets).
+    Runs silently — never raises."""
+    if max_age_seconds is None:
+        max_age_seconds = EXCEL_MAX_AGE_SECONDS
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    now = time.time()
+    removed = 0
+    try:
+        for f in glob.glob(os.path.join(app_dir, "*.xlsx")):
+            basename = os.path.basename(f)
+            if basename in _PROTECTED_EXCEL_FILES:
+                continue
+            try:
+                age = now - os.path.getmtime(f)
+                if age > max_age_seconds:
+                    os.remove(f)
+                    removed += 1
+                    logger.info("Cleanup: removed stale file '{}' (age={:.0f}s)".format(basename, age))
+            except OSError:
+                pass  # File in use or already deleted
+    except Exception as e:
+        logger.warning("Cleanup sweep error: {}".format(e))
+    return removed
 
 @app.route('/health')
 def health_check():
@@ -1114,6 +1200,8 @@ def parse_class_level(class_name):
 @app.route('/export-excel', methods=['POST'])
 def export_excel():
     """Generates Excel from scanned results. Handles multi-term merge and standard formatting."""
+    # Housekeeping: remove stale generated files to prevent disk exhaustion
+    _cleanup_old_excel_files()
     try:
         data = request.json
         if not data or 'results' not in data:
@@ -1768,7 +1856,8 @@ def upload_excel_scorelist():
             if sheet_term and sheet_records:
                 term_data[sheet_term] = sheet_records
 
-        # DB Sync: Ensure student names + class exist in roster (names only, no scores)
+        # DB Sync: Fuzzy-match uploaded names against roster to prevent phantom students.
+        # Only genuinely new names (no close roster match) are added.
         if detected_class:
             c = ClassModel.query.filter(func.lower(ClassModel.name) == detected_class.lower()).first()
             if not c:
@@ -1776,14 +1865,39 @@ def upload_excel_scorelist():
                 db.session.add(c)
                 db.session.commit()
 
-            existing_student_names = [s.name.lower() for s in StudentModel.query.filter_by(class_id=c.id).all()]
+            roster_students = StudentModel.query.filter_by(class_id=c.id).all()
+            roster_names = [s.name for s in roster_students]
+            roster_names_lower = [n.lower() for n in roster_names]
+            claimed = set()
+
             for r in all_records:
                 s_name = r.get('Name', '').strip()
-                if not s_name: continue
-                if s_name.lower() not in existing_student_names:
-                    new_student = StudentModel(name=s_name.title(), class_id=c.id)
-                    db.session.add(new_student)
-                    existing_student_names.append(s_name.lower())
+                if not s_name:
+                    continue
+
+                # Exact match — nothing to do
+                if s_name.lower() in roster_names_lower:
+                    continue
+
+                # Fuzzy match against unclaimed roster names
+                available = [n for n in roster_names if n not in claimed]
+                if not available:
+                    available = roster_names
+                if available:
+                    best = process.extractOne(s_name, available, scorer=fuzz.token_set_ratio)
+                    if best and best[1] >= 75:
+                        # Correct the record's name to the official roster version
+                        logger.info("[UPLOAD ROSTER] Corrected '{}' -> '{}' (score={})".format(s_name, best[0], best[1]))
+                        r['Name'] = best[0]
+                        claimed.add(best[0])
+                        continue
+
+                # No match at all — genuinely new student, add to roster
+                new_student = StudentModel(name=s_name.title(), class_id=c.id)
+                db.session.add(new_student)
+                roster_names.append(s_name.title())
+                roster_names_lower.append(s_name.lower())
+                logger.info("[UPLOAD ROSTER] Added new student '{}' (no roster match)".format(s_name))
 
             db.session.commit()
 
@@ -2284,6 +2398,8 @@ Rules:
 @app.route('/api/assistant-build-excel', methods=['POST'])
 def assistant_build_excel():
     """Takes confirmed/edited preview data and builds the final Excel file."""
+    # Housekeeping: remove stale generated files to prevent disk exhaustion
+    _cleanup_old_excel_files()
     try:
         payload = request.json
         if not payload or 'data' not in payload:
@@ -2692,14 +2808,17 @@ Return ONLY raw JSON. Example:
 
 @app.route('/api/download-edited-excel')
 def download_edited_excel():
-    """Download an edited Excel file."""
+    """Download an edited Excel file, then schedule it for cleanup."""
     filename = request.args.get('file', '')
     if not filename or '..' in filename or '/' in filename or '\\' in filename:
         return jsonify({"error": "Invalid filename"}), 400
     filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
     if not os.path.exists(filepath):
         return jsonify({"error": "File not found"}), 404
-    return send_file(filepath, as_attachment=True, download_name=filename)
+    response = make_response(send_file(filepath, as_attachment=True, download_name=filename))
+    # Clean up after serving — remove files older than 1 hour
+    _cleanup_old_excel_files()
+    return response
 
 
 @app.route('/api/smart-assistant', methods=['POST'])
