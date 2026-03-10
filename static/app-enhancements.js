@@ -1799,6 +1799,25 @@ async function safeAddStudentForce(studentName, className) {
     }
 }
 // === PREVIEW TABLE HELPERS ===
+// Roster names cache for autocomplete
+window._previewRosterNames = null;
+
+async function _fetchPreviewRoster() {
+    // Fetch roster names for the current class (cached per session)
+    if (window._previewRosterNames) return window._previewRosterNames;
+    const className = window._assistantPreviewMeta?.class_name;
+    if (!className) return [];
+    try {
+        const res = await fetch('/api/students?class_name=' + encodeURIComponent(className));
+        if (res.ok) {
+            const students = await res.json();
+            window._previewRosterNames = students.map(s => s.name).sort();
+            return window._previewRosterNames;
+        }
+    } catch (e) { console.warn('Roster fetch failed:', e); }
+    return [];
+}
+
 function updatePreviewCell(rowIdx, colName, newValue) {
     if (window._assistantPreviewData && window._assistantPreviewData[rowIdx]) {
         window._assistantPreviewData[rowIdx][colName] = newValue;
@@ -1821,12 +1840,159 @@ function addPreviewRow() {
     }
 }
 
-function refreshPreviewTable() {
+function dismissPreviewTable() {
+    window._assistantPreviewData = null;
+    window._assistantPreviewMeta = null;
+    window._previewRosterNames = null;
+    const container = document.getElementById('preview-table-container');
+    if (container) {
+        const wrapper = container.closest('.flex.justify-start.mb-3');
+        if (wrapper) wrapper.remove();
+        else container.remove();
+    }
+}
+
+// Close any open autocomplete dropdown
+function _closeRosterDropdown() {
+    const existing = document.getElementById('roster-autocomplete-dropdown');
+    if (existing) existing.remove();
+    window._rosterDropdownActiveIdx = -1;
+}
+
+// Show roster autocomplete dropdown for a name input
+function _showRosterDropdown(inputEl, rowIdx, colName) {
+    _closeRosterDropdown();
+    const roster = window._previewRosterNames;
+    if (!roster || roster.length === 0) return;
+
+    const query = inputEl.value.toLowerCase().trim();
+    // Filter: show all if empty, otherwise filter by typed text
+    let matches = roster;
+    if (query) {
+        matches = roster.filter(n => n.toLowerCase().includes(query));
+        // Also include starts-with matches first
+        matches.sort((a, b) => {
+            const aStarts = a.toLowerCase().startsWith(query) ? 0 : 1;
+            const bStarts = b.toLowerCase().startsWith(query) ? 0 : 1;
+            return aStarts - bStarts || a.localeCompare(b);
+        });
+    }
+    if (matches.length === 0) return;
+    // Don't show if the only match is exactly what's typed
+    if (matches.length === 1 && matches[0] === inputEl.value.trim()) return;
+
+    const dropdown = document.createElement('div');
+    dropdown.id = 'roster-autocomplete-dropdown';
+    dropdown.className = 'fixed z-[9999] bg-[#1e1e32] border border-white/15 rounded-lg shadow-2xl overflow-y-auto';
+    dropdown.style.maxHeight = '180px';
+    dropdown.style.minWidth = '200px';
+
+    // Position below the input
+    const rect = inputEl.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow > 100) {
+        dropdown.style.top = rect.bottom + 2 + 'px';
+    } else {
+        dropdown.style.top = (rect.top - Math.min(matches.length * 32, 180) - 2) + 'px';
+    }
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.width = Math.max(rect.width, 200) + 'px';
+
+    matches.forEach((name, i) => {
+        const item = document.createElement('div');
+        item.className = 'px-3 py-1.5 text-[12px] text-white/80 cursor-pointer hover:bg-violet-500/20 hover:text-white transition-colors';
+        item.dataset.idx = i;
+        // Highlight matching portion
+        if (query) {
+            const matchIdx = name.toLowerCase().indexOf(query);
+            if (matchIdx >= 0) {
+                item.innerHTML = name.substring(0, matchIdx) +
+                    '<span class="text-violet-400 font-bold">' + name.substring(matchIdx, matchIdx + query.length) + '</span>' +
+                    name.substring(matchIdx + query.length);
+            } else {
+                item.textContent = name;
+            }
+        } else {
+            item.textContent = name;
+        }
+        item.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent blur from firing before click
+            inputEl.value = name;
+            updatePreviewCell(rowIdx, colName, name);
+            _closeRosterDropdown();
+            // Brief flash to confirm selection
+            inputEl.style.borderColor = 'rgba(139, 92, 246, 0.5)';
+            setTimeout(() => { inputEl.style.borderColor = ''; }, 600);
+        });
+        dropdown.appendChild(item);
+    });
+
+    document.body.appendChild(dropdown);
+    window._rosterDropdownActiveIdx = -1;
+}
+
+// Keyboard navigation for roster dropdown
+function _handleRosterKeydown(e, inputEl, rowIdx, colName) {
+    const dropdown = document.getElementById('roster-autocomplete-dropdown');
+    if (!dropdown) {
+        // Open dropdown on typing
+        if (e.key.length === 1 || e.key === 'Backspace') {
+            setTimeout(() => _showRosterDropdown(inputEl, rowIdx, colName), 50);
+        }
+        return;
+    }
+    const items = dropdown.querySelectorAll('[data-idx]');
+    if (!items.length) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        window._rosterDropdownActiveIdx = Math.min((window._rosterDropdownActiveIdx || -1) + 1, items.length - 1);
+        items.forEach((it, i) => it.classList.toggle('bg-violet-500/20', i === window._rosterDropdownActiveIdx));
+        items[window._rosterDropdownActiveIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        window._rosterDropdownActiveIdx = Math.max((window._rosterDropdownActiveIdx || 0) - 1, 0);
+        items.forEach((it, i) => it.classList.toggle('bg-violet-500/20', i === window._rosterDropdownActiveIdx));
+        items[window._rosterDropdownActiveIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && window._rosterDropdownActiveIdx >= 0) {
+        e.preventDefault();
+        const selectedItem = items[window._rosterDropdownActiveIdx];
+        if (selectedItem) {
+            const name = window._previewRosterNames?.filter(n => {
+                const q = inputEl.value.toLowerCase().trim();
+                return !q || n.toLowerCase().includes(q);
+            })[window._rosterDropdownActiveIdx];
+            if (name) {
+                inputEl.value = name;
+                updatePreviewCell(rowIdx, colName, name);
+            }
+        }
+        _closeRosterDropdown();
+    } else if (e.key === 'Escape') {
+        _closeRosterDropdown();
+    } else {
+        // Re-filter on typing
+        setTimeout(() => _showRosterDropdown(inputEl, rowIdx, colName), 50);
+    }
+}
+
+// Close dropdown on any outside click
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#roster-autocomplete-dropdown') && !e.target.dataset.rosterInput) {
+        _closeRosterDropdown();
+    }
+});
+
+async function refreshPreviewTable() {
     const container = document.getElementById('preview-table-container');
     if (!container || !window._assistantPreviewData) return;
 
+    // Pre-fetch roster names for autocomplete (non-blocking)
+    const rosterPromise = _fetchPreviewRoster();
+
     const data = window._assistantPreviewData;
     const cols = Object.keys(data[0] || {});
+    const nameCol = cols.find(c => c.toLowerCase() === 'name') || null;
 
     // Check for inferred cells (starting with ~)
     let inferredCount = 0;
@@ -1848,7 +2014,7 @@ function refreshPreviewTable() {
          </div>`;
     }
 
-    tableHTML += `<p class="text-sm text-emerald-400 font-bold mb-2"><i class="fa-solid fa-table mr-1.5"></i>${data.length} rows with columns: ${cols.join(', ')}. Edit anything below.</p>`;
+    tableHTML += `<div class="flex items-center justify-between mb-2"><p class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-table mr-1.5"></i>${data.length} rows with columns: ${cols.join(', ')}. Edit anything below.</p><button onclick="dismissPreviewTable()" class="w-6 h-6 flex items-center justify-center rounded-full text-white/30 hover:text-white/80 hover:bg-white/10 transition-colors" title="Dismiss table"><i class="fa-solid fa-xmark text-xs"></i></button></div>`;
     tableHTML += `<div class="overflow-x-auto max-h-[300px] overflow-y-auto"><table class="w-full text-[11px] border-collapse">`;
     tableHTML += `<thead><tr class="border-b border-white/20">`;
     cols.forEach(c => {
@@ -1865,7 +2031,7 @@ function refreshPreviewTable() {
 
             if (rawVal.startsWith('~')) {
                 isInferred = true;
-                rawVal = rawVal.substring(1); // strip the ~ for display and editing
+                rawVal = rawVal.substring(1);
             }
 
             const safeVal = rawVal.replace(/"/g, '&quot;');
@@ -1877,7 +2043,13 @@ function refreshPreviewTable() {
 
             const titleMsg = isInferred ? 'title="Inferred from image context — please verify"' : '';
 
-            tableHTML += `<td class="px-2 py-1"><input type="text" value="${safeVal}" data-row="${ri}" data-col="${c}" class="border-b hover:border-white/20 focus:border-primary focus:outline-none text-[11px] w-full px-1 py-0.5 rounded-sm transition-colors ${styleClasses}" ${titleMsg} onchange="updatePreviewCell(${ri},'${safeCol}',this.value)"></td>`;
+            // Name column gets roster autocomplete
+            const isNameCol = nameCol && c === nameCol;
+            const rosterAttrs = isNameCol
+                ? `data-roster-input="1" onfocus="_showRosterDropdown(this,${ri},'${safeCol}')" onkeydown="_handleRosterKeydown(event,this,${ri},'${safeCol}')" onblur="setTimeout(_closeRosterDropdown,200)"`
+                : '';
+
+            tableHTML += `<td class="px-2 py-1"><input type="text" value="${safeVal}" data-row="${ri}" data-col="${c}" class="border-b hover:border-white/20 focus:border-primary focus:outline-none text-[11px] w-full px-1 py-0.5 rounded-sm transition-colors ${styleClasses}" ${titleMsg} ${rosterAttrs} onchange="updatePreviewCell(${ri},'${safeCol}',this.value)"></td>`;
         });
         tableHTML += `<td class="px-1 py-1"><button onclick="deletePreviewRow(${ri})" class="text-red-400/50 hover:text-red-400 text-[10px]" title="Delete row"><i class="fa-solid fa-trash-can"></i></button></td>`;
         tableHTML += `</tr>`;
@@ -1890,6 +2062,15 @@ function refreshPreviewTable() {
     tableHTML += `</div>`;
 
     container.innerHTML = tableHTML;
+
+    // Wait for roster to load, then add a subtle hint if available
+    const roster = await rosterPromise;
+    if (roster.length > 0 && nameCol) {
+        const hint = document.createElement('p');
+        hint.className = 'text-[10px] text-violet-400/60 mt-1.5 mb-0';
+        hint.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Tap any name to see roster suggestions (${roster.length} students loaded)`;
+        container.querySelector('.flex.gap-2')?.before(hint);
+    }
 }
 
 async function buildExcelFromPreview() {
