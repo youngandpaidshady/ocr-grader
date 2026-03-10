@@ -2630,67 +2630,100 @@ def assistant_build_excel():
         from openpyxl.styles import Font, Alignment, PatternFill
         from openpyxl.utils import get_column_letter
 
+        # --- Build Multiple Sheets by Class ---
+        class_col_name = next((c for c in df.columns if str(c).lower() == 'class'), None)
+        if not class_col_name:
+            df['Class'] = class_name
+            class_col_name = 'Class'
+        else:
+            # Fill any missing classes with the current target class
+            df[class_col_name] = df[class_col_name].fillna(class_name)
+
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-            sheet_name_str = "Scores"
-            if class_name and subject_name:
-                sheet_name_str = "{} - {}".format(class_name[:15], subject_name[:15])
+            # Group by class name to recreate multiple sheets
+            for grp_class_name, c_df in df.groupby(class_col_name):
+                grp_class_str = str(grp_class_name).strip()
+                if not grp_class_str or grp_class_str.lower() == 'nan':
+                    grp_class_str = class_name or "Unknown"
+                    
+                s_name = "{} - {}".format(grp_class_str[:15], (subject_name or "Scores")[:10])
                 
-            df.to_excel(writer, sheet_name=sheet_name_str, index=False, startrow=4)
-            worksheet = writer.sheets[sheet_name_str]
-            
-            # --- Emulate export_excel formatting ---
-            worksheet.merge_cells('A1:K1')
-            title_cell = worksheet['A1']
-            title_cell.value = "QSI SMART GRADER SCORESHEET"
-            title_cell.font = Font(bold=True, size=16)
-            title_cell.alignment = Alignment(horizontal='center', vertical='center')
-            
-            worksheet.merge_cells('A2:E2')
-            class_cell = worksheet['A2']
-            class_cell.value = "Class: {}".format(class_name or "Unknown")
-            class_cell.font = Font(bold=True)
-            
-            worksheet.merge_cells('F2:K2')
-            term_cell = worksheet['F2']
-            term_cell.value = "Term: {}".format("Active") # Assuming active term
-            term_cell.font = Font(bold=True)
-            term_cell.alignment = Alignment(horizontal='right')
-            
-            worksheet.merge_cells('A3:E3')
-            subj_cell = worksheet['A3']
-            subj_cell.value = "Subject: {}".format(subject_name or "Unknown")
-            subj_cell.font = Font(bold=True)
-            
-            worksheet.merge_cells('F3:K3')
-            assess_cell = worksheet['F3']
-            assess_cell.value = "Assessment: {}".format(", ".join(assessment_type) if isinstance(assessment_type, list) else assessment_type)
-            assess_cell.font = Font(bold=True)
-            assess_cell.alignment = Alignment(horizontal='right')
-            
-            # Style headers
-            header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-            for cell in worksheet[5]:
-                cell.fill = header_fill
-                cell.font = Font(bold=True, color="FFFFFF")
+                # Prevent duplicate sheet names
+                base_s = s_name
+                counter = 1
+                while s_name in writer.sheets:
+                    s_name = "{} ({})".format(base_s[:25], counter)
+                    counter += 1
+
+                # Re-sort just in case grouping messed it up
+                name_c = next((c for c in c_df.columns if str(c).lower() == 'name'), None)
+                if name_c:
+                    c_df = c_df.sort_values(by=name_c, key=lambda col: col.str.lower()).reset_index(drop=True)
                 
-            # Auto-size columns
-            import openpyxl
-            for col in worksheet.columns:
-                max_length = 0
-                column = None
-                for cell in col:
-                    if not isinstance(cell, openpyxl.cell.cell.MergedCell):
-                        column = cell.column_letter
-                        break
-                if not column: continue
+                # Fix S/N for this specific sheet
+                if 'S/N' in c_df.columns:
+                    c_df = c_df.drop(columns=['S/N'])
+                c_df.insert(0, 'S/N', range(1, len(c_df) + 1))
                 
-                for cell in col:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                worksheet.column_dimensions[column].width = min(max_length + 2, 30)
+                # Drop Class column before writing just like export_excel does
+                out_df = c_df.drop(columns=[class_col_name])
+
+                out_df.to_excel(writer, sheet_name=s_name, index=False, startrow=4)
+                worksheet = writer.sheets[s_name]
+                
+                # --- Emulate export_excel formatting ---
+                worksheet.merge_cells('A1:K1')
+                title_cell = worksheet['A1']
+                title_cell.value = "QSI SMART GRADER SCORESHEET"
+                title_cell.font = Font(bold=True, size=16)
+                title_cell.alignment = Alignment(horizontal='center', vertical='center')
+                
+                worksheet.merge_cells('A2:E2')
+                class_cell = worksheet['A2']
+                class_cell.value = "Class: {}".format(grp_class_str)
+                class_cell.font = Font(bold=True)
+                
+                worksheet.merge_cells('F2:K2')
+                term_cell = worksheet['F2']
+                term_cell.value = "Term: Active"
+                term_cell.font = Font(bold=True)
+                term_cell.alignment = Alignment(horizontal='right')
+                
+                worksheet.merge_cells('A3:E3')
+                subj_cell = worksheet['A3']
+                subj_cell.value = "Subject: {}".format(subject_name or "Unknown")
+                subj_cell.font = Font(bold=True)
+                
+                worksheet.merge_cells('F3:K3')
+                assess_cell = worksheet['F3']
+                assess_cell.value = "Assessment: {}".format(", ".join(assessment_type) if isinstance(assessment_type, list) else assessment_type)
+                assess_cell.font = Font(bold=True)
+                assess_cell.alignment = Alignment(horizontal='right')
+                
+                # Style headers
+                header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                for cell in worksheet[5]:
+                    cell.fill = header_fill
+                    cell.font = Font(bold=True, color="FFFFFF")
+                    
+                # Auto-size columns
+                import openpyxl
+                for col in worksheet.columns:
+                    max_length = 0
+                    column = None
+                    for cell in col:
+                        if not isinstance(cell, openpyxl.cell.cell.MergedCell):
+                            column = cell.column_letter
+                            break
+                    if not column: continue
+                    
+                    for cell in col:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    worksheet.column_dimensions[column].width = min(max_length + 2, 30)
 
         return jsonify({
             "success": True,
