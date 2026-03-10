@@ -1485,11 +1485,17 @@ def export_excel():
                     
                     df = df[final_cols]
                     
+                    import re
+                    ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
+
                     # Force nullable integer type to lose the .0 trailing decimals in output
                     for col in df.columns:
-                        if col not in ['S/N', 'Name', 'Class', 'Grade', 'Remarks', 'Position']:
-                            # Using 'Int64' (capital I) allows Pandas to hold NA/blank gracefully while dropping decimal places.
-                            df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+                        if col in ['Name', 'Class', 'Grade', 'Remarks', 'Position']:
+                            # Remove illegal characters from strings to prevent openpyxl XML errors
+                            df[col] = df[col].apply(lambda x: ILLEGAL_CHARACTERS_RE.sub('', str(x)) if pd.notna(x) else x)
+                        elif col not in ['S/N']:
+                            # Round floats to nearest whole number so it can safely cast to Int64
+                            df[col] = pd.to_numeric(df[col], errors='coerce').round().astype('Int64')
                     
                     sheets_dict[sheet_name] = df
             if not sheets_dict:
