@@ -2622,7 +2622,7 @@ def assistant_build_excel():
         ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
         
         for col in df.columns:
-            if col in ['S/N', 'name', 'Grade', 'Remarks', 'Position', 'Name', 'Class']:
+            if col in ['S/N', 'name', 'Grade', 'Remarks', 'Position', 'Name', 'Class', 'Term', 'Subject']:
                 df[col] = df[col].apply(lambda x: ILLEGAL_CHARACTERS_RE.sub('', str(x)) if pd.notna(x) else x).astype(str)
             else:
                 df[col] = pd.to_numeric(df[col], errors='coerce').round().astype('Int64')
@@ -2630,7 +2630,7 @@ def assistant_build_excel():
         from openpyxl.styles import Font, Alignment, PatternFill
         from openpyxl.utils import get_column_letter
 
-        # --- Build Multiple Sheets by Class ---
+        # --- Build Multiple Sheets by Class & Term ---
         class_col_name = next((c for c in df.columns if str(c).lower() == 'class'), None)
         if not class_col_name:
             df['Class'] = class_name
@@ -2638,15 +2638,27 @@ def assistant_build_excel():
         else:
             # Fill any missing classes with the current target class
             df[class_col_name] = df[class_col_name].fillna(class_name)
+            
+        term_col_name = next((c for c in df.columns if str(c).lower() == 'term'), None)
+        if not term_col_name:
+            df['Term'] = 'Active'
+            term_col_name = 'Term'
+        else:
+            df[term_col_name] = df[term_col_name].fillna('Active')
 
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-            # Group by class name to recreate multiple sheets
-            for grp_class_name, c_df in df.groupby(class_col_name):
-                grp_class_str = str(grp_class_name).strip()
+            # Group by class name and term to recreate multiple sheets exactly like export_excel
+            for (grp_c, grp_t), c_df in df.groupby([class_col_name, term_col_name]):
+                grp_class_str = str(grp_c).strip()
                 if not grp_class_str or grp_class_str.lower() == 'nan':
                     grp_class_str = class_name or "Unknown"
                     
-                s_name = "{} - {}".format(grp_class_str[:15], (subject_name or "Scores")[:10])
+                grp_term_str = str(grp_t).strip()
+                if not grp_term_str or grp_term_str.lower() == 'nan':
+                    grp_term_str = "Active"
+                    
+                # export_excel format: sheet_name = "{} - {}".format(class_name[:20], t[:10])
+                s_name = "{} - {}".format(grp_class_str[:20], grp_term_str[:10])
                 
                 # Prevent duplicate sheet names
                 base_s = s_name
@@ -2665,8 +2677,12 @@ def assistant_build_excel():
                     c_df = c_df.drop(columns=['S/N'])
                 c_df.insert(0, 'S/N', range(1, len(c_df) + 1))
                 
-                # Drop Class column before writing just like export_excel does
-                out_df = c_df.drop(columns=[class_col_name])
+                # Drop Class and Term columns before writing just like export_excel does
+                cols_to_drop = [class_col_name, term_col_name]
+                subj_col = next((c for c in c_df.columns if str(c).lower() == 'subject'), None)
+                if subj_col:
+                    cols_to_drop.append(subj_col)
+                out_df = c_df.drop(columns=cols_to_drop)
 
                 out_df.to_excel(writer, sheet_name=s_name, index=False, startrow=4)
                 worksheet = writer.sheets[s_name]
