@@ -367,7 +367,7 @@ def compute_derived_scores(student_scores, config=None):
     has_any_ca = False
     for ca_name in config["ca_columns"]:
         val = student_scores.get(ca_name)
-        if val is not None and str(val).strip() != '' and str(val).upper() != 'ABS':
+        if pd.notna(val) and str(val).strip().lower() not in ['', 'nan', 'none'] and str(val).upper() != 'ABS':
             try:
                 ca_sum += float(val)
                 ca_count += 1
@@ -399,7 +399,7 @@ def compute_derived_scores(student_scores, config=None):
     # Get Exam score
     exam_val = student_scores.get("Exam")
     exam_numeric = None
-    if exam_val is not None and str(exam_val).strip() != '' and str(exam_val).upper() != 'ABS':
+    if pd.notna(exam_val) and str(exam_val).strip().lower() not in ['', 'nan', 'none'] and str(exam_val).upper() != 'ABS':
         try:
             exam_numeric = float(exam_val)
         except (ValueError, TypeError):
@@ -2418,6 +2418,42 @@ def assistant_build_excel():
         # Drop redundant 'Class' column if present
         df.drop(columns=['Class', 'class', 'CLASS'], errors='ignore', inplace=True)
         
+        # --- PHASE 0: Smart Merge existing data if provided ---
+        existing_data = payload.get('existing_data', [])
+        if existing_data:
+            existing_df = pd.DataFrame(existing_data)
+            name_col = next((col for col in df.columns if str(col).lower() == 'name'), None)
+            ex_name_col = next((col for col in existing_df.columns if str(col).lower() == 'name'), None)
+            
+            if name_col and ex_name_col:
+                ex_names = existing_df[ex_name_col].apply(lambda x: str(x).strip()).tolist()
+                valid_ex_names = [n for n in ex_names if str(n).lower() not in ['nan', 'none', '']]
+                
+                for idx in df.index:
+                    ocr_name = str(df.at[idx, name_col]).strip()
+                    if not ocr_name or ocr_name.lower() in ['nan', 'none', '']: continue
+                    
+                    best = process.extractOne(ocr_name, valid_ex_names, scorer=fuzz.token_set_ratio)
+                    if best and best[1] >= 75:
+                        matched_name = best[0]
+                        # Account for potential duplicate names in existing_df; just take first
+                        ex_idx = existing_df.index[existing_df[ex_name_col] == matched_name][0]
+                        
+                        # Update existing row with extracted values
+                        for col in df.columns:
+                            c_lower = str(col).lower()
+                            if c_lower not in ['name', 's/n', 'position', 'rank']:
+                                target_col = next((ec for ec in existing_df.columns if str(ec).lower() == c_lower), col)
+                                val = df.at[idx, col]
+                                if pd.notna(val) and str(val).strip() != '':
+                                    existing_df.at[ex_idx, target_col] = val
+                    else:
+                        print(f"[MERGE] No tight match for '{ocr_name}', appending as new row")
+                        new_row_df = pd.DataFrame([df.loc[idx]])
+                        existing_df = pd.concat([existing_df, new_row_df], ignore_index=True)
+                        
+                df = existing_df # Swap in the merged dataframe
+                
         # --- PHASE 1: Correct OCR names to official roster names ---
         # --- PHASE 2: Pad with unscanned roster students ---
         # This ensures ALL names in the output come from the class roster.
@@ -2479,7 +2515,11 @@ def assistant_build_excel():
         if name_col:
             df = df.sort_values(by=name_col, key=lambda col: col.str.lower()).reset_index(drop=True)
             
-        # Add Serial Number (S/N) column at the far left
+        # Add or update Serial Number (S/N) column at the far left
+        if 'S/N' in df.columns:
+            df.drop(columns=['S/N'], inplace=True)
+        # Drop lowercase variations as well, just in case
+        df.drop(columns=['s/n'], errors='ignore', inplace=True)
         df.insert(0, 'S/N', range(1, len(df) + 1))
         
         # Clean up any remaining '~' inferred markers if the teacher didn't edit them
@@ -2509,7 +2549,7 @@ def assistant_build_excel():
         for col in score_cols:
             for idx in df.index:
                 val = df.at[idx, col]
-                if val is not None and str(val).strip() != '':
+                if pd.notna(val) and str(val).strip().lower() not in ['', 'nan', 'none']:
                     cleaned, warns = validate_and_cap_score(col, val)
                     df.at[idx, col] = cleaned
                     all_warnings.extend(warns)
@@ -2634,13 +2674,20 @@ def assistant_build_excel():
                 cell.font = Font(bold=True, color="FFFFFF")
                 
             # Auto-size columns
+            import openpyxl
             for col in worksheet.columns:
                 max_length = 0
-                column = col[0].column_letter
+                column = None
+                for cell in col:
+                    if not isinstance(cell, openpyxl.cell.cell.MergedCell):
+                        column = cell.column_letter
+                        break
+                if not column: continue
+                
                 for cell in col:
                     try:
                         if len(str(cell.value)) > max_length:
-                            max_length = len(cell.value)
+                            max_length = len(str(cell.value))
                     except:
                         pass
                 worksheet.column_dimensions[column].width = min(max_length + 2, 30)
@@ -2652,6 +2699,8 @@ def assistant_build_excel():
         }), 200
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print("Build Excel Error: {}".format(e))
         return jsonify({"error": str(e)}), 500
 

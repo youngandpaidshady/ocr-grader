@@ -2091,6 +2091,7 @@ async function buildExcelFromPreview() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 data: window._assistantPreviewData,
+                existing_data: window._excelRecords || null,
                 class_name: window._assistantPreviewMeta?.class_name || '',
                 subject_name: window._assistantPreviewMeta?.subject_name || '',
                 assessment_type: window._assistantPreviewMeta?.assessment_type || ''
