@@ -474,6 +474,19 @@ def _keep_alive():
 _ping_thread = threading.Thread(target=_keep_alive, daemon=True)
 _ping_thread.start()
 
+@app.route('/purge-db-urgent', methods=['GET'])
+def purge_db_urgent():
+    try:
+        db.session.query(ScoreModel).delete()
+        db.session.query(EnrollmentModel).delete()
+        db.session.query(StudentModel).delete()
+        db.session.query(ClassModel).delete()
+        db.session.commit()
+        return "SUCCESS PURGED", 200
+    except Exception as e:
+        db.session.rollback()
+        return str(e), 500
+
 @app.route('/health')
 def health_check():
     """Health check endpoint for Render and monitoring."""
