@@ -1198,7 +1198,8 @@ def export_excel():
                                 corrected[best[0]] = score
                                 claimed.add(best[0])
                             else:
-                                corrected[name] = score  # Keep as-is if no match
+                                # Drop unmatched OCR names — only roster names belong in the Excel
+                                print("[ROSTER] Dropped unrecognized name '{}' (no roster match)".format(name))
                     new_scores_by_class[class_name] = corrected
 
         # 4. Merge corrected scans into existing records
@@ -2331,7 +2332,10 @@ def assistant_build_excel():
                         if best and best[1] >= 75:
                             df.at[idx, name_col] = best[0]  # Correct to official roster name
                             matched_roster_names.add(best[0])
-                        # If no match at all (<75), keep the OCR name as-is (edge case: new student not on roster)
+                        # If no match at all (<75), drop the row — only roster names belong in the Excel
+                        else:
+                            print("[ROSTER] Dropped unrecognized name '{}' from preview (no roster match)".format(ocr_name))
+                            df.drop(idx, inplace=True)
                 
                 # PHASE 2: Pad with roster students who had NO match in the scanned data
                 if name_col and roster_names:
