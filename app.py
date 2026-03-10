@@ -1129,40 +1129,6 @@ def export_excel():
 
         subject_mode = data.get('subjectMode', 'general').strip().lower()
              
-        # === ROSTER-ONLY DB SYNC ===
-        # Only update class rosters (student names), NOT scores
-        
-        # Merge new scanned names for roster sync
-        all_new_names = []
-        for r in results:
-            name = str(r.get('name', '')).strip().title()
-            if not name: continue
-            all_new_names.append((name, str(r.get('class', '')).strip().upper()))
-            
-        for name, c_raw in all_new_names:
-            c_cleaned = re_mod.sub(r'[^A-Z0-9]', '', c_raw)
-            match = re_mod.match(r'([A-Z]+)(\d+.*)', c_cleaned)
-            class_name = "{} {}".format(match.group(1), match.group(2)) if match else (c_raw or "Unknown Class")
-            
-            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
-            if not c:
-                c = ClassModel(name=class_name)
-                db.session.add(c)
-                db.session.commit()
-                
-            student = StudentModel.query.filter_by(class_id=c.id, name=name).first()
-            if not student:
-                existing_students = StudentModel.query.filter_by(class_id=c.id).all()
-                existing_names = [s.name for s in existing_students]
-                if existing_names:
-                    best = process.extractOne(name, existing_names, scorer=fuzz.token_set_ratio)
-                    if best and best[1] >= 85:
-                        student = StudentModel.query.filter_by(class_id=c.id, name=best[0]).first()
-                if not student:
-                    student = StudentModel(class_id=c.id, name=name)
-                    db.session.add(student)
-                    db.session.commit()
-            
         # === BUILD & MERGE EXCEL DATA ===
         
         # 1. Standardize and process new scanned results by class
