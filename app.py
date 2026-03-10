@@ -1857,11 +1857,22 @@ def upload_excel_scorelist():
                 term_data[sheet_term] = sheet_records
 
         # DB Sync: Fuzzy-match uploaded names against roster to prevent phantom students.
-        # Only genuinely new names (no close roster match) are added.
-        if detected_class:
-            c = ClassModel.query.filter(func.lower(ClassModel.name) == detected_class.lower()).first()
+        # DB Sync: Fuzzy-match uploaded names against roster to prevent phantom students.
+        # Group records by class to prevent cross-pollination from multi-tab Excel files.
+        records_by_class = {}
+        for r in all_records:
+            c_name = r.get('Class', '').strip()
+            if not c_name or c_name.lower() in ['nan', 'none']:
+                c_name = detected_class or 'Unknown Class'
+            
+            if c_name not in records_by_class:
+                records_by_class[c_name] = []
+            records_by_class[c_name].append(r)
+
+        for class_name, records in records_by_class.items():
+            c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
             if not c:
-                c = ClassModel(name=detected_class.title())
+                c = ClassModel(name=class_name.title())
                 db.session.add(c)
                 db.session.commit()
 
@@ -1870,7 +1881,7 @@ def upload_excel_scorelist():
             roster_names_lower = [n.lower() for n in roster_names]
             claimed = set()
 
-            for r in all_records:
+            for r in records:
                 s_name = r.get('Name', '').strip()
                 if not s_name:
                     continue
@@ -1897,7 +1908,7 @@ def upload_excel_scorelist():
                 db.session.add(new_student)
                 roster_names.append(s_name.title())
                 roster_names_lower.append(s_name.lower())
-                logger.info("[UPLOAD ROSTER] Added new student '{}' (no roster match)".format(s_name))
+                logger.info("[UPLOAD ROSTER] Added new student '{}' to class '{}'".format(s_name, class_name))
 
             db.session.commit()
 
