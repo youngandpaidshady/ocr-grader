@@ -1743,20 +1743,42 @@ def upload_excel_scorelist():
             # Read ALL sheets for multi-term support
             xf = pd.ExcelFile(file)
             all_sheets = {}
+            sheet_metadata = {}
             for sn in xf.sheet_names:
-                # Read without headers to dynamically find the row containing 'Name'
+                # Read without headers to dynamically find the row containing 'Name' and extract metadata
                 df_raw = pd.read_excel(xf, sheet_name=sn, header=None)
                 if df_raw.empty:
                     all_sheets[sn] = pd.DataFrame()
+                    sheet_metadata[sn] = {}
                     continue
                     
+                meta_class = None
+                meta_term = None
+                meta_subject = None
                 header_row = 0
                 for idx, row in df_raw.iterrows():
-                    # Look for any cell containing 'name' (case-insensitive)
+                    # Extract metadata from titles before the explicit headers (e.g "Class: SS 1Q")
+                    if idx < 10:
+                        for cell in row.values:
+                            val = str(cell).strip()
+                            v_lower = val.lower()
+                            if v_lower.startswith('class:'):
+                                meta_class = val.split(':', 1)[1].strip()
+                            elif v_lower.startswith('term:'):
+                                meta_term = val.split(':', 1)[1].strip()
+                            elif v_lower.startswith('subject:'):
+                                meta_subject = val.split(':', 1)[1].strip()
+
+                    # Look for any cell containing 'name' (case-insensitive) to mark the table start
                     if any('name' in str(cell).lower().strip() for cell in row.values if pd.notna(cell)):
                         header_row = idx
                         break
                         
+                sheet_metadata[sn] = {
+                    'class': meta_class,
+                    'term': meta_term,
+                    'subject': meta_subject
+                }
                 # Re-read with correct header (use cached xf to avoid file pointer exhaustion)
                 df_try = pd.read_excel(xf, sheet_name=sn, skiprows=header_row)
                 all_sheets[sn] = df_try
@@ -1768,12 +1790,18 @@ def upload_excel_scorelist():
         assessment_types = []
 
         for sheet_name, df in all_sheets.items():
-            # Parse term from sheet name (e.g. "SS 1Q - 1st Term" -> "1st Term")
-            sheet_term = None
+            meta = sheet_metadata.get(sheet_name, {})
+            sheet_class = meta.get('class')
+            sheet_term = meta.get('term')
+            sheet_subj = meta.get('subject')
+
+            # Fallback 1: Parse term and class from sheet name (e.g. "SS 1Q - 1st Term") if metadata is completely missing
             if ' - ' in sheet_name:
                 parts = sheet_name.split(' - ')
+                if not sheet_class:
+                    sheet_class = parts[0].strip()
                 possible_term = parts[-1].strip()
-                if 'term' in possible_term.lower():
+                if not sheet_term and 'term' in possible_term.lower():
                     sheet_term = possible_term
 
             # Detect Name Column
@@ -1787,7 +1815,7 @@ def upload_excel_scorelist():
             if not name_col:
                 continue
 
-            # Detect Class and Subject Columns
+            # Detect Class and Subject Columns (if they exist in the actual row headers)
             class_col = None
             subj_col = None
             for col in df.columns:
@@ -1834,12 +1862,14 @@ def upload_excel_scorelist():
                     continue
 
                 # Guard against NaN class/subject values
-                cls_val = str(row[class_col]).strip() if class_col else ''
-                if cls_val.lower() in ['nan', 'none', '']:
+                cls_val = str(row[class_col]).strip() if class_col else getattr(sheet_class, 'strip', lambda: sheet_class)() if sheet_class else ''
+                if not cls_val or cls_val.lower() in ['nan', 'none', '']:
                     cls_val = detected_class or ''
-                subj_val = str(row[subj_col]).strip() if subj_col else ''
-                if subj_val.lower() in ['nan', 'none', '']:
+                    
+                subj_val = str(row[subj_col]).strip() if subj_col else getattr(sheet_subj, 'strip', lambda: sheet_subj)() if sheet_subj else ''
+                if not subj_val or subj_val.lower() in ['nan', 'none', '']:
                     subj_val = detected_subject or ''
+                    
                 r = {
                     "Name": name,
                     "Class": cls_val,
