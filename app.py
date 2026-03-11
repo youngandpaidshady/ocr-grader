@@ -2474,28 +2474,36 @@ def assistant_build_excel():
                 db_students = StudentModel.query.filter_by(class_id=c.id).all()
                 roster_names = [s.name for s in db_students]
                 name_col = next((col for col in df.columns if str(col).lower() == 'name'), None)
+                class_col = next((col for col in df.columns if str(col).lower() == 'class'), None)
+                term_col = next((col for col in df.columns if str(col).lower() == 'term'), None)
                 
                 # PHASE 1: Correct every OCR name to the closest roster match
-                # This prevents duplicates like "Abdulkareem I.O." vs "Abdulkareem Ihtimod Oyewumi"
-                matched_roster_names = set()  # Track which roster names have been claimed
+                matched_roster_names = set()
                 if name_col and not df.empty and roster_names:
                     for idx in df.index:
+                        # Skip validation for rows belonging to OTHER classes in a multi-tab upload
+                        if class_col:
+                            row_class = str(df.at[idx, class_col]).strip()
+                            if row_class and row_class.lower() not in ['nan', 'none', ''] and row_class.lower() != class_name.lower():
+                                continue
+
                         ocr_name = str(df.at[idx, name_col]).strip()
                         if not ocr_name or ocr_name.lower() in ['nan', 'none']:
                             continue
-                        # Check if this OCR name already exactly matches a roster name
+                            
+                        # Check if exact match
                         if ocr_name in roster_names:
                             matched_roster_names.add(ocr_name)
                             continue
-                        # Fuzzy match against UNCLAIMED roster names to avoid two OCR rows mapping to the same student
+                            
+                        # Fuzzy match against unclaimed
                         available_roster = [n for n in roster_names if n not in matched_roster_names]
                         if not available_roster:
-                            available_roster = roster_names  # Fallback if all claimed
+                            available_roster = roster_names
                         best = process.extractOne(ocr_name, available_roster, scorer=fuzz.token_set_ratio)
                         if best and best[1] >= 75:
-                            df.at[idx, name_col] = best[0]  # Correct to official roster name
+                            df.at[idx, name_col] = best[0]
                             matched_roster_names.add(best[0])
-                        # If no match at all (<75), drop the row — only roster names belong in the Excel
                         else:
                             print("[ROSTER] Dropped unrecognized name '{}' from preview (no roster match)".format(ocr_name))
                             df.drop(idx, inplace=True)
@@ -2505,7 +2513,6 @@ def assistant_build_excel():
                     current_names = [str(n).strip() for n in df[name_col].tolist() if pd.notna(n) and str(n).strip()] if not df.empty else []
                     missing_students = []
                     for roster_name in roster_names:
-                        # Check if this roster name is already in the DataFrame
                         found = False
                         if current_names:
                             best = process.extractOne(roster_name, current_names, scorer=fuzz.token_set_ratio)
@@ -2515,13 +2522,23 @@ def assistant_build_excel():
                             row_dict = {name_col: roster_name}
                             for col in df.columns:
                                 if col != name_col:
-                                    row_dict[col] = ''
+                                    if class_col and col == class_col:
+                                        row_dict[col] = class_name
+                                    elif term_col and col == term_col:
+                                        # Inherit term from the first valid row of the current class, or default to Active
+                                        if existing_data:
+                                            ex_term = df[df[class_col] == class_name][term_col].iloc[0] if not df[df[class_col] == class_name].empty else 'Active'
+                                            row_dict[col] = ex_term
+                                        else:
+                                            row_dict[col] = 'Active'
+                                    else:
+                                        row_dict[col] = ''
                             missing_students.append(row_dict)
                     
                     if missing_students:
                         df = pd.concat([df, pd.DataFrame(missing_students)], ignore_index=True)
         
-        # Sort rows alphabetically by student name
+        # Sort rows alphabetically by student name (within their classes)
         name_col = next((col for col in df.columns if str(col).lower() == 'name'), None)
         if name_col:
             df = df.sort_values(by=name_col, key=lambda col: col.str.lower()).reset_index(drop=True)
