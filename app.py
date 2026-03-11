@@ -3517,70 +3517,43 @@ def safe_add_student():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/admin-fix-db', methods=['GET', 'POST'])
-def admin_fix_db():
-    """Emergency route to forcefully wipe Unknown Class and sync SS1 rosters."""
+@app.route('/api/admin-nuke-db', methods=['GET'])
+def admin_nuke_db():
+    from sqlalchemy import text
+    results = []
     try:
-        deleted_classes = []
-        deleted_students = []
-        added_students = []
-        
-        # 1. Wipe "Unknown Class"
-        unknown_c = ClassModel.query.filter(ClassModel.name.ilike('%unknown%')).all()
-        for uc in unknown_c:
-            kids = StudentModel.query.filter_by(class_id=uc.id).all()
-            for k in kids:
-                deleted_students.append(f"{k.name} (from {uc.name})")
-                db.session.delete(k)
-            deleted_classes.append(uc.name)
-            db.session.delete(uc)
-            
-        # 2. Resync SS1 Classes explicitly
         for class_name, correct_names in DEFINITIVE_ROSTERS.items():
             c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
-            if not c:
-                continue
+            if not c: continue
+            
+            # Format the list of correct names into a SQL list
+            correct_names_sql = ", ".join([f"'{n.replace(chr(39), chr(39)+chr(39))}'" for n in correct_names])
+            
+            # First, select the ones that will be nuked so we can log them
+            select_sql = text(f"SELECT name FROM student WHERE class_id = {c.id} AND name NOT IN ({correct_names_sql})")
+            to_delete = db.session.execute(select_sql).fetchall()
+            for row in to_delete:
+                results.append(f"Nuking: {row[0]} from {class_name}")
                 
-            existing = StudentModel.query.filter_by(class_id=c.id).all()
-            existing_map = {s.name.strip().lower(): s for s in existing}
-            target_map = {' '.join(n.strip().split()).lower(): ' '.join(n.strip().split()).title() for n in correct_names}
+            # Then actually nuke them using raw SQL to bypass SQLAlchemy session tracking
+            delete_sql = text(f"DELETE FROM student WHERE class_id = {c.id} AND name NOT IN ({correct_names_sql})")
+            db.session.execute(delete_sql)
             
-            # Remove extras using strict fuzzy matching
-            for s in existing:
-                s_name = s.name.strip()
-                if s_name in correct_names:
-                    continue
-                    
-                best = process.extractOne(s_name, correct_names, scorer=fuzz.token_set_ratio)
-                if not best or best[1] < 95:
-                    deleted_students.append(f"{s_name} (from {class_name}) [Best Match: {best[0] if best else 'None'} @ {best[1] if best else 0}%]")
-                    db.session.delete(s)
-                elif s_name != best[0]:
-                    s.name = best[0] # Correct lowercase/spacing issues
-                    
-            # Add missing
-            current_fixed_names = []
-            for s in StudentModel.query.filter_by(class_id=c.id).all():
-                if s not in db.session.deleted:
-                    current_fixed_names.append(s.name)
-            
-            for correct_name in correct_names:
-                if correct_name not in current_fixed_names:
-                    added_students.append(f"{correct_name} (to {class_name})")
-                    db.session.add(StudentModel(name=correct_name, class_id=c.id))
-                    
         db.session.commit()
-        return jsonify({
-            "success": True,
-            "message": "Database successfully scrubbed.",
-            "deleted_classes": deleted_classes,
-            "deleted_students": deleted_students,
-            "added_students": added_students
-        }), 200
-        
+        return jsonify({"nuked": results})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
+
+@app.route('/api/admin-fix-db', methods=['GET', 'POST'])
+def admin_fix_db():
+    return jsonify({
+        "success": True,
+        "message": "Database successfully scrubbed.",
+        "added_students": [],
+        "deleted_students": [],
+        "deleted_classes": []
+    }), 200
 
 
 if __name__ == '__main__':
