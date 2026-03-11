@@ -3526,18 +3526,19 @@ def admin_nuke_db():
             c = ClassModel.query.filter(func.lower(ClassModel.name) == class_name.lower()).first()
             if not c: continue
             
-            # Format the list of correct names into a SQL list
-            correct_names_sql = ", ".join([f"'{n.replace(chr(39), chr(39)+chr(39))}'" for n in correct_names])
+            # Fetch all students in this class currently
+            all_stu_sql = text(f"SELECT id, name FROM student WHERE class_id = {c.id}")
+            current_students = db.session.execute(all_stu_sql).fetchall()
             
-            # First, select the ones that will be nuked so we can log them
-            select_sql = text(f"SELECT name FROM student WHERE class_id = {c.id} AND name NOT IN ({correct_names_sql})")
-            to_delete = db.session.execute(select_sql).fetchall()
-            for row in to_delete:
-                results.append(f"Nuking: {row[0]} from {class_name}")
+            for row in current_students:
+                s_id = row[0]
+                s_name = row[1]
                 
-            # Then actually nuke them using raw SQL to bypass SQLAlchemy session tracking
-            delete_sql = text(f"DELETE FROM student WHERE class_id = {c.id} AND name NOT IN ({correct_names_sql})")
-            db.session.execute(delete_sql)
+                # Check if this student exactly matches the correct roster
+                if s_name not in correct_names:
+                    results.append(f"Nuking: {s_name} from {class_name}")
+                    delete_sql = text(f"DELETE FROM student WHERE id = {s_id}")
+                    db.session.execute(delete_sql)
             
         db.session.commit()
         return jsonify({"nuked": results})
