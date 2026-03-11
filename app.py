@@ -3527,18 +3527,16 @@ def admin_nuke_db():
             if not c: continue
             
             # Fetch all students in this class currently
-            all_stu_sql = text(f"SELECT id, name FROM students WHERE class_id = {c.id}")
-            current_students = db.session.execute(all_stu_sql).fetchall()
+            current_students = StudentModel.query.filter_by(class_id=c.id).all()
             
-            for row in current_students:
-                s_id = row[0]
-                s_name = row[1]
+            for student_obj in current_students:
+                s_name = student_obj.name
                 
-                # Check if this student exactly matches the correct roster
+                # Check if this student strictly matches the correct roster
                 if s_name not in correct_names:
                     results.append(f"Nuking: {s_name} from {class_name}")
-                    delete_sql = text(f"DELETE FROM students WHERE id = {s_id}")
-                    db.session.execute(delete_sql)
+                    # Delete them using the ORM to avoid raw SQL table name errors
+                    db.session.delete(student_obj)
             
         db.session.commit()
         return jsonify({"nuked": results})
