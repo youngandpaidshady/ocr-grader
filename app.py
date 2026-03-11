@@ -3527,7 +3527,7 @@ def admin_nuke_db():
             if not c: continue
             
             # Fetch all students in this class currently
-            all_stu_sql = text(f"SELECT id, name FROM student WHERE class_id = {c.id}")
+            all_stu_sql = text(f"SELECT id, name FROM students WHERE class_id = {c.id}")
             current_students = db.session.execute(all_stu_sql).fetchall()
             
             for row in current_students:
@@ -3537,7 +3537,7 @@ def admin_nuke_db():
                 # Check if this student exactly matches the correct roster
                 if s_name not in correct_names:
                     results.append(f"Nuking: {s_name} from {class_name}")
-                    delete_sql = text(f"DELETE FROM student WHERE id = {s_id}")
+                    delete_sql = text(f"DELETE FROM students WHERE id = {s_id}")
                     db.session.execute(delete_sql)
             
         db.session.commit()
