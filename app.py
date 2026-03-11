@@ -3545,20 +3545,29 @@ def admin_fix_db():
             existing_map = {s.name.strip().lower(): s for s in existing}
             target_map = {' '.join(n.strip().split()).lower(): ' '.join(n.strip().split()).title() for n in correct_names}
             
-            # Remove extras
+            # Remove extras using strict fuzzy matching
             for s in existing:
-                s_lower = ' '.join(s.name.strip().split()).lower()
-                if s_lower not in target_map:
-                    deleted_students.append(f"{s.name} (from {class_name})")
+                s_name = s.name.strip()
+                if s_name in correct_names:
+                    continue
+                    
+                best = process.extractOne(s_name, correct_names, scorer=fuzz.token_set_ratio)
+                if not best or best[1] < 95:
+                    deleted_students.append(f"{s_name} (from {class_name}) [Best Match: {best[0] if best else 'None'} @ {best[1] if best else 0}%]")
                     db.session.delete(s)
-                elif s.name != target_map[s_lower]:
-                    s.name = target_map[s_lower]
+                elif s_name != best[0]:
+                    s.name = best[0] # Correct lowercase/spacing issues
                     
             # Add missing
-            for t_lower, t_title in target_map.items():
-                if t_lower not in existing_map:
-                    added_students.append(f"{t_title} (to {class_name})")
-                    db.session.add(StudentModel(name=t_title, class_id=c.id))
+            current_fixed_names = []
+            for s in StudentModel.query.filter_by(class_id=c.id).all():
+                if s not in db.session.deleted:
+                    current_fixed_names.append(s.name)
+            
+            for correct_name in correct_names:
+                if correct_name not in current_fixed_names:
+                    added_students.append(f"{correct_name} (to {class_name})")
+                    db.session.add(StudentModel(name=correct_name, class_id=c.id))
                     
         db.session.commit()
         return jsonify({
