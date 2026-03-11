@@ -4,5 +4,9 @@
 # overrides the 'startCommand' in render.yaml.
 
 timeout = 160 # Increase worker timeout to 160 seconds to allow for long Gemini OCR operations
-workers = 2 # Use 2 workers to handle concurrent requests
-threads = 4 # Use threads for I/O bound tasks
+workers = 1 # Reduced to 1 to save memory on 512MB RAM free tier
+threads = 4 # Use threads for I/O bound tasks (safe for memory, good for concurrent I/O)
+
+# Prevent memory leaks by recycling workers periodically
+max_requests = 50 # Restart the worker after 50 requests to clear memory bloat
+max_requests_jitter = 10 # Add random jitter to prevent restarts at exactly the same time
